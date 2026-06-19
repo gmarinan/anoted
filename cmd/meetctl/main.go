@@ -184,7 +184,7 @@ func sessionsCmd() *cobra.Command {
 			}
 			for _, r := range recs {
 				fmt.Printf("#%-4d %s %-12s %s\n",
-					r.ID, r.StartedAt.Format("2006-01-02 15:04"), r.Provider, r.Dir)
+					r.ID, session.FormatLocalTime(r.StartedAt, "2006-01-02 15:04"), r.Provider, r.Dir)
 			}
 			return nil
 		},

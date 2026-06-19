@@ -171,7 +171,7 @@ func (v SessionsView) formatRow(r session.Record) string {
 	path := filepath.Join(r.Dir, sessionAudioName)
 	return fmt.Sprintf("#%-3d  %-16s  %-14s  %-8s  %s",
 		r.ID,
-		r.StartedAt.Format("2006-01-02 15:04"),
+		session.FormatLocalTime(r.StartedAt, "2006-01-02 15:04"),
 		truncate(meet, 14),
 		truncate(dur, 8),
 		truncate(path, 40),
@@ -188,7 +188,7 @@ func (v SessionsView) detailsBox(width int) string {
 	r := v.Records[v.Cursor]
 	lines := []string{
 		row("ID", fmt.Sprintf("#%d", r.ID)),
-		row("Started", r.StartedAt.Format("2006-01-02 15:04:05")),
+		row("Started", session.FormatLocalTime(r.StartedAt, "2006-01-02 15:04:05")),
 		row("Provider", formatProvider(string(r.Provider))),
 		row("Backend", r.Backend),
 		row("Status", string(r.Status)),

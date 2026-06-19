@@ -60,6 +60,14 @@ type Store interface {
 	List(limit int) ([]Record, error)
 }
 
+// FormatLocalTime formats t in the system local timezone.
+func FormatLocalTime(t time.Time, layout string) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.Local().Format(layout)
+}
+
 // WriteMetadataFile writes metadata.json into a session directory.
 func WriteMetadataFile(dir string, meta Metadata) error {
 	data, err := json.MarshalIndent(meta, "", "  ")
