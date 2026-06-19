@@ -1,0 +1,37 @@
+package logging
+
+import (
+	"io"
+	"log/slog"
+	"os"
+	"path/filepath"
+
+	"meetctl/internal/config"
+)
+
+// Setup configures structured logging to stderr and optionally a log file.
+func Setup(level slog.Level) (*slog.Logger, error) {
+	opts := &slog.HandlerOptions{Level: level}
+	handler := slog.NewJSONHandler(os.Stderr, opts)
+
+	logPath, err := logFilePath()
+	if err != nil {
+		return slog.New(handler), nil
+	}
+
+	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		return slog.New(handler), nil
+	}
+
+	multi := io.MultiWriter(os.Stderr, f)
+	return slog.New(slog.NewJSONHandler(multi, opts)), nil
+}
+
+func logFilePath() (string, error) {
+	dir, err := config.ConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "meetctl.log"), nil
+}

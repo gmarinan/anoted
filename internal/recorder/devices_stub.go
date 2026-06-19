@@ -1,0 +1,13 @@
+//go:build !linux
+
+package recorder
+
+import "meetctl/internal/config"
+
+func resolveAudioDevices(_ config.Config) (systemMonitor, microphone string, err error) {
+	return "", "", nil
+}
+
+func ListAudioDevices(_ config.Config) (monitor, mic string, err error) {
+	return "", "", nil
+}

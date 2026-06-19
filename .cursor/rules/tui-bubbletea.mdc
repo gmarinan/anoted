@@ -1,0 +1,14 @@
+---
+description: Bubble Tea v2 TUI patterns for meetctl
+globs: internal/tui/**
+alwaysApply: false
+---
+
+Use Bubble Tea v2 (`charm.land/bubbletea/v2`) with the Model-Update-View pattern.
+
+- `View()` returns `tea.View`, not `string`. Set `AltScreen`, `WindowTitle`, etc. on the view.
+- Handle `tea.KeyPressMsg` (not v1 `tea.KeyMsg` struct).
+- Never block the Update loop; use `tea.Cmd` for async work (polling, recording, detection).
+- Keep model state serializable where possible.
+- Split UI into `internal/tui/components/` for reusable pieces.
+- TUI must not import platform-specific packages directly; use injected interfaces.

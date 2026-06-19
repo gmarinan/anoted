@@ -1,0 +1,24 @@
+---
+description: Project rules for meetctl
+alwaysApply: true
+---
+
+This is a Go cross-platform TUI app using Bubble Tea v2.
+
+Architecture:
+- TUI must not contain OS-specific logic.
+- Platform-specific code must live behind interfaces.
+- Use build tags for Linux and Windows.
+- WSL2 must use a native Windows helper for real Windows audio capture.
+- Audio recording must be explicit and visible to the user.
+- Auto-record is disabled by default.
+- No cloud upload.
+- No hidden recording.
+- No bypassing OS/browser privacy restrictions.
+
+Coding style:
+- Small interfaces.
+- Clear errors with context.
+- Testable packages.
+- No unnecessary globals.
+- Prefer standard library unless a dependency clearly improves the project.
