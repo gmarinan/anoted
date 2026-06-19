@@ -10,6 +10,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"meetctl/internal/doctor"
 	"meetctl/internal/session"
+	"meetctl/internal/transcribe"
 )
 
 // DoctorView renders the Doctor tab.
@@ -102,10 +103,12 @@ func (v DoctorView) warningsBox(width int) string {
 
 // SessionsView renders the Sessions tab.
 type SessionsView struct {
-	Records []session.Record
-	Cursor  int
-	ErrMsg  string
-	Width   int
+	Records      []session.Record
+	Cursor       int
+	ErrMsg       string
+	Transcribing bool
+	StatusNote   string
+	Width        int
 }
 
 func (v SessionsView) View() string {
@@ -120,6 +123,14 @@ func (v SessionsView) View() string {
 		tableW = 80
 	}
 	b.WriteString(v.tableBox(tableW))
+	if v.StatusNote != "" {
+		b.WriteString("\n")
+		if v.Transcribing {
+			b.WriteString(warnStyle.Render("⏳ " + v.StatusNote))
+		} else {
+			b.WriteString(okStyle.Render("✓ " + v.StatusNote))
+		}
+	}
 	b.WriteString("\n\n")
 
 	colW := v.columnWidth()
@@ -168,6 +179,9 @@ func (v SessionsView) formatRow(r session.Record) string {
 		dur = "—"
 	}
 	meet := formatProvider(string(r.Provider))
+	if transcribe.HasTranscript(r.Dir) {
+		meet = truncate(meet, 10) + " " + Badge("TX", "ok")
+	}
 	path := filepath.Join(r.Dir, sessionAudioName)
 	return fmt.Sprintf("#%-3d  %-16s  %-14s  %-8s  %s",
 		r.ID,
@@ -198,12 +212,16 @@ func (v SessionsView) detailsBox(width int) string {
 	if r.Metadata.Duration != "" {
 		lines = append(lines, row("Duration", r.Metadata.Duration))
 	}
+	if files := transcribe.ListTranscriptFiles(r.Dir); len(files) > 0 {
+		lines = append(lines, row("Transcript", truncate(filepath.Base(files[0]), width-12)))
+	}
 	return Box("Details", strings.Join(lines, "\n"), width)
 }
 
 func (v SessionsView) actionsBox(width int) string {
 	lines := []string{
 		FooterHint("↑↓", "Navigate list"),
+		FooterHint("t", "Transcribe (Whisper)"),
 		FooterHint("o", "Open session folder"),
 		FooterHint("p", "Play recording"),
 		FooterHint("R", "Refresh list"),

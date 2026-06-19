@@ -44,6 +44,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleSessionsAction(msg)
 	case configEditorSaveMsg:
 		return m.handleConfigEditorSave(msg)
+	case transcribeResultMsg:
+		return m.handleTranscribeResult(msg)
 	case deviceLabelsMsg:
 		m = m.handleDeviceLabels(msg)
 		return m, nil
@@ -130,6 +132,16 @@ func (m Model) handleRecordToggle(msg recordToggleResultMsg) (tea.Model, tea.Cmd
 		m.appState = StateInMeeting
 	} else {
 		m.appState = StateIdle
+	}
+
+	savedDir := msg.savedDir
+	if savedDir == "" {
+		savedDir = st.SessionDir
+	}
+	if savedDir != "" && m.deps.Config.Transcription.AutoAfterRecording {
+		m.transcribing = true
+		m.transcribeNote = "auto-transcribing…"
+		return m, transcribeSessionCmd(m, savedDir)
 	}
 	return m, nil
 }

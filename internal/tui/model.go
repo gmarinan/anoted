@@ -10,6 +10,7 @@ import (
 	"meetctl/internal/platform"
 	"meetctl/internal/recorder"
 	"meetctl/internal/session"
+	"meetctl/internal/transcribe"
 	"meetctl/internal/tui/components"
 )
 
@@ -43,8 +44,9 @@ type Deps struct {
 	Platform   platform.Info
 	Detector   detector.Detector
 	Recorder   recorder.Recorder
-	Store      session.Store
-	Audio      audio.Provider
+	Store       session.Store
+	Audio       audio.Provider
+	Transcriber *transcribe.Service
 }
 
 // Model is the Bubble Tea model.
@@ -92,6 +94,9 @@ type Model struct {
 	configDirty     bool
 	configErr       string
 	configSavedMsg  string
+
+	transcribing   bool
+	transcribeNote string
 }
 
 // NewModel creates the initial TUI model.

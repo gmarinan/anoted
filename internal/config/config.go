@@ -20,10 +20,22 @@ type Config struct {
 	SetupCompleted                 bool          `yaml:"setup_completed"`
 	AutoRecord                     bool          `yaml:"auto_record"`
 	AutoRecordRequiresConfirmation bool          `yaml:"auto_record_requires_confirmation"`
-	OutputDir                      string        `yaml:"output_dir"`
-	Audio                          AudioConfig   `yaml:"audio"`
-	Detection                      DetectConfig  `yaml:"detection"`
-	Privacy                        PrivacyConfig `yaml:"privacy"`
+	OutputDir                      string                `yaml:"output_dir"`
+	Audio                          AudioConfig           `yaml:"audio"`
+	Detection                      DetectConfig          `yaml:"detection"`
+	Transcription                  TranscriptionConfig   `yaml:"transcription"`
+	Privacy                        PrivacyConfig         `yaml:"privacy"`
+}
+
+type TranscriptionConfig struct {
+	AutoAfterRecording bool   `yaml:"auto_after_recording"`
+	Binary             string `yaml:"binary"`      // empty = auto-detect in PATH
+	Backend            string `yaml:"backend"`     // auto, openai-whisper, whisper-cpp
+	Model              string `yaml:"model"`       // tiny, base, small, medium, large
+	Language           string `yaml:"language"`    // empty = auto-detect
+	Device             string `yaml:"device"`      // cpu, cuda, auto
+	GPULayers          int    `yaml:"gpu_layers"`  // whisper.cpp -ngl (0 = CPU only)
+	ModelPath          string `yaml:"model_path"`  // whisper.cpp ggml model file
 }
 
 type AudioConfig struct {
@@ -75,6 +87,13 @@ func Default() Config {
 					Patterns: []string{"teams.microsoft.com", "Microsoft Teams", "Teams"},
 				},
 			},
+		},
+		Transcription: TranscriptionConfig{
+			AutoAfterRecording: false,
+			Backend:            "auto",
+			Model:              "base",
+			Device:             "auto",
+			GPULayers:          0,
 		},
 		Privacy: PrivacyConfig{
 			ShowRecordingIndicator:       true,
@@ -216,6 +235,15 @@ func (c *Config) applyDefaults() {
 		c.Detection.Providers = def.Detection.Providers
 	} else {
 		mergeProviderPatterns(c.Detection.Providers, def.Detection.Providers)
+	}
+	if c.Transcription.Backend == "" {
+		c.Transcription.Backend = def.Transcription.Backend
+	}
+	if c.Transcription.Model == "" {
+		c.Transcription.Model = def.Transcription.Model
+	}
+	if c.Transcription.Device == "" {
+		c.Transcription.Device = def.Transcription.Device
 	}
 }
 

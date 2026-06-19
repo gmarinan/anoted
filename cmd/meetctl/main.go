@@ -17,6 +17,7 @@ import (
 	"meetctl/internal/recorder"
 	"meetctl/internal/session"
 	"meetctl/internal/setup"
+	"meetctl/internal/transcribe"
 	"meetctl/internal/tui"
 )
 
@@ -122,8 +123,9 @@ func runTUI(cmd *cobra.Command, args []string) error {
 		Platform:   plat,
 		Detector:   detector.New(cfg, plat, useMock),
 		Recorder:   recorder.New(cfg, plat, forceDummy),
-		Store:      store,
-		Audio:      audio.NewProvider(),
+		Store:       store,
+		Audio:       audio.NewProvider(),
+		Transcriber: transcribe.New(cfg),
 	}
 
 	p := tea.NewProgram(tui.NewModel(deps))

@@ -103,8 +103,25 @@ Recordings are saved under `~/Music/meetctl/` by default:
 ```
 ~/Music/meetctl/YYYY-MM-DD_HH-mm-ss_<provider>/
 ├── recording.wav
+├── transcript.txt    # after Whisper transcription
+├── transcript.srt
 └── metadata.json
 ```
+
+### Transcription (Whisper)
+
+```yaml
+transcription:
+  auto_after_recording: false   # transcribe when recording stops
+  backend: auto                 # auto, openai-whisper, whisper-cpp
+  model: base                   # tiny, base, small, medium, large
+  device: auto                  # cpu, cuda, auto
+  gpu_layers: 0                 # whisper.cpp only (99 = full GPU)
+  model_path: ""                # path to ggml model for whisper.cpp
+  language: ""                  # empty = auto-detect
+```
+
+Install: `sudo pacman -S whisper.cpp` or `pip install -U openai-whisper`. Run `meetctl setup` for guided install.
 
 ## Development
 

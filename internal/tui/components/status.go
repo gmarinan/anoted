@@ -40,6 +40,7 @@ func FooterForTab(tab TabID, awaitingConfirm bool) string {
 	case TabSessions:
 		return JoinFooter(
 			FooterHint("↑↓", "navigate"),
+			FooterHint("t", "transcribe"),
 			FooterHint("o", "open folder"),
 			FooterHint("p", "play"),
 			FooterHint("R", "refresh"),

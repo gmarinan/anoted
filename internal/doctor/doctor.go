@@ -9,6 +9,7 @@ import (
 	"meetctl/internal/config"
 	"meetctl/internal/platform"
 	"meetctl/internal/recorder"
+	"meetctl/internal/transcribe"
 )
 
 // Check describes a single diagnostic result.
@@ -51,6 +52,10 @@ func Run(cfg config.Config) Report {
 
 	if plat.IsWSL2 {
 		rep.Checks = append(rep.Checks, helperCheck())
+	}
+
+	for _, c := range transcribe.DoctorChecks(cfg) {
+		rep.Checks = append(rep.Checks, Check{Name: c.Name, Status: c.Status, Detail: c.Detail})
 	}
 
 	return rep

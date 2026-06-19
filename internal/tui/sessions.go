@@ -24,6 +24,11 @@ func (m Model) handleSessionsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, m.openSessionPath(false)
 	case "p":
 		return m, m.openSessionPath(true)
+	case "t":
+		if m.transcribing || len(m.sessions) == 0 || m.sessionCursor < 0 || m.sessionCursor >= len(m.sessions) {
+			return m, nil
+		}
+		return m.startTranscribe(m.sessions[m.sessionCursor].Dir)
 	}
 	return m, nil
 }

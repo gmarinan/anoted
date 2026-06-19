@@ -49,7 +49,7 @@ func Run(cfg config.Config, cfgPath string, plat platform.Info, opts Options) (c
 	fmt.Fprintln(out, "─────────────")
 	fmt.Fprintln(out)
 
-	fmt.Fprintln(out, "[1/3] Configuration")
+	fmt.Fprintln(out, "[1/4] Configuration")
 	path, err := config.EnsureDefault()
 	if err != nil {
 		return cfg, err
@@ -63,10 +63,10 @@ func Run(cfg config.Config, cfgPath string, plat platform.Info, opts Options) (c
 	}
 	fmt.Fprintf(out, "  ✓ Config: %s\n\n", path)
 
-	fmt.Fprintln(out, "[2/3] Platform")
+	fmt.Fprintln(out, "[2/4] Platform")
 	fmt.Fprintf(out, "  ✓ %s (session: %s)\n\n", plat.Name(), plat.Session)
 
-	fmt.Fprintln(out, "[3/3] Meeting detection")
+	fmt.Fprintln(out, "[3/4] Meeting detection")
 	mode := opts.Mode
 	if mode == "" {
 		mode = chooseDetectionMode(in, out, plat)
@@ -104,6 +104,8 @@ func Run(cfg config.Config, cfgPath string, plat platform.Info, opts Options) (c
 		}
 	}
 
+	setupTranscription(in, out, &cfg, opts.Install)
+
 	cfg.SetupCompleted = true
 	if err := config.Save(path, cfg); err != nil {
 		return cfg, err
@@ -112,6 +114,9 @@ func Run(cfg config.Config, cfgPath string, plat platform.Info, opts Options) (c
 	fmt.Fprintln(out)
 	fmt.Fprintln(out, "Setup complete!")
 	fmt.Fprintf(out, "  detection.mode: %s\n", cfg.Detection.Mode)
+	if cfg.Transcription.AutoAfterRecording {
+		fmt.Fprintln(out, "  transcription.auto_after_recording: true")
+	}
 	fmt.Fprintln(out, "  meetctl watch   — open the TUI")
 	fmt.Fprintln(out, "  meetctl doctor  — check dependencies")
 	return cfg, nil

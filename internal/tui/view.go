@@ -58,8 +58,8 @@ func (m Model) homeView() components.HomeView {
 		AutoRecord:      m.autoRecord,
 		AwaitingConfirm: m.awaitingRecordConfirm,
 		ConfirmPrompt:   "Meeting detected — start recording? [y/n]",
-		StatusNote:      m.statusNote,
-		DetectionWarn:   m.detection.Warning,
+			StatusNote:      m.statusNote,
+			DetectionWarn:   m.detection.Warning,
 		ErrorMsg:        m.errMsg,
 		Width:           m.width,
 	}
@@ -100,10 +100,12 @@ func (m Model) doctorView() components.DoctorView {
 
 func (m Model) sessionsView() components.SessionsView {
 	return components.SessionsView{
-		Records: m.sessions,
-		Cursor:  m.sessionCursor,
-		ErrMsg:  m.sessionsErr,
-		Width:   m.width,
+		Records:      m.sessions,
+		Cursor:       m.sessionCursor,
+		ErrMsg:       m.sessionsErr,
+		Transcribing: m.transcribing,
+		StatusNote:   m.transcribeNote,
+		Width:        m.width,
 	}
 }
 
