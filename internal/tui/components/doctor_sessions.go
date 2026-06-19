@@ -1,0 +1,232 @@
+package components
+
+import (
+	"fmt"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"charm.land/lipgloss/v2"
+	"meetctl/internal/doctor"
+	"meetctl/internal/session"
+)
+
+// DoctorView renders the Doctor tab.
+type DoctorView struct {
+	Report        doctor.Report
+	AppState      string
+	Platform      string
+	Backend       string
+	Provider      string
+	SystemDevice  string
+	MicDevice     string
+	DetectionWarn string
+	Width         int
+}
+
+func (v DoctorView) View() string {
+	var b strings.Builder
+	b.WriteString(Header())
+	b.WriteString("\n")
+	b.WriteString(TabBar(TabDoctor))
+	b.WriteString("\n\n")
+
+	colW := v.columnWidth()
+	summary := v.summaryBox(colW)
+	env := v.environmentBox(colW)
+	b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, summary, " ", env))
+	b.WriteString("\n\n")
+	b.WriteString(v.warningsBox(v.Width))
+	return b.String()
+}
+
+func (v DoctorView) columnWidth() int {
+	w := v.Width
+	if w < 60 {
+		return 36
+	}
+	return (w - 3) / 2
+}
+
+func (v DoctorView) summaryBox(width int) string {
+	var lines []string
+	okCount := 0
+	for _, c := range v.Report.Checks {
+		icon := "✓"
+		style := okStyle
+		switch c.Status {
+		case "warn":
+			icon = "!"
+			style = warnStyle
+		case "fail":
+			icon = "✗"
+			style = errStyle
+		default:
+			okCount++
+		}
+		lines = append(lines, style.Render(fmt.Sprintf("%s %-22s %s", icon, c.Name, c.Detail)))
+	}
+	header := fmt.Sprintf("%s / %d checks OK", Badge("OK", "ok"), okCount)
+	body := header + "\n" + strings.Join(lines, "\n")
+	return Box("Diagnostic summary", body, width)
+}
+
+func (v DoctorView) environmentBox(width int) string {
+	lines := []string{
+		row("State", displayState(v.AppState)),
+		row("Platform", v.Platform),
+		row("Backend", v.Backend),
+		row("Meeting", v.Provider),
+		row("System audio", truncate(v.SystemDevice, width-14)),
+		row("Microphone", truncate(v.MicDevice, width-14)),
+	}
+	return Box("Environment", strings.Join(lines, "\n"), width)
+}
+
+func (v DoctorView) warningsBox(width int) string {
+	var warns []string
+	for _, c := range v.Report.Checks {
+		if c.Status == "warn" || c.Status == "fail" {
+			warns = append(warns, fmt.Sprintf("• %s: %s", c.Name, c.Detail))
+		}
+	}
+	if v.DetectionWarn != "" {
+		warns = append(warns, "• "+v.DetectionWarn)
+	}
+	if len(warns) == 0 {
+		warns = append(warns, subtleStyle.Render("No warnings — all systems ready."))
+	}
+	return Box("Warnings / recommendations", strings.Join(warns, "\n"), width)
+}
+
+// SessionsView renders the Sessions tab.
+type SessionsView struct {
+	Records []session.Record
+	Cursor  int
+	ErrMsg  string
+	Width   int
+}
+
+func (v SessionsView) View() string {
+	var b strings.Builder
+	b.WriteString(Header())
+	b.WriteString("\n")
+	b.WriteString(TabBar(TabSessions))
+	b.WriteString("\n\n")
+
+	tableW := v.Width
+	if tableW < 40 {
+		tableW = 80
+	}
+	b.WriteString(v.tableBox(tableW))
+	b.WriteString("\n\n")
+
+	colW := v.columnWidth()
+	b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, v.detailsBox(colW), " ", v.actionsBox(colW)))
+	return b.String()
+}
+
+func (v SessionsView) columnWidth() int {
+	w := v.Width
+	if w < 60 {
+		return 36
+	}
+	return (w - 3) / 2
+}
+
+func (v SessionsView) tableBox(width int) string {
+	if v.ErrMsg != "" {
+		return Box("Sessions", errStyle.Render(v.ErrMsg), width)
+	}
+	if len(v.Records) == 0 {
+		return Box("Sessions", subtleStyle.Render("No recordings yet."), width)
+	}
+
+	header := fmt.Sprintf("%-4s  %-16s  %-14s  %-8s  %s",
+		"ID", "DATE", "MEET", "DUR", "PATH")
+	lines := []string{subtleStyle.Render(header)}
+	for i, r := range v.Records {
+		line := v.formatRow(r)
+		if i == v.Cursor {
+			line = lipgloss.NewStyle().
+				Background(lipgloss.Color("63")).
+				Foreground(lipgloss.Color("229")).
+				Render(line)
+		}
+		lines = append(lines, line)
+	}
+	return Box("Sessions", strings.Join(lines, "\n"), width)
+}
+
+func (v SessionsView) formatRow(r session.Record) string {
+	dur := r.Metadata.Duration
+	if dur == "" && !r.EndedAt.IsZero() {
+		dur = r.EndedAt.Sub(r.StartedAt).Round(time.Second).String()
+	}
+	if dur == "" {
+		dur = "—"
+	}
+	meet := formatProvider(string(r.Provider))
+	path := filepath.Join(r.Dir, sessionAudioName)
+	return fmt.Sprintf("#%-3d  %-16s  %-14s  %-8s  %s",
+		r.ID,
+		r.StartedAt.Format("2006-01-02 15:04"),
+		truncate(meet, 14),
+		truncate(dur, 8),
+		truncate(path, 40),
+	)
+}
+
+func (v SessionsView) detailsBox(width int) string {
+	if len(v.Records) == 0 {
+		return Box("Details", subtleStyle.Render("Select a session"), width)
+	}
+	if v.Cursor < 0 || v.Cursor >= len(v.Records) {
+		return Box("Details", "", width)
+	}
+	r := v.Records[v.Cursor]
+	lines := []string{
+		row("ID", fmt.Sprintf("#%d", r.ID)),
+		row("Started", r.StartedAt.Format("2006-01-02 15:04:05")),
+		row("Provider", formatProvider(string(r.Provider))),
+		row("Backend", r.Backend),
+		row("Status", string(r.Status)),
+		row("Path", truncate(r.Dir, width-8)),
+		row("File", sessionAudioName),
+	}
+	if r.Metadata.Duration != "" {
+		lines = append(lines, row("Duration", r.Metadata.Duration))
+	}
+	return Box("Details", strings.Join(lines, "\n"), width)
+}
+
+func (v SessionsView) actionsBox(width int) string {
+	lines := []string{
+		FooterHint("↑↓", "Navigate list"),
+		FooterHint("o", "Open session folder"),
+		FooterHint("p", "Play recording"),
+		FooterHint("R", "Refresh list"),
+	}
+	return Box("Actions (keyboard)", strings.Join(lines, "\n"), width)
+}
+
+func formatProvider(p string) string {
+	switch p {
+	case "google_meet":
+		return "Google Meet"
+	case "teams":
+		return "Microsoft Teams"
+	case "unknown", "":
+		return "Unknown"
+	default:
+		return p
+	}
+}
+
+const sessionAudioName = "recording.wav"
+
+// OpenPath opens a file or directory with the desktop default handler.
+func OpenPath(path string) error {
+	return exec.Command("xdg-open", path).Start()
+}

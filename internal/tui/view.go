@@ -12,59 +12,20 @@ func (m Model) View() tea.View {
 	var content strings.Builder
 
 	switch m.screen {
-	case ScreenDoctor:
-		content.WriteString(components.DoctorPanel(m.doctorLines))
-	case ScreenSessions:
-		content.WriteString(components.SessionsPanel(m.sessionLines))
 	case ScreenAudio:
-		panel := components.AudioPanel{
-			Catalog:       m.audioCatalog,
-			Section:       m.audioSection,
-			Cursor:        m.audioCursor,
-			SystemMonitor: m.deps.Config.Audio.SystemMonitor,
-			Microphone:    m.deps.Config.Audio.Microphone,
-			Loading:       m.audioLoading,
-			ErrMsg:        m.audioErr,
-			SavedMsg:      m.audioSaved,
-			MonitorWarn:   m.audioMonitorWarn,
-			Width:         m.width,
-		}
-		content.WriteString(panel.View())
+		content.WriteString(m.audioView().View())
+	case ScreenDoctor:
+		content.WriteString(m.doctorView().View())
+	case ScreenSessions:
+		content.WriteString(m.sessionsView().View())
+	case ScreenConfig:
+		content.WriteString(m.configView().View())
 	default:
-		duration := time.Duration(0)
-		if m.recording && !m.recordStart.IsZero() {
-			duration = time.Since(m.recordStart)
-		}
-		backend := m.deps.Recorder.Name()
-		if m.recStatus.Backend != "" {
-			backend = m.recStatus.Backend
-		}
-		panel := components.StatusPanel{
-			AppState:        string(m.appState),
-			Platform:        m.deps.Platform.Name(),
-			Backend:         backend,
-			SystemDevice:    m.systemDevice,
-			MicDevice:       m.micDevice,
-			Provider:        displayProvider(m.provider, m.detection.Title),
-			Recording:       m.recording,
-			Duration:        duration,
-			SessionDir:      m.sessionDir,
-			AutoRecord:      m.autoRecord,
-			AwaitingConfirm: m.awaitingRecordConfirm,
-			ConfirmPrompt:   "Meeting detected — start recording? [y/n]",
-			StatusNote:      m.statusNote,
-			DetectionWarn:   m.detection.Warning,
-			ErrorMsg:        m.errMsg,
-		}
-		content.WriteString(panel.View(m.width))
+		content.WriteString(m.homeView().View())
 	}
 
 	content.WriteString("\n\n")
-	if m.screen == ScreenAudio {
-		content.WriteString(components.AudioHelpBar())
-	} else {
-		content.WriteString(components.HelpBar(m.awaitingRecordConfirm))
-	}
+	content.WriteString(components.FooterForTab(components.ScreenToTab(string(m.screen)), m.awaitingRecordConfirm))
 
 	v := tea.NewView(content.String())
 	v.AltScreen = true
@@ -73,6 +34,92 @@ func (m Model) View() tea.View {
 		v.WindowTitle = "meetctl ● RECORDING"
 	}
 	return v
+}
+
+func (m Model) homeView() components.HomeView {
+	duration := time.Duration(0)
+	if m.recording && !m.recordStart.IsZero() {
+		duration = time.Since(m.recordStart)
+	}
+	backend := m.deps.Recorder.Name()
+	if m.recStatus.Backend != "" {
+		backend = m.recStatus.Backend
+	}
+	return components.HomeView{
+		AppState:        string(m.appState),
+		Platform:        m.deps.Platform.Name(),
+		Backend:         backend,
+		SystemDevice:    m.systemDevice,
+		MicDevice:       m.micDevice,
+		Provider:        displayProvider(m.provider, m.detection.Title),
+		Recording:       m.recording,
+		Duration:        duration,
+		SessionDir:      m.sessionDir,
+		AutoRecord:      m.autoRecord,
+		AwaitingConfirm: m.awaitingRecordConfirm,
+		ConfirmPrompt:   "Meeting detected — start recording? [y/n]",
+		StatusNote:      m.statusNote,
+		DetectionWarn:   m.detection.Warning,
+		ErrorMsg:        m.errMsg,
+		Width:           m.width,
+	}
+}
+
+func (m Model) audioView() components.AudioView {
+	return components.AudioView{
+		Catalog:       m.audioCatalog,
+		Section:       m.audioSection,
+		Cursor:        m.audioCursor,
+		SystemMonitor: m.deps.Config.Audio.SystemMonitor,
+		Microphone:    m.deps.Config.Audio.Microphone,
+		Loading:       m.audioLoading,
+		ErrMsg:        m.audioErr,
+		SavedMsg:      m.audioSaved,
+		MonitorWarn:   m.audioMonitorWarn,
+		Width:         m.width,
+	}
+}
+
+func (m Model) doctorView() components.DoctorView {
+	backend := m.deps.Recorder.Name()
+	if m.recStatus.Backend != "" {
+		backend = m.recStatus.Backend
+	}
+	return components.DoctorView{
+		Report:        m.doctorReport,
+		AppState:      string(m.appState),
+		Platform:      m.deps.Platform.Name(),
+		Backend:       backend,
+		Provider:      displayProvider(m.provider, m.detection.Title),
+		SystemDevice:  m.systemDevice,
+		MicDevice:     m.micDevice,
+		DetectionWarn: m.detection.Warning,
+		Width:         m.width,
+	}
+}
+
+func (m Model) sessionsView() components.SessionsView {
+	return components.SessionsView{
+		Records: m.sessions,
+		Cursor:  m.sessionCursor,
+		ErrMsg:  m.sessionsErr,
+		Width:   m.width,
+	}
+}
+
+func (m Model) configView() components.ConfigView {
+	return components.ConfigView{
+		Path:      m.deps.ConfigPath,
+		Lines:     m.configLines,
+		CursorRow: m.configCursorRow,
+		CursorCol: m.configCursorCol,
+		ScrollRow: m.configScrollRow,
+		Dirty:     m.configDirty,
+		ErrMsg:    m.configErr,
+		SavedMsg:  m.configSavedMsg,
+		Width:     m.width,
+		Height:    m.height,
+	}
 }
 
 func displayProvider(provider, title string) string {
@@ -89,5 +136,5 @@ func displayProvider(provider, title string) string {
 	if title != "" {
 		return title
 	}
-	return "none"
+	return "None detected"
 }

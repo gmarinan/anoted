@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"charm.land/lipgloss/v2"
 	"meetctl/internal/audio"
 )
 
@@ -16,12 +15,12 @@ const (
 	AudioSectionMic
 )
 
-// AudioPanel renders the device picker screen.
-type AudioPanel struct {
+// AudioView renders the Audio tab.
+type AudioView struct {
 	Catalog       audio.Catalog
 	Section       AudioSection
 	Cursor        int
-	SystemMonitor string // configured monitor ID (empty = auto)
+	SystemMonitor string
 	Microphone    string
 	Loading       bool
 	ErrMsg        string
@@ -30,69 +29,77 @@ type AudioPanel struct {
 	Width         int
 }
 
-func (p AudioPanel) View() string {
+func (v AudioView) View() string {
 	var b strings.Builder
-	b.WriteString(titleStyle.Render("Audio devices"))
+	b.WriteString(Header())
 	b.WriteString("\n")
-	b.WriteString(labelStyle.Render("PipeWire nodes · Enter saves · pick the RUNNING output where apps play"))
+	b.WriteString(TabBar(TabAudio))
 	b.WriteString("\n\n")
 
-	if p.Loading {
-		b.WriteString(labelStyle.Render("Loading devices..."))
+	if v.Loading {
+		b.WriteString(Box("Output devices", subtleStyle.Render("Loading…"), v.Width))
 		return b.String()
 	}
-	if p.ErrMsg != "" {
-		b.WriteString(errStyle.Render("✗ " + p.ErrMsg))
+	if v.ErrMsg != "" {
+		b.WriteString(errStyle.Render("✗ " + v.ErrMsg))
 		b.WriteString("\n\n")
 	}
-	if p.MonitorWarn != "" {
-		b.WriteString(warnStyle.Render("⚠ " + p.MonitorWarn))
+	if v.MonitorWarn != "" {
+		b.WriteString(warnStyle.Render("⚠ " + v.MonitorWarn))
 		b.WriteString("\n\n")
 	}
 
-	b.WriteString(p.sectionHeader("Output devices (system audio)", p.Section == AudioSectionOutput))
-	b.WriteString("\n")
-	b.WriteString(p.renderList(p.Catalog.Outputs, p.Section == AudioSectionOutput, p.SystemMonitor))
+	b.WriteString(v.deviceBox("Output devices (system audio)", v.Catalog.Outputs, v.Section == AudioSectionOutput, v.SystemMonitor))
 	b.WriteString("\n\n")
+	b.WriteString(v.deviceBox("Input devices (microphone)", v.Catalog.Microphones, v.Section == AudioSectionMic, v.Microphone))
 
-	b.WriteString(p.sectionHeader("Input devices (microphone)", p.Section == AudioSectionMic))
-	b.WriteString("\n")
-	b.WriteString(p.renderList(p.Catalog.Microphones, p.Section == AudioSectionMic, p.Microphone))
-
-	if p.SavedMsg != "" {
+	if v.SavedMsg != "" {
 		b.WriteString("\n\n")
-		b.WriteString(okStyle.Render("✓ " + p.SavedMsg))
+		b.WriteString(okStyle.Render("✓ " + v.SavedMsg))
 	}
+
+	b.WriteString("\n\n")
+	b.WriteString(subtleStyle.Render("Legend: "))
+	b.WriteString(Badge("RUNNING", "ok"))
+	b.WriteString(" ")
+	b.WriteString(Badge("DEFAULT", "warn"))
+	b.WriteString("  ·  ")
+	b.WriteString(FooterHint("↑↓", "navigate"))
+	b.WriteString("  ")
+	b.WriteString(FooterHint("Tab", "switch section"))
+	b.WriteString("  ")
+	b.WriteString(FooterHint("Enter", "select"))
 
 	return b.String()
 }
 
-func (p AudioPanel) sectionHeader(title string, focused bool) string {
+func (v AudioView) deviceBox(title string, devices []audio.Device, focused bool, selectedID string) string {
 	prefix := "  "
 	if focused {
 		prefix = "▸ "
 	}
-	style := labelStyle
+	boxTitle := prefix + strings.ToUpper(title)
 	if focused {
-		style = titleStyle
+		boxTitle = boxTitleStyle.Render(boxTitle)
+	} else {
+		boxTitle = labelStyle.Render(boxTitle)
 	}
-	return style.Render(prefix + title)
-}
 
-func (p AudioPanel) renderList(devices []audio.Device, focused bool, selectedID string) string {
-	if len(devices) == 0 {
-		return labelStyle.Render("  (no devices found)")
-	}
 	var lines []string
-	for i, d := range devices {
-		lines = append(lines, p.renderDevice(devices, i, d, focused, selectedID))
+	if len(devices) == 0 {
+		lines = append(lines, subtleStyle.Render("  (no devices found)"))
+	} else {
+		for i, d := range devices {
+			lines = append(lines, v.renderDevice(devices, i, d, focused, selectedID))
+		}
 	}
-	return strings.Join(lines, "\n")
+	body := boxTitle + "\n" + strings.Join(lines, "\n")
+	return boxStyle.Width(v.Width).Render(body)
 }
 
-func (p AudioPanel) renderDevice(all []audio.Device, idx int, d audio.Device, focused bool, selectedID string) string {
+func (v AudioView) renderDevice(all []audio.Device, idx int, d audio.Device, focused bool, selectedID string) string {
 	marker := "  "
-	if focused && idx == p.Cursor {
+	if focused && idx == v.Cursor {
 		marker = "> "
 	}
 	sel := "○"
@@ -100,22 +107,24 @@ func (p AudioPanel) renderDevice(all []audio.Device, idx int, d audio.Device, fo
 		sel = "●"
 	}
 
-	var parts []string
+	var line string
 	if d.ID == audio.AutoID {
-		parts = append(parts, fmt.Sprintf("%s%s %s", marker, sel, d.Name))
+		line = fmt.Sprintf("%s%s %s", marker, sel, d.Name)
+		if d.IsDefault {
+			line += " " + Badge("DEFAULT", "warn")
+		}
 	} else {
-		state := stateStyle(d.State).Render(fmt.Sprintf("%-9s", d.State))
-		parts = append(parts, fmt.Sprintf("%s%s [%s] %s %s", marker, sel, d.NodeID, state, d.Name))
+		state := Badge(strings.ToUpper(d.State), badgeKindForState(d.State))
+		line = fmt.Sprintf("%s%s [%s] %s %s", marker, sel, d.NodeID, state, d.Name)
 		if d.Format != "" {
-			parts[len(parts)-1] += labelStyle.Render("  " + d.Format)
+			line += labelStyle.Render("  " + d.Format)
 		}
 		if d.IsDefault {
-			parts[len(parts)-1] += okStyle.Render("  default")
+			line += " " + Badge("DEFAULT", "warn")
 		}
 	}
 
-	line := parts[0]
-	if focused && idx == p.Cursor {
+	if focused && idx == v.Cursor {
 		line = valueStyle.Bold(true).Render(line)
 	} else {
 		line = valueStyle.Render(line)
@@ -131,25 +140,17 @@ func (p AudioPanel) renderDevice(all []audio.Device, idx int, d audio.Device, fo
 	return line
 }
 
-func stateStyle(state string) lipgloss.Style {
+func badgeKindForState(state string) string {
 	switch strings.ToUpper(state) {
 	case "RUNNING":
-		return okStyle
+		return "running"
 	case "SUSPENDED", "IDLE":
-		return warnStyle
+		return "warn"
 	default:
-		return labelStyle
+		return ""
 	}
 }
 
 func deviceSelected(deviceID, configuredID string) bool {
 	return deviceID == configuredID
-}
-
-// AudioHelpBar returns shortcuts for the audio screen.
-func AudioHelpBar() string {
-	keys := []string{
-		"↑/↓ navigate", "Tab switch", "Enter select", "o back", "R refresh",
-	}
-	return labelStyle.Render(strings.Join(keys, "  ·  "))
 }

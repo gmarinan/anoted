@@ -9,27 +9,8 @@ import (
 	"meetctl/internal/tui/components"
 )
 
-func (m Model) openAudioScreen() (Model, tea.Cmd) {
-	m.screen = ScreenAudio
-	m.audioSection = components.AudioSectionOutput
-	m.audioCursor = 0
-	m.audioLoading = true
-	m.audioErr = ""
-	m.audioSaved = ""
-	m.audioMonitorWarn = m.deps.Audio.MonitorWarning(m.deps.Config.Audio.SystemMonitor)
-	return m, tea.Batch(loadAudioCatalogCmd(m), resolveDeviceLabelsCmd(m))
-}
-
-func (m Model) closeAudioScreen() Model {
-	m.screen = ScreenMain
-	m.audioSaved = ""
-	return m
-}
-
-func (m Model) handleAudioKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
+func (m Model) handleAudioKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "o", "esc":
-		return m.closeAudioScreen(), resolveDeviceLabelsCmd(m)
 	case "tab":
 		if m.audioSection == components.AudioSectionOutput {
 			m.audioSection = components.AudioSectionMic
@@ -51,10 +32,6 @@ func (m Model) handleAudioKey(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		return m, nil
 	case "enter", " ":
 		return m, m.selectAudioDevice()
-	case "R":
-		m.audioLoading = true
-		m.audioErr = ""
-		return m, loadAudioCatalogCmd(m)
 	}
 	return m, nil
 }
@@ -144,7 +121,7 @@ func formatDeviceLabel(configured, resolved string) string {
 	return configured
 }
 
-func (m Model) handleAudioCatalog(msg audioCatalogMsg) (Model, tea.Cmd) {
+func (m Model) handleAudioCatalog(msg audioCatalogMsg) (tea.Model, tea.Cmd) {
 	m.audioLoading = false
 	if msg.err != nil {
 		m.audioErr = msg.err.Error()
@@ -155,7 +132,7 @@ func (m Model) handleAudioCatalog(msg audioCatalogMsg) (Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) handleConfigSaved(msg configSavedMsg) (Model, tea.Cmd) {
+func (m Model) handleConfigSaved(msg configSavedMsg) (tea.Model, tea.Cmd) {
 	if msg.err != nil {
 		m.audioErr = msg.err.Error()
 		return m, nil

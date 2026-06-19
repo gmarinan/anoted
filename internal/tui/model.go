@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"time"
 
 	"meetctl/internal/audio"
@@ -34,6 +33,7 @@ const (
 	ScreenDoctor   Screen = "doctor"
 	ScreenSessions Screen = "sessions"
 	ScreenAudio    Screen = "audio"
+	ScreenConfig   Screen = "config"
 )
 
 // Deps bundles injected services for the TUI.
@@ -65,8 +65,10 @@ type Model struct {
 	recordStart  time.Time
 	sessionDir   string
 	errMsg       string
-	doctorLines  []string
-	sessionLines []string
+	doctorReport doctor.Report
+	sessions     []session.Record
+	sessionCursor int
+	sessionsErr  string
 	width        int
 	height       int
 	quitting     bool
@@ -81,6 +83,15 @@ type Model struct {
 	audioMonitorWarn string
 	systemDevice     string // resolved label for main screen
 	micDevice        string
+
+	// Config YAML editor
+	configLines     []string
+	configCursorRow int
+	configCursorCol int
+	configScrollRow int
+	configDirty     bool
+	configErr       string
+	configSavedMsg  string
 }
 
 // NewModel creates the initial TUI model.
@@ -138,25 +149,13 @@ type configSavedMsg struct {
 	err error
 }
 
-func loadDoctorLines(cfg config.Config) []string {
-	rep := doctor.Run(cfg)
-	var lines []string
-	for _, c := range rep.Checks {
-		lines = append(lines, fmt.Sprintf("[%s] %s: %s",
-			components.StatusBadge(c.Status), c.Name, c.Detail))
-	}
-	return lines
+func loadDoctorReport(cfg config.Config) doctor.Report {
+	return doctor.Run(cfg)
 }
 
-func loadSessionLines(store session.Store) []string {
-	recs, err := store.List(20)
-	if err != nil {
-		return []string{fmt.Sprintf("error: %v", err)}
+func loadSessionRecords(store session.Store) ([]session.Record, error) {
+	if store == nil {
+		return nil, nil
 	}
-	var lines []string
-	for _, r := range recs {
-		lines = append(lines, fmt.Sprintf("#%d %s %s %s",
-			r.ID, r.StartedAt.Format("2006-01-02 15:04"), r.Provider, r.Dir))
-	}
-	return lines
+	return store.List(50)
 }

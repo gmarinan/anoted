@@ -1,113 +1,112 @@
 package components
 
 import (
-	"fmt"
 	"strings"
-	"time"
-
-	"charm.land/lipgloss/v2"
 )
 
-var (
-	titleStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("63"))
-	labelStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
-	valueStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
-	warnStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
-	errStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("203"))
-	okStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
-	recStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("203")).Background(lipgloss.Color("52"))
-)
-
-// StatusPanel renders the main status block.
-type StatusPanel struct {
-	AppState      string
-	Platform      string
-	Backend       string
-	Provider      string
-	SystemDevice  string
-	MicDevice     string
-	Recording     bool
-	Duration      time.Duration
-	SessionDir    string
-	AutoRecord    bool
-	AwaitingConfirm bool
-	ConfirmPrompt string
-	StatusNote    string
-	DetectionWarn string
-	ErrorMsg      string
+// FooterForTab returns context-sensitive footer shortcuts.
+func FooterForTab(tab TabID, awaitingConfirm bool) string {
+	switch tab {
+	case TabHome:
+		if awaitingConfirm {
+			return JoinFooter(
+				FooterHint("y", "start recording"),
+				FooterHint("n", "dismiss"),
+				FooterHint("1-5", "tabs"),
+				FooterHint("q", "quit"),
+			)
+		}
+		return JoinFooter(
+			FooterHint("r", "record"),
+			FooterHint("a", "auto-record"),
+			FooterHint("1-5", "tabs"),
+			FooterHint("q", "quit"),
+		)
+	case TabAudio:
+		return JoinFooter(
+			FooterHint("↑↓", "navigate"),
+			FooterHint("Tab", "section"),
+			FooterHint("Enter", "select"),
+			FooterHint("R", "refresh"),
+			FooterHint("1-5", "tabs"),
+			FooterHint("q", "quit"),
+		)
+	case TabDoctor:
+		return JoinFooter(
+			FooterHint("R", "refresh"),
+			FooterHint("1-5", "tabs"),
+			FooterHint("q", "quit"),
+		)
+	case TabSessions:
+		return JoinFooter(
+			FooterHint("↑↓", "navigate"),
+			FooterHint("o", "open folder"),
+			FooterHint("p", "play"),
+			FooterHint("R", "refresh"),
+			FooterHint("1-5", "tabs"),
+			FooterHint("q", "quit"),
+		)
+	case TabConfig:
+		return JoinFooter(
+			FooterHint("Ctrl+S", "save"),
+			FooterHint("R", "reload"),
+			FooterHint("1-5", "tabs"),
+			FooterHint("q", "quit"),
+		)
+	default:
+		return JoinFooter(FooterHint("q", "quit"))
+	}
 }
 
-func (p StatusPanel) View(width int) string {
-	var lines []string
-	lines = append(lines, titleStyle.Render("meetctl"))
-
-	if p.Recording && p.AppState == "recording" {
-		lines = append(lines, recStyle.Render(" ● RECORDING "))
+// ScreenToTab maps internal screen IDs to tab IDs.
+func ScreenToTab(screen string) TabID {
+	switch screen {
+	case "audio":
+		return TabAudio
+	case "doctor":
+		return TabDoctor
+	case "sessions":
+		return TabSessions
+	case "config":
+		return TabConfig
+	default:
+		return TabHome
 	}
-
-	lines = append(lines, row("State", p.AppState))
-	lines = append(lines, row("Platform", p.Platform))
-	lines = append(lines, row("Audio backend", p.Backend))
-	if p.SystemDevice != "" {
-		lines = append(lines, row("System audio", p.SystemDevice))
-	}
-	if p.MicDevice != "" {
-		lines = append(lines, row("Microphone", p.MicDevice))
-	}
-	lines = append(lines, row("Meeting", p.Provider))
-	if p.Recording {
-		lines = append(lines, row("Duration", p.Duration.Round(time.Second).String()))
-		lines = append(lines, row("Output", p.SessionDir))
-	}
-	lines = append(lines, row("Auto-record", fmt.Sprintf("%v", p.AutoRecord)))
-
-	if p.AwaitingConfirm {
-		lines = append(lines, warnStyle.Render("⚠ "+p.ConfirmPrompt))
-	}
-	if p.StatusNote != "" {
-		lines = append(lines, okStyle.Render("✓ "+p.StatusNote))
-	}
-
-	if p.DetectionWarn != "" {
-		lines = append(lines, warnStyle.Render("⚠ "+p.DetectionWarn))
-	}
-	if p.ErrorMsg != "" {
-		lines = append(lines, errStyle.Render("✗ "+p.ErrorMsg))
-	}
-
-	body := strings.Join(lines, "\n")
-	if width > 0 {
-		return lipgloss.NewStyle().Width(width).Render(body)
-	}
-	return body
 }
 
+// TabToScreen maps tab IDs to internal screen IDs.
+func TabToScreen(tab TabID) string {
+	switch tab {
+	case TabAudio:
+		return "audio"
+	case TabDoctor:
+		return "doctor"
+	case TabSessions:
+		return "sessions"
+	case TabConfig:
+		return "config"
+	default:
+		return "main"
+	}
+}
+
+// NextTab cycles to the next tab.
+func NextTab(current TabID) TabID {
+	return TabID((int(current) + 1) % len(tabLabels))
+}
+
+// PrevTab cycles to the previous tab.
+func PrevTab(current TabID) TabID {
+	n := int(current) - 1
+	if n < 0 {
+		n = len(tabLabels) - 1
+	}
+	return TabID(n)
+}
+
+// Legacy helpers kept for tests.
 func row(label, value string) string {
 	return labelStyle.Render(label+":") + " " + valueStyle.Render(value)
-}
-
-// HelpBar renders keyboard shortcuts.
-func HelpBar(awaitingConfirm bool) string {
-	if awaitingConfirm {
-		return labelStyle.Render("y start recording  ·  n dismiss  ·  q quit")
-	}
-	keys := []string{
-		"q quit", "r record", "a auto-record", "o audio", "d doctor", "s sessions",
-	}
-	return labelStyle.Render(strings.Join(keys, "  ·  "))
-}
-
-// DoctorPanel renders doctor check results.
-func DoctorPanel(lines []string) string {
-	return titleStyle.Render("Doctor") + "\n" + strings.Join(lines, "\n")
-}
-
-// SessionsPanel renders a simple session list.
-func SessionsPanel(lines []string) string {
-	if len(lines) == 0 {
-		return titleStyle.Render("Sessions") + "\n" + labelStyle.Render("(none)")
-	}
-	return titleStyle.Render("Sessions") + "\n" + strings.Join(lines, "\n")
 }
 
 // StatusBadge returns a styled status string.
@@ -122,4 +121,9 @@ func StatusBadge(status string) string {
 	default:
 		return valueStyle.Render(status)
 	}
+}
+
+// FormatDoctorLine formats a single doctor check for plain-text output.
+func FormatDoctorLine(status, name, detail string) string {
+	return strings.Join([]string{"[" + StatusBadge(status) + "]", name + ":", detail}, " ")
 }

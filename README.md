@@ -80,12 +80,16 @@ meetctl detects WSL2 and will use the helper for real Windows audio when the pro
 
 | Key | Action |
 |-----|--------|
+| `1`–`5` / `Tab` | Switch tabs: Home, Audio, Doctor, Sessions, Config |
 | `q` | Quit |
 | `r` | Start/stop manual recording |
 | `a` | Toggle auto-record |
-| `o` | Audio devices (system monitor + microphone) |
-| `d` | Doctor / debug screen |
-| `s` | Sessions list |
+| `y` / `n` | Confirm or dismiss auto-record prompt |
+| `Ctrl+S` | Save config (Config tab) |
+| `↑`/`↓` | Navigate lists (Audio, Sessions) or YAML editor lines |
+| `Enter` | Select audio device / new line in config editor |
+| `o` / `p` | Open session folder / play recording (Sessions tab) |
+| `R` | Refresh current tab |
 
 ## Configuration
 

@@ -40,79 +40,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleAudioCatalog(msg)
 	case configSavedMsg:
 		return m.handleConfigSaved(msg)
+	case sessionsActionMsg:
+		return m.handleSessionsAction(msg)
+	case configEditorSaveMsg:
+		return m.handleConfigEditorSave(msg)
 	case deviceLabelsMsg:
 		m = m.handleDeviceLabels(msg)
 		return m, nil
-	}
-	return m, nil
-}
-
-func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	if m.screen == ScreenAudio {
-		return m.handleAudioKey(msg)
-	}
-
-	switch msg.String() {
-	case "q", "ctrl+c":
-		m.quitting = true
-		if m.recording {
-			return m, tea.Sequence(stopRecordingCmd(m, false), tea.Quit)
-		}
-		return m, tea.Quit
-	case "r":
-		if m.recording {
-			return m, stopRecordingCmd(m, false)
-		}
-		return m, startRecordingCmd(m)
-	case "a":
-		m.autoRecord = !m.autoRecord
-		if !m.autoRecord {
-			m.awaitingRecordConfirm = false
-			return m, nil
-		}
-		if m.detection.InMeeting && !m.recording {
-			if m.deps.Config.AutoRecordRequiresConfirmation {
-				if !m.recordConfirmDismissed {
-					m.awaitingRecordConfirm = true
-					m.appState = StateAwaitingRecordConfirm
-				}
-				return m, nil
-			}
-			return m, startRecordingCmd(m)
-		}
-		return m, nil
-	case "y", "enter":
-		if m.awaitingRecordConfirm && !m.recording {
-			m.awaitingRecordConfirm = false
-			return m, startRecordingCmd(m)
-		}
-		return m, nil
-	case "n", "esc":
-		if m.awaitingRecordConfirm {
-			m.awaitingRecordConfirm = false
-			m.recordConfirmDismissed = true
-			m.appState = StateInMeeting
-			return m, nil
-		}
-		return m, nil
-	case "d":
-		if m.screen == ScreenDoctor {
-			m.screen = ScreenMain
-		} else {
-			m.doctorLines = loadDoctorLines(m.deps.Config)
-			m.screen = ScreenDoctor
-		}
-		return m, nil
-	case "s":
-		if m.screen == ScreenSessions {
-			m.screen = ScreenMain
-		} else {
-			m.sessionLines = loadSessionLines(m.deps.Store)
-			m.screen = ScreenSessions
-		}
-		return m, nil
-	case "o":
-		return m.openAudioScreen()
 	}
 	return m, nil
 }
@@ -185,6 +119,12 @@ func (m Model) handleRecordToggle(msg recordToggleResultMsg) (tea.Model, tea.Cmd
 		m.statusNote = "Meeting ended — saved to " + msg.savedDir
 	} else {
 		m.sessionDir = ""
+	}
+	if m.screen == ScreenSessions {
+		recs, err := loadSessionRecords(m.deps.Store)
+		if err == nil {
+			m.sessions = recs
+		}
 	}
 	if m.detection.InMeeting {
 		m.appState = StateInMeeting
