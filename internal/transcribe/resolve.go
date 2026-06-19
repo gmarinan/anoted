@@ -27,10 +27,13 @@ func resolveBinary(cfg config.TranscriptionConfig) (path, backend string, err er
 				return p, BackendWhisperCpp, nil
 			}
 		}
+		if ManagedWhisperInstalled() {
+			return ManagedWhisperBinary(), BackendOpenAI, nil
+		}
 		if p, err := exec.LookPath("whisper"); err == nil {
 			return p, BackendOpenAI, nil
 		}
-		return "", "", fmt.Errorf("whisper not found in PATH (install openai-whisper or whisper.cpp)")
+		return "", "", fmt.Errorf("whisper not found — run meetctl setup or install openai-whisper")
 	}
 
 	switch want {
@@ -42,6 +45,9 @@ func resolveBinary(cfg config.TranscriptionConfig) (path, backend string, err er
 		}
 		return "", "", fmt.Errorf("whisper.cpp binary not found (whisper-cli / whisper-cpp)")
 	case BackendOpenAI:
+		if ManagedWhisperInstalled() {
+			return ManagedWhisperBinary(), BackendOpenAI, nil
+		}
 		p, err := exec.LookPath("whisper")
 		if err != nil {
 			return "", "", fmt.Errorf("openai-whisper CLI not found (whisper)")
@@ -83,13 +89,12 @@ func resolveDevice(cfg config.TranscriptionConfig) string {
 }
 
 func hasCUDA() bool {
-	_, err := exec.LookPath("nvidia-smi")
-	return err == nil
+	return NVIDIAAvailable()
 }
 
 func resolvedModel(cfg config.TranscriptionConfig) string {
 	if cfg.Model != "" {
 		return cfg.Model
 	}
-	return "base"
+	return "turbo"
 }

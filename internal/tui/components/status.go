@@ -4,8 +4,16 @@ import (
 	"strings"
 )
 
+// SessionsFooterMode selects footer shortcuts on the Sessions screen.
+type SessionsFooterMode int
+
+const (
+	SessionsFooterNormal SessionsFooterMode = iota
+	SessionsFooterOpenerPicker
+)
+
 // FooterForTab returns context-sensitive footer shortcuts.
-func FooterForTab(tab TabID, awaitingConfirm bool) string {
+func FooterForTab(tab TabID, awaitingConfirm bool, sessionsMode SessionsFooterMode) string {
 	switch tab {
 	case TabHome:
 		if awaitingConfirm {
@@ -33,10 +41,19 @@ func FooterForTab(tab TabID, awaitingConfirm bool) string {
 			FooterHint("q", "quit"),
 		)
 	case TabSessions:
+		if sessionsMode == SessionsFooterOpenerPicker {
+			return JoinFooter(
+				FooterHint("↑↓", "choose"),
+				FooterHint("Enter", "apply"),
+				FooterHint("Esc", "cancel"),
+				FooterHint("q", "quit"),
+			)
+		}
 		return JoinFooter(
 			FooterHint("↑↓", "navigate"),
 			FooterHint("t", "transcribe"),
 			FooterHint("o", "open folder"),
+			FooterHint("f", "folder opener"),
 			FooterHint("p", "play"),
 			FooterHint("R", "refresh"),
 			FooterHint("1-4", "screens"),

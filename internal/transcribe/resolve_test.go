@@ -16,7 +16,7 @@ func TestDetectBackend(t *testing.T) {
 }
 
 func TestResolvedModelDefault(t *testing.T) {
-	if got := resolvedModel(config.TranscriptionConfig{}); got != "base" {
+	if got := resolvedModel(config.TranscriptionConfig{}); got != "turbo" {
 		t.Fatalf("got %q", got)
 	}
 }

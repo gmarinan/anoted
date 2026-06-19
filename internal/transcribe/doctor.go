@@ -2,7 +2,6 @@ package transcribe
 
 import (
 	"fmt"
-	"os/exec"
 
 	"meetctl/internal/config"
 )
@@ -100,15 +99,4 @@ func BinaryPath(cfg config.Config) (string, error) {
 // IsInstalled reports whether a whisper backend is available.
 func IsInstalled(cfg config.Config) bool {
 	return Verify(cfg) == nil
-}
-
-// InstallHint returns a suggested install command for the current OS.
-func InstallHint() string {
-	if _, err := exec.LookPath("pacman"); err == nil {
-		return "sudo pacman -S whisper.cpp  # or: pip install -U openai-whisper"
-	}
-	if _, err := exec.LookPath("apt-get"); err == nil {
-		return "pip install -U openai-whisper  # or build whisper.cpp from source"
-	}
-	return "pip install -U openai-whisper  # or install whisper.cpp (whisper-cli)"
 }

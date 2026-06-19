@@ -24,14 +24,24 @@ type Config struct {
 	Audio                          AudioConfig           `yaml:"audio"`
 	Detection                      DetectConfig          `yaml:"detection"`
 	Transcription                  TranscriptionConfig   `yaml:"transcription"`
+	Desktop                        DesktopConfig         `yaml:"desktop"`
 	Privacy                        PrivacyConfig         `yaml:"privacy"`
+}
+
+type DesktopConfig struct {
+	// Opener: auto, xdg-open, dolphin, nautilus, thunar, pcmanfm, nemo, caja, custom
+	Opener string `yaml:"opener"`
+	// OpenCommand is used when opener is custom, e.g. ["dolphin", "{path}"]
+	OpenCommand []string `yaml:"open_command"`
+	// FileOpener overrides how recording.wav is opened (default: xdg-open).
+	FileOpener string `yaml:"file_opener"`
 }
 
 type TranscriptionConfig struct {
 	AutoAfterRecording bool   `yaml:"auto_after_recording"`
 	Binary             string `yaml:"binary"`      // empty = auto-detect in PATH
 	Backend            string `yaml:"backend"`     // auto, openai-whisper, whisper-cpp
-	Model              string `yaml:"model"`       // tiny, base, small, medium, large
+	Model              string `yaml:"model"`       // tiny, base, small, medium, large, turbo
 	Language           string `yaml:"language"`    // empty = auto-detect
 	Device             string `yaml:"device"`      // cpu, cuda, auto
 	GPULayers          int    `yaml:"gpu_layers"`  // whisper.cpp -ngl (0 = CPU only)
@@ -91,9 +101,12 @@ func Default() Config {
 		Transcription: TranscriptionConfig{
 			AutoAfterRecording: false,
 			Backend:            "auto",
-			Model:              "base",
+			Model:              "turbo",
 			Device:             "auto",
 			GPULayers:          0,
+		},
+		Desktop: DesktopConfig{
+			Opener: "auto",
 		},
 		Privacy: PrivacyConfig{
 			ShowRecordingIndicator:       true,
@@ -244,6 +257,9 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Transcription.Device == "" {
 		c.Transcription.Device = def.Transcription.Device
+	}
+	if c.Desktop.Opener == "" {
+		c.Desktop.Opener = def.Desktop.Opener
 	}
 }
 

@@ -58,6 +58,8 @@ func Run(cfg config.Config) Report {
 		rep.Checks = append(rep.Checks, Check{Name: c.Name, Status: c.Status, Detail: c.Detail})
 	}
 
+	rep.Checks = append(rep.Checks, desktopCheck(cfg))
+
 	return rep
 }
 

@@ -41,6 +41,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleAudioCatalog(msg)
 	case configSavedMsg:
 		return m.handleConfigSaved(msg)
+	case desktopOpenerSavedMsg:
+		return m.handleDesktopOpenerSaved(msg)
 	case sessionsActionMsg:
 		return m.handleSessionsAction(msg)
 	case configEditorSaveMsg:

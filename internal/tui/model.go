@@ -96,6 +96,10 @@ type Model struct {
 
 	transcribing   bool
 	transcribeNote string
+
+	sessionsOpenerPicker bool
+	sessionsOpenerCursor int
+	sessionsDesktopNote  string
 }
 
 // NewModel creates the initial TUI model.

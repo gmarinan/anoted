@@ -1,0 +1,194 @@
+package transcribe
+
+import (
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+)
+
+const managedVenvName = "whisper-venv"
+
+// ManagedVenvDir is the meetctl-managed Python venv for OpenAI Whisper.
+func ManagedVenvDir() string {
+	if xdg := os.Getenv("XDG_DATA_HOME"); xdg != "" {
+		return filepath.Join(xdg, "meetctl", managedVenvName)
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return filepath.Join(".local", "share", "meetctl", managedVenvName)
+	}
+	return filepath.Join(home, ".local", "share", "meetctl", managedVenvName)
+}
+
+// ManagedWhisperBinary returns the whisper CLI path inside the managed venv.
+func ManagedWhisperBinary() string {
+	return filepath.Join(ManagedVenvDir(), "bin", "whisper")
+}
+
+// IsManagedBinary reports whether path is the meetctl-managed whisper binary.
+func IsManagedBinary(path string) bool {
+	if path == "" {
+		return false
+	}
+	absManaged, err := filepath.Abs(ManagedWhisperBinary())
+	if err != nil {
+		return false
+	}
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return false
+	}
+	return absPath == absManaged
+}
+
+// ManagedWhisperInstalled reports whether the managed venv whisper exists.
+func ManagedWhisperInstalled() bool {
+	_, err := os.Stat(ManagedWhisperBinary())
+	return err == nil
+}
+
+// InstallManaged creates/updates the meetctl venv with CPU PyTorch + openai-whisper.
+// No root required; downloads from PyPI (~400–600 MB).
+func InstallManaged(out io.Writer) error {
+	py, err := findPython()
+	if err != nil {
+		return err
+	}
+
+	venv := ManagedVenvDir()
+	if err := os.MkdirAll(filepath.Dir(venv), 0o755); err != nil {
+		return fmt.Errorf("create data dir: %w", err)
+	}
+
+	python := filepath.Join(venv, "bin", "python")
+	if _, err := os.Stat(python); err != nil {
+		fmt.Fprintf(out, "  Creating venv at %s\n", venv)
+		if err := runCmd(py, "-m", "venv", venv); err != nil {
+			return fmt.Errorf("create venv: %w", err)
+		}
+	}
+
+	pip := filepath.Join(venv, "bin", "pip")
+	steps := []struct {
+		desc string
+		args []string
+	}{
+		{"Upgrading pip", []string{pip, "install", "-U", "pip"}},
+		{"Installing PyTorch (CPU)", []string{pip, "install", "torch", "--index-url", "https://download.pytorch.org/whl/cpu"}},
+		{"Installing openai-whisper", []string{pip, "install", "-U", "openai-whisper"}},
+	}
+	for _, step := range steps {
+		fmt.Fprintf(out, "  %s…\n", step.desc)
+		if err := runCmd(step.args...); err != nil {
+			return fmt.Errorf("%s: %w", step.desc, err)
+		}
+	}
+
+	if !ManagedWhisperInstalled() {
+		return fmt.Errorf("whisper binary missing after install")
+	}
+	fmt.Fprintf(out, "  ✓ Installed: %s\n", ManagedWhisperBinary())
+	return nil
+}
+
+// UpgradeManagedTorchCUDA replaces CPU PyTorch with a CUDA build in the managed venv.
+func UpgradeManagedTorchCUDA(out io.Writer) error {
+	if !ManagedWhisperInstalled() {
+		return fmt.Errorf("managed venv not installed — run meetctl setup first")
+	}
+	pip := filepath.Join(ManagedVenvDir(), "bin", "pip")
+	indexes := []string{
+		"https://download.pytorch.org/whl/cu126",
+		"https://download.pytorch.org/whl/cu124",
+		"https://download.pytorch.org/whl/cu121",
+	}
+	var lastErr error
+	for _, idx := range indexes {
+		fmt.Fprintf(out, "  Installing PyTorch (CUDA) from %s…\n", idx)
+		err := runCmd(pip, "install", "-U", "torch", "--index-url", idx)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		if ManagedTorchCUDAAvailable() {
+			return nil
+		}
+		lastErr = fmt.Errorf("torch installed but CUDA not available")
+	}
+	if lastErr == nil {
+		lastErr = fmt.Errorf("no CUDA torch wheel matched this system")
+	}
+	return lastErr
+}
+
+// ManagedTorchCUDAAvailable reports whether the managed venv can use CUDA.
+func ManagedTorchCUDAAvailable() bool {
+	python := filepath.Join(ManagedVenvDir(), "bin", "python")
+	cmd := exec.Command(python, "-c", "import torch; raise SystemExit(0 if torch.cuda.is_available() else 1)")
+	return cmd.Run() == nil
+}
+
+func runCmd(args ...string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("empty command")
+	}
+	cmd := exec.Command(args[0], args[1:]...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+func findPython() (string, error) {
+	if py := firstPython(); py != "" {
+		return py, nil
+	}
+	return "", fmt.Errorf("python3 not found — %s", PythonInstallHint())
+}
+
+// FindPython returns the resolved Python interpreter path.
+func FindPython() (string, error) {
+	return findPython()
+}
+
+var pythonCandidates = []string{
+	"python3",
+	"python",
+	"/usr/bin/python3",
+	"/usr/bin/python",
+	"/usr/local/bin/python3",
+}
+
+func firstPython() string {
+	for _, name := range pythonCandidates {
+		if path, ok := resolvePython(name); ok {
+			return path
+		}
+	}
+	return ""
+}
+
+func resolvePython(name string) (string, bool) {
+	if path := findExecutable(name); path != "" {
+		return path, true
+	}
+	return "", false
+}
+
+// PythonInstallHint returns how to install Python on this system.
+func PythonInstallHint() string {
+	if hasCmd("pacman") {
+		return "install: sudo pacman -S python"
+	}
+	if hasCmd("apt-get") {
+		return "install: sudo apt install python3 python3-venv"
+	}
+	return "install Python 3.8+ with venv support"
+}
+
+func hasCmd(name string) bool {
+	_, err := exec.LookPath(name)
+	return err != nil
+}

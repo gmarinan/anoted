@@ -226,6 +226,11 @@ func askYes(in io.Reader, out io.Writer, prompt string) bool {
 	return ans == "" || strings.EqualFold(ans, "y") || strings.EqualFold(ans, "yes")
 }
 
+func askNo(in io.Reader, out io.Writer, prompt string) bool {
+	ans := askChoice(in, out, prompt, "n")
+	return strings.EqualFold(ans, "y") || strings.EqualFold(ans, "yes")
+}
+
 func hasTool(name string) bool {
 	_, err := exec.LookPath(name)
 	return err == nil

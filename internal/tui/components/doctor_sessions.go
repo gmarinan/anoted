@@ -2,7 +2,6 @@ package components
 
 import (
 	"fmt"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -97,14 +96,28 @@ func (v DoctorView) warningsBox(width int) string {
 	return Box("Warnings / recommendations", strings.Join(warns, "\n"), width)
 }
 
+// FolderOpenerChoice is one row in the folder-opener picker.
+type FolderOpenerChoice struct {
+	ID          string
+	Label       string
+	Description string
+	Available   bool
+}
+
 // SessionsView renders the Sessions tab.
 type SessionsView struct {
-	Records      []session.Record
-	Cursor       int
-	ErrMsg       string
-	Transcribing bool
-	StatusNote   string
-	Width        int
+	Records         []session.Record
+	Cursor          int
+	ErrMsg          string
+	Transcribing    bool
+	StatusNote      string
+	DesktopNote     string
+	Width           int
+	OpenerPicker    bool
+	OpenerCursor    int
+	OpenerChoices   []FolderOpenerChoice
+	CurrentOpener   string
+	OpenerDetected  string
 }
 
 func (v SessionsView) View() string {
@@ -123,7 +136,16 @@ func (v SessionsView) View() string {
 			b.WriteString(okStyle.Render("✓ " + v.StatusNote))
 		}
 	}
+	if v.DesktopNote != "" {
+		b.WriteString("\n")
+		b.WriteString(okStyle.Render("✓ " + v.DesktopNote))
+	}
 	b.WriteString("\n\n")
+
+	if v.OpenerPicker {
+		b.WriteString(v.openerBox(tableW))
+		return b.String()
+	}
 
 	colW := v.columnWidth()
 	b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, v.detailsBox(colW), " ", v.actionsBox(colW)))
@@ -212,13 +234,60 @@ func (v SessionsView) detailsBox(width int) string {
 
 func (v SessionsView) actionsBox(width int) string {
 	lines := []string{
+		row("Open folders", v.OpenerDetected),
+		row("Setting", openerSettingLabel(v.CurrentOpener)),
+		"",
 		FooterHint("↑↓", "Navigate list"),
 		FooterHint("t", "Transcribe (Whisper)"),
 		FooterHint("o", "Open session folder"),
+		FooterHint("f", "Choose folder opener"),
 		FooterHint("p", "Play recording"),
 		FooterHint("R", "Refresh list"),
 	}
 	return Box("Actions (keyboard)", strings.Join(lines, "\n"), width)
+}
+
+func (v SessionsView) openerBox(width int) string {
+	var lines []string
+	lines = append(lines, row("Active", openerSettingLabel(v.CurrentOpener)))
+	lines = append(lines, row("Resolves to", truncate(v.OpenerDetected, width-14)))
+	lines = append(lines, "")
+
+	for i, opt := range v.OpenerChoices {
+		marker := "  "
+		if i == v.OpenerCursor {
+			marker = "> "
+		}
+		sel := "○"
+		if opt.ID == v.CurrentOpener {
+			sel = "●"
+		}
+		line := fmt.Sprintf("%s%s %s", marker, sel, opt.Label)
+		if !opt.Available {
+			line += " " + Badge("N/A", "warn")
+		}
+		if i == v.OpenerCursor {
+			line = valueStyle.Bold(true).Render(line)
+		} else {
+			line = valueStyle.Render(line)
+		}
+		lines = append(lines, line)
+		if i == v.OpenerCursor && opt.Description != "" {
+			lines = append(lines, subtleStyle.Render("      "+truncate(opt.Description, width-8)))
+		}
+	}
+	return Box("Open folder with", strings.Join(lines, "\n"), width)
+}
+
+func openerSettingLabel(id string) string {
+	switch id {
+	case "", "auto":
+		return "Auto-detect"
+	case "xdg-open":
+		return "xdg-open"
+	default:
+		return id
+	}
 }
 
 func formatProvider(p string) string {
@@ -235,8 +304,3 @@ func formatProvider(p string) string {
 }
 
 const sessionAudioName = "recording.wav"
-
-// OpenPath opens a file or directory with the desktop default handler.
-func OpenPath(path string) error {
-	return exec.Command("xdg-open", path).Start()
-}

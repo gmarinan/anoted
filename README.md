@@ -115,14 +115,20 @@ Recordings are saved under `~/Music/meetctl/` by default:
 transcription:
   auto_after_recording: false   # transcribe when recording stops
   backend: auto                 # auto, openai-whisper, whisper-cpp
-  model: base                   # tiny, base, small, medium, large
+  model: turbo                  # tiny, base, small, medium, large, turbo (recommended)
   device: auto                  # cpu, cuda, auto
   gpu_layers: 0                 # whisper.cpp only (99 = full GPU)
   model_path: ""                # path to ggml model for whisper.cpp
   language: ""                  # empty = auto-detect
 ```
 
-Install: `sudo pacman -S whisper.cpp` or `pip install -U openai-whisper`. Run `meetctl setup` for guided install.
+Install: run `meetctl setup` (installs a local venv at `~/.local/share/meetctl/whisper-venv`, no sudo). Optional: `sudo pacman -S python-openai-whisper` or `yay -S whisper.cpp` for GPU.
+
+### Desktop (open folder / play file)
+
+In **Sessions**, press **`f`** to choose how folders open (auto-detect, Dolphin, Thunar, xdg-open, etc.). Skips disk-usage apps like Baobab when using auto.
+
+Play recording (`p`) uses `xdg-open`.
 
 ## Development
 

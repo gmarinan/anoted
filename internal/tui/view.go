@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"meetctl/internal/tui/components"
+	"meetctl/internal/open"
 )
 
 func (m Model) View() tea.View {
@@ -29,7 +30,7 @@ func (m Model) View() tea.View {
 	}
 
 	content.WriteString("\n\n")
-	content.WriteString(components.FooterForTab(tab, m.awaitingRecordConfirm))
+	content.WriteString(components.FooterForTab(tab, m.awaitingRecordConfirm, m.sessionsFooter()))
 
 	v := tea.NewView(content.String())
 	v.AltScreen = true
@@ -99,13 +100,26 @@ func (m Model) doctorView() components.DoctorView {
 
 func (m Model) sessionsView() components.SessionsView {
 	return components.SessionsView{
-		Records:      m.sessions,
-		Cursor:       m.sessionCursor,
-		ErrMsg:       m.sessionsErr,
-		Transcribing: m.transcribing,
-		StatusNote:   m.transcribeNote,
-		Width:        m.width,
+		Records:         m.sessions,
+		Cursor:          m.sessionCursor,
+		ErrMsg:          m.sessionsErr,
+		Transcribing:    m.transcribing,
+		StatusNote:      m.transcribeNote,
+		DesktopNote:     m.sessionsDesktopNote,
+		Width:           m.width,
+		OpenerPicker:    m.sessionsOpenerPicker,
+		OpenerCursor:    m.sessionsOpenerCursor,
+		OpenerChoices:   m.sessionsOpenerChoices(),
+		CurrentOpener:   open.CurrentOpenerID(m.deps.Config.Desktop),
+		OpenerDetected:  open.Detected(m.deps.Config.Desktop, open.KindFolder),
 	}
+}
+
+func (m Model) sessionsFooter() components.SessionsFooterMode {
+	if m.sessionsOpenerPicker {
+		return components.SessionsFooterOpenerPicker
+	}
+	return components.SessionsFooterNormal
 }
 
 func (m Model) configView() components.ConfigView {

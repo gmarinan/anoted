@@ -7,60 +7,168 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 
 	"meetctl/internal/config"
 	"meetctl/internal/transcribe"
 )
 
 func setupTranscription(in io.Reader, out io.Writer, cfg *config.Config, autoInstall bool) {
-	fmt.Fprintln(out, "[4/4] Transcription (Whisper, optional)")
-	fmt.Fprintln(out, "  Transcribe recordings locally — output saved as transcript.txt in each session folder.")
+	fmt.Fprintln(out, "[4/4] Transcription (Whisper)")
+	fmt.Fprintln(out, "  ─────────────────────────────────────")
+	fmt.Fprintln(out, "  Local speech-to-text → transcript.txt + .srt per session")
 	fmt.Fprintln(out)
 
-	if askYes(in, out, "  Enable auto-transcription after each recording? [y/N]: ") {
+	if askNo(in, out, "  Auto-transcribe after each recording? [y/N]: ") {
 		cfg.Transcription.AutoAfterRecording = true
 	}
 
-	if transcribe.IsInstalled(*cfg) {
-		path, _ := transcribe.BinaryPath(*cfg)
-		fmt.Fprintf(out, "  ✓ Whisper found: %s\n", path)
+	whisperReady := transcribe.IsInstalled(*cfg)
+	if whisperReady {
+		printWhisperStatus(out, cfg)
 	} else {
-		fmt.Fprintln(out, "  ⚠ Whisper not installed")
-		fmt.Fprintf(out, "    Install hint: %s\n", transcribe.InstallHint())
-		if autoInstall || askYes(in, out, "  Try installing whisper.cpp now? (needs sudo) [y/N]: ") {
-			if err := installWhisperCpp(out); err != nil {
+		printWhisperInstallHints(out)
+		prompt := "  Install Whisper in local venv (~500MB, no sudo)? [y/N]: "
+		if autoInstall || askNo(in, out, prompt) {
+			if err := installWhisper(out, autoInstall); err != nil {
 				fmt.Fprintf(out, "  ⚠ Install failed: %v\n", err)
-			} else if transcribe.IsInstalled(*cfg) {
-				path, _ := transcribe.BinaryPath(*cfg)
-				fmt.Fprintf(out, "  ✓ Whisper ready: %s\n", path)
+				fmt.Fprintf(out, "    Retry: %s\n", transcribe.InstallHint())
+			} else {
+				cfg.Transcription.Binary = transcribe.ManagedWhisperBinary()
+				cfg.Transcription.Backend = transcribe.BackendOpenAI
+				whisperReady = true
+				fmt.Fprintf(out, "  ✓ Whisper ready: %s\n", cfg.Transcription.Binary)
 			}
 		}
 	}
 
-	if hasCUDA() && askYes(in, out, "  Use GPU (CUDA) for transcription? [y/N]: ") {
-		cfg.Transcription.Device = transcribe.DeviceCUDA
-		cfg.Transcription.GPULayers = 99
-		fmt.Fprintln(out, "  ✓ GPU enabled (transcription.device: cuda, gpu_layers: 99)")
-	} else {
-		cfg.Transcription.Device = transcribe.DeviceCPU
-		fmt.Fprintln(out, "  ○ Using CPU for transcription")
+	if !whisperReady {
+		fmt.Fprintln(out)
+		fmt.Fprintln(out, "  ○ Transcription skipped — run meetctl setup again later")
+		fmt.Fprintln(out)
+		return
 	}
+
+	fmt.Fprintln(out)
+	bin, _ := transcribe.BinaryPath(*cfg)
+	configureTranscriptionDevice(in, out, cfg, bin)
 	fmt.Fprintln(out)
 }
 
-func installWhisperCpp(out io.Writer) error {
-	if hasCmd("pacman") {
-		cmd := exec.Command("sudo", "pacman", "-S", "--needed", "--noconfirm", "whisper.cpp")
-		fmt.Fprintf(out, "\n  Running: %s\n\n", joinCmd(cmd.Args))
-		cmd.Stdin = os.Stdin
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		return cmd.Run()
+func printWhisperStatus(out io.Writer, cfg *config.Config) {
+	path, _ := transcribe.BinaryPath(*cfg)
+	fmt.Fprintf(out, "  ✓ Whisper: %s\n", path)
+	if transcribe.IsManagedBinary(path) {
+		cfg.Transcription.Binary = path
+		cfg.Transcription.Backend = transcribe.BackendOpenAI
 	}
-	return fmt.Errorf("automatic install only supported on pacman systems — %s", transcribe.InstallHint())
 }
 
-func hasCUDA() bool {
-	_, err := exec.LookPath("nvidia-smi")
-	return err == nil
+func printWhisperInstallHints(out io.Writer) {
+	fmt.Fprintln(out, "  ⚠ Whisper not installed")
+	fmt.Fprintf(out, "    → Recommended: local venv at %s\n", transcribe.ManagedVenvDir())
+	if hint := transcribe.PacmanHint(); hint != "" {
+		fmt.Fprintf(out, "    → Optional (system): %s\n", hint)
+	}
+	fmt.Fprintf(out, "    → Fast GPU path: %s\n", transcribe.WhisperCppHint())
+}
+
+func configureTranscriptionDevice(in io.Reader, out io.Writer, cfg *config.Config, bin string) {
+	gpu := transcribe.DetectGPU()
+	fmt.Fprintln(out, "  Hardware")
+	fmt.Fprintln(out, "  ────────")
+	printGPUStatus(out, gpu, bin)
+
+	if !gpu.NVIDIA {
+		cfg.Transcription.Device = transcribe.DeviceCPU
+		cfg.Transcription.GPULayers = 0
+		fmt.Fprintln(out)
+		fmt.Fprintln(out, "  ○ Using CPU (no NVIDIA GPU detected)")
+		return
+	}
+
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, "  → GPU speeds up Whisper significantly (recommended on NVIDIA)")
+	if transcribe.IsManagedBinary(bin) && !transcribe.ManagedTorchCUDAAvailable() {
+		fmt.Fprintln(out, "  ℹ Enabling GPU downloads CUDA PyTorch wheels (~1–2 GB) into the venv")
+	} else if transcribe.IsManagedBinary(bin) && transcribe.ManagedTorchCUDAAvailable() {
+		cfg.Transcription.Device = transcribe.DeviceCUDA
+		cfg.Transcription.GPULayers = 0
+		fmt.Fprintln(out)
+		fmt.Fprintln(out, "  ✓ GPU already enabled in managed venv")
+		return
+	}
+
+	if !askYes(in, out, "  Use GPU (CUDA) for transcription? [Y/n]: ") {
+		cfg.Transcription.Device = transcribe.DeviceCPU
+		cfg.Transcription.GPULayers = 0
+		fmt.Fprintln(out)
+		fmt.Fprintln(out, "  ○ Using CPU for transcription")
+		return
+	}
+
+	if transcribe.IsManagedBinary(bin) {
+		fmt.Fprintln(out)
+		fmt.Fprintln(out, "  Upgrading venv PyTorch to CUDA…")
+		if err := transcribe.UpgradeManagedTorchCUDA(out); err != nil {
+			fmt.Fprintf(out, "  ⚠ GPU setup failed: %v\n", err)
+			cfg.Transcription.Device = transcribe.DeviceCPU
+			cfg.Transcription.GPULayers = 0
+			fmt.Fprintln(out, "  ○ Falling back to CPU")
+			return
+		}
+		cfg.Transcription.Device = transcribe.DeviceCUDA
+		cfg.Transcription.GPULayers = 0
+		fmt.Fprintln(out)
+		fmt.Fprintln(out, "  ✓ GPU enabled (PyTorch CUDA in venv)")
+		return
+	}
+
+	cfg.Transcription.Device = transcribe.DeviceCUDA
+	cfg.Transcription.GPULayers = 99
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, "  ✓ GPU enabled (transcription.device: cuda)")
+}
+
+func printGPUStatus(out io.Writer, gpu transcribe.GPUInfo, bin string) {
+	if gpu.NVIDIA {
+		line := fmt.Sprintf("  ✓ GPU: %s", gpu.Name)
+		var details []string
+		if gpu.Driver != "" {
+			details = append(details, "driver "+gpu.Driver)
+		}
+		if gpu.CUDAVersion != "" {
+			details = append(details, "CUDA "+gpu.CUDAVersion)
+		}
+		if len(details) > 0 {
+			line += " (" + strings.Join(details, ", ") + ")"
+		}
+		fmt.Fprintln(out, line)
+		if transcribe.IsManagedBinary(bin) && transcribe.ManagedTorchCUDAAvailable() {
+			fmt.Fprintln(out, "  ✓ PyTorch CUDA: ready in managed venv")
+		} else if transcribe.IsManagedBinary(bin) {
+			fmt.Fprintln(out, "  ○ PyTorch: CPU build in managed venv (GPU available to enable)")
+		}
+		return
+	}
+	fmt.Fprintln(out, "  ○ GPU: none detected (Whisper will use CPU)")
+}
+
+func installWhisper(out io.Writer, autoInstall bool) error {
+	if _, err := transcribe.FindPython(); err != nil {
+		if autoInstall && hasCmd("pacman") {
+			fmt.Fprintln(out, "  Python missing — installing via pacman…")
+			cmd := exec.Command("sudo", "pacman", "-S", "--needed", "--noconfirm", "python")
+			cmd.Stdin = os.Stdin
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			fmt.Fprintf(out, "\n  Running: %s\n\n", joinCmd(cmd.Args))
+			if err := cmd.Run(); err != nil {
+				return fmt.Errorf("install python: %w", err)
+			}
+		} else {
+			return err
+		}
+	}
+	return transcribe.InstallManaged(out)
 }

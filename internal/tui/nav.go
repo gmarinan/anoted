@@ -24,6 +24,7 @@ func (m Model) switchScreen(screen Screen) (tea.Model, tea.Cmd) {
 		if m.sessionCursor >= len(m.sessions) {
 			m.sessionCursor = 0
 		}
+		m.sessionsOpenerPicker = false
 	case ScreenMain:
 		m.audioMonitorWarn = m.deps.Audio.MonitorWarning(m.deps.Config.Audio.SystemMonitor)
 		if len(m.audioCatalog.Outputs) == 0 && !m.audioLoading {
@@ -63,6 +64,9 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if model, cmd, ok := m.handleTabSwitch(key); ok {
+		if m.screen == ScreenSessions && m.sessionsOpenerPicker {
+			m.sessionsOpenerPicker = false
+		}
 		return model, cmd
 	}
 

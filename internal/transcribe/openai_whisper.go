@@ -17,8 +17,7 @@ func transcribeOpenAI(ctx context.Context, cfg config.TranscriptionConfig, bin, 
 		audioPath,
 		"--model", model,
 		"--output_dir", sessionDir,
-		"--output_format", "txt,srt,vtt",
-		"--verbose", "False",
+		"--output_format", "all",
 	}
 	if lang := strings.TrimSpace(cfg.Language); lang != "" {
 		args = append(args, "--language", lang)
