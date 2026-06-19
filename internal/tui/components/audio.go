@@ -15,91 +15,39 @@ const (
 	AudioSectionMic
 )
 
-// AudioView renders the Audio tab.
-type AudioView struct {
+// AudioPanel renders the device picker list (used inside Home audio box).
+type AudioPanel struct {
 	Catalog       audio.Catalog
 	Section       AudioSection
 	Cursor        int
 	SystemMonitor string
 	Microphone    string
-	Loading       bool
-	ErrMsg        string
-	SavedMsg      string
-	MonitorWarn   string
-	Width         int
 }
 
-func (v AudioView) View() string {
-	var b strings.Builder
-	b.WriteString(Header())
-	b.WriteString("\n")
-	b.WriteString(TabBar(TabAudio))
-	b.WriteString("\n\n")
-
-	if v.Loading {
-		b.WriteString(Box("Output devices", subtleStyle.Render("Loading…"), v.Width))
-		return b.String()
+func (p AudioPanel) renderDeviceList() string {
+	var devices []audio.Device
+	var selected string
+	switch p.Section {
+	case AudioSectionOutput:
+		devices = p.Catalog.Outputs
+		selected = p.SystemMonitor
+	default:
+		devices = p.Catalog.Microphones
+		selected = p.Microphone
 	}
-	if v.ErrMsg != "" {
-		b.WriteString(errStyle.Render("✗ " + v.ErrMsg))
-		b.WriteString("\n\n")
-	}
-	if v.MonitorWarn != "" {
-		b.WriteString(warnStyle.Render("⚠ " + v.MonitorWarn))
-		b.WriteString("\n\n")
-	}
-
-	b.WriteString(v.deviceBox("Output devices (system audio)", v.Catalog.Outputs, v.Section == AudioSectionOutput, v.SystemMonitor))
-	b.WriteString("\n\n")
-	b.WriteString(v.deviceBox("Input devices (microphone)", v.Catalog.Microphones, v.Section == AudioSectionMic, v.Microphone))
-
-	if v.SavedMsg != "" {
-		b.WriteString("\n\n")
-		b.WriteString(okStyle.Render("✓ " + v.SavedMsg))
-	}
-
-	b.WriteString("\n\n")
-	b.WriteString(subtleStyle.Render("Legend: "))
-	b.WriteString(Badge("RUNNING", "ok"))
-	b.WriteString(" ")
-	b.WriteString(Badge("DEFAULT", "warn"))
-	b.WriteString("  ·  ")
-	b.WriteString(FooterHint("↑↓", "navigate"))
-	b.WriteString("  ")
-	b.WriteString(FooterHint("Tab", "switch section"))
-	b.WriteString("  ")
-	b.WriteString(FooterHint("Enter", "select"))
-
-	return b.String()
-}
-
-func (v AudioView) deviceBox(title string, devices []audio.Device, focused bool, selectedID string) string {
-	prefix := "  "
-	if focused {
-		prefix = "▸ "
-	}
-	boxTitle := prefix + strings.ToUpper(title)
-	if focused {
-		boxTitle = boxTitleStyle.Render(boxTitle)
-	} else {
-		boxTitle = labelStyle.Render(boxTitle)
-	}
-
-	var lines []string
 	if len(devices) == 0 {
-		lines = append(lines, subtleStyle.Render("  (no devices found)"))
-	} else {
-		for i, d := range devices {
-			lines = append(lines, v.renderDevice(devices, i, d, focused, selectedID))
-		}
+		return subtleStyle.Render("  (no devices found)")
 	}
-	body := boxTitle + "\n" + strings.Join(lines, "\n")
-	return boxStyle.Width(v.Width).Render(body)
+	var lines []string
+	for i, d := range devices {
+		lines = append(lines, p.renderDevice(devices, i, d, selected))
+	}
+	return strings.Join(lines, "\n")
 }
 
-func (v AudioView) renderDevice(all []audio.Device, idx int, d audio.Device, focused bool, selectedID string) string {
+func (p AudioPanel) renderDevice(all []audio.Device, idx int, d audio.Device, selectedID string) string {
 	marker := "  "
-	if focused && idx == v.Cursor {
+	if idx == p.Cursor {
 		marker = "> "
 	}
 	sel := "○"
@@ -124,7 +72,7 @@ func (v AudioView) renderDevice(all []audio.Device, idx int, d audio.Device, foc
 		}
 	}
 
-	if focused && idx == v.Cursor {
+	if idx == p.Cursor {
 		line = valueStyle.Bold(true).Render(line)
 	} else {
 		line = valueStyle.Render(line)

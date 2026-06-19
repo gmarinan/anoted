@@ -248,7 +248,7 @@ func (m Model) handleConfigEditorSave(msg configEditorSaveMsg) (tea.Model, tea.C
 
 func (m Model) isTabSwitchKey(key string) bool {
 	switch key {
-	case "1", "2", "3", "4", "5", "c", "o", "d", "tab", "shift+tab":
+	case "1", "2", "3", "4", "c", "d":
 		return true
 	default:
 		return false

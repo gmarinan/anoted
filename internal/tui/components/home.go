@@ -6,9 +6,10 @@ import (
 	"time"
 
 	"charm.land/lipgloss/v2"
+	"meetctl/internal/audio"
 )
 
-// HomeView renders the Home tab content.
+// HomeView renders the Home screen.
 type HomeView struct {
 	AppState        string
 	Platform        string
@@ -26,16 +27,22 @@ type HomeView struct {
 	DetectionWarn   string
 	ErrorMsg        string
 	Width           int
+
+	// Audio device picker (subsection tabs inside Audio panel)
+	AudioCatalog    audio.Catalog
+	AudioSection    AudioSection
+	AudioCursor     int
+	SystemMonitor   string
+	Microphone      string
+	AudioLoading    bool
+	AudioErr        string
+	AudioSaved      string
+	MonitorWarn     string
 }
 
 func (v HomeView) View() string {
 	colW := v.columnWidth()
 	var b strings.Builder
-
-	b.WriteString(Header())
-	b.WriteString("\n")
-	b.WriteString(TabBar(TabHome))
-	b.WriteString("\n\n")
 
 	status := v.statusBox(colW)
 	audio := v.audioBox(colW)
@@ -91,12 +98,43 @@ func (v HomeView) audioBox(width int) string {
 	if mic == "" {
 		mic = subtleStyle.Render("(loading…)")
 	}
-	body := strings.Join([]string{
-		row("System audio", truncate(sys, width-14)),
-		row("Microphone", truncate(mic, width-14)),
-		subtleStyle.Render("Configure in Audio tab"),
-	}, "\n")
-	return Box("Audio", body, width)
+
+	var body strings.Builder
+	body.WriteString(row("System audio", truncate(sys, width-14)))
+	body.WriteString("\n")
+	body.WriteString(row("Microphone", truncate(mic, width-14)))
+	body.WriteString("\n\n")
+	body.WriteString(SubTabBar([]string{"Output", "Microphone"}, int(v.AudioSection)))
+	body.WriteString("\n")
+
+	if v.AudioLoading {
+		body.WriteString(subtleStyle.Render("  Loading devices…"))
+		return Box("Audio", body.String(), width)
+	}
+	if v.AudioErr != "" {
+		body.WriteString(errStyle.Render("  ✗ " + v.AudioErr))
+		body.WriteString("\n")
+	}
+	if v.MonitorWarn != "" && v.AudioSection == AudioSectionOutput {
+		body.WriteString(warnStyle.Render("  ⚠ " + v.MonitorWarn))
+		body.WriteString("\n")
+	}
+
+	panel := AudioPanel{
+		Catalog:       v.AudioCatalog,
+		Section:       v.AudioSection,
+		Cursor:        v.AudioCursor,
+		SystemMonitor: v.SystemMonitor,
+		Microphone:    v.Microphone,
+	}
+	body.WriteString(panel.renderDeviceList())
+
+	if v.AudioSaved != "" {
+		body.WriteString("\n")
+		body.WriteString(okStyle.Render("  ✓ " + v.AudioSaved))
+	}
+
+	return Box("Audio", body.String(), width)
 }
 
 func (v HomeView) activityBox(width int) string {

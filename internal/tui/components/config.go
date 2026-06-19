@@ -24,9 +24,6 @@ type ConfigView struct {
 
 func (v ConfigView) View() string {
 	var b strings.Builder
-	b.WriteString(Header())
-	b.WriteString("\n")
-	b.WriteString(TabBar(TabConfig))
 	if v.Dirty {
 		b.WriteString(warnStyle.Render(" ●"))
 	}

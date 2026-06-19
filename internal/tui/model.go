@@ -33,7 +33,6 @@ const (
 	ScreenMain     Screen = "main"
 	ScreenDoctor   Screen = "doctor"
 	ScreenSessions Screen = "sessions"
-	ScreenAudio    Screen = "audio"
 	ScreenConfig   Screen = "config"
 )
 
@@ -106,8 +105,9 @@ func NewModel(deps Deps) Model {
 		screen:     ScreenMain,
 		appState:   StateIdle,
 		provider:   "none",
-		autoRecord: deps.Config.AutoRecord,
-		recStatus:  deps.Recorder.Status(),
+		autoRecord:   deps.Config.AutoRecord,
+		recStatus:    deps.Recorder.Status(),
+		audioLoading: true,
 	}
 }
 

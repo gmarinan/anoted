@@ -11,9 +11,13 @@ import (
 func (m Model) View() tea.View {
 	var content strings.Builder
 
+	tab := components.ScreenToTab(string(m.screen))
+	content.WriteString(components.Header())
+	content.WriteString("\n")
+	content.WriteString(components.TabBar(tab))
+	content.WriteString("\n\n")
+
 	switch m.screen {
-	case ScreenAudio:
-		content.WriteString(m.audioView().View())
 	case ScreenDoctor:
 		content.WriteString(m.doctorView().View())
 	case ScreenSessions:
@@ -25,7 +29,7 @@ func (m Model) View() tea.View {
 	}
 
 	content.WriteString("\n\n")
-	content.WriteString(components.FooterForTab(components.ScreenToTab(string(m.screen)), m.awaitingRecordConfirm))
+	content.WriteString(components.FooterForTab(tab, m.awaitingRecordConfirm))
 
 	v := tea.NewView(content.String())
 	v.AltScreen = true
@@ -58,25 +62,20 @@ func (m Model) homeView() components.HomeView {
 		AutoRecord:      m.autoRecord,
 		AwaitingConfirm: m.awaitingRecordConfirm,
 		ConfirmPrompt:   "Meeting detected — start recording? [y/n]",
-			StatusNote:      m.statusNote,
-			DetectionWarn:   m.detection.Warning,
+		StatusNote:      m.statusNote,
+		DetectionWarn:   m.detection.Warning,
 		ErrorMsg:        m.errMsg,
 		Width:           m.width,
-	}
-}
 
-func (m Model) audioView() components.AudioView {
-	return components.AudioView{
-		Catalog:       m.audioCatalog,
-		Section:       m.audioSection,
-		Cursor:        m.audioCursor,
+		AudioCatalog:  m.audioCatalog,
+		AudioSection:  m.audioSection,
+		AudioCursor:   m.audioCursor,
 		SystemMonitor: m.deps.Config.Audio.SystemMonitor,
 		Microphone:    m.deps.Config.Audio.Microphone,
-		Loading:       m.audioLoading,
-		ErrMsg:        m.audioErr,
-		SavedMsg:      m.audioSaved,
+		AudioLoading:  m.audioLoading,
+		AudioErr:      m.audioErr,
+		AudioSaved:    m.audioSaved,
 		MonitorWarn:   m.audioMonitorWarn,
-		Width:         m.width,
 	}
 }
 

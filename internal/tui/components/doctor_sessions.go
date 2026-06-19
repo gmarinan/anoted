@@ -28,10 +28,6 @@ type DoctorView struct {
 
 func (v DoctorView) View() string {
 	var b strings.Builder
-	b.WriteString(Header())
-	b.WriteString("\n")
-	b.WriteString(TabBar(TabDoctor))
-	b.WriteString("\n\n")
 
 	colW := v.columnWidth()
 	summary := v.summaryBox(colW)
@@ -113,10 +109,6 @@ type SessionsView struct {
 
 func (v SessionsView) View() string {
 	var b strings.Builder
-	b.WriteString(Header())
-	b.WriteString("\n")
-	b.WriteString(TabBar(TabSessions))
-	b.WriteString("\n\n")
 
 	tableW := v.Width
 	if tableW < 40 {

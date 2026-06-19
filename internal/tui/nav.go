@@ -24,11 +24,7 @@ func (m Model) switchScreen(screen Screen) (tea.Model, tea.Cmd) {
 		if m.sessionCursor >= len(m.sessions) {
 			m.sessionCursor = 0
 		}
-	case ScreenAudio:
-		m.audioSection = components.AudioSectionOutput
-		m.audioCursor = 0
-		m.audioErr = ""
-		m.audioSaved = ""
+	case ScreenMain:
 		m.audioMonitorWarn = m.deps.Audio.MonitorWarning(m.deps.Config.Audio.SystemMonitor)
 		if len(m.audioCatalog.Outputs) == 0 && !m.audioLoading {
 			m.audioLoading = true
@@ -70,9 +66,18 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return model, cmd
 	}
 
+	if m.screen == ScreenMain {
+		switch key {
+		case "tab", "up", "down", "k", "j", " ":
+			return m.handleAudioKey(msg)
+		case "enter":
+			if !m.awaitingRecordConfirm || m.recording {
+				return m.handleAudioKey(msg)
+			}
+		}
+	}
+
 	switch m.screen {
-	case ScreenAudio:
-		return m.handleAudioKey(msg)
 	case ScreenSessions:
 		return m.handleSessionsKey(msg)
 	}
@@ -125,23 +130,14 @@ func (m Model) handleTabSwitch(key string) (tea.Model, tea.Cmd, bool) {
 	case "1":
 		model, cmd := m.switchTab(components.TabHome)
 		return model, cmd, true
-	case "2", "o":
-		model, cmd := m.switchTab(components.TabAudio)
-		return model, cmd, true
-	case "3", "d":
+	case "2", "d":
 		model, cmd := m.switchTab(components.TabDoctor)
 		return model, cmd, true
-	case "4":
+	case "3":
 		model, cmd := m.switchTab(components.TabSessions)
 		return model, cmd, true
-	case "5", "c":
+	case "4", "c":
 		model, cmd := m.switchTab(components.TabConfig)
-		return model, cmd, true
-	case "tab":
-		model, cmd := m.switchTab(components.NextTab(components.ScreenToTab(string(m.screen))))
-		return model, cmd, true
-	case "shift+tab":
-		model, cmd := m.switchTab(components.PrevTab(components.ScreenToTab(string(m.screen))))
 		return model, cmd, true
 	default:
 		return m, nil, false
@@ -155,10 +151,10 @@ func (m Model) handleRefresh() (tea.Model, tea.Cmd) {
 		return m, nil
 	case ScreenSessions:
 		return m.switchScreen(ScreenSessions)
-	case ScreenAudio:
+	case ScreenMain:
 		m.audioLoading = true
 		m.audioErr = ""
-		return m, loadAudioCatalogCmd(m)
+		return m, tea.Batch(loadAudioCatalogCmd(m), resolveDeviceLabelsCmd(m))
 	case ScreenConfig:
 		m = m.loadConfigEditor()
 		return m, nil

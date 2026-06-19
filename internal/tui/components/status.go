@@ -12,29 +12,24 @@ func FooterForTab(tab TabID, awaitingConfirm bool) string {
 			return JoinFooter(
 				FooterHint("y", "start recording"),
 				FooterHint("n", "dismiss"),
-				FooterHint("1-5", "tabs"),
+				FooterHint("1-4", "screens"),
 				FooterHint("q", "quit"),
 			)
 		}
 		return JoinFooter(
 			FooterHint("r", "record"),
 			FooterHint("a", "auto-record"),
-			FooterHint("1-5", "tabs"),
-			FooterHint("q", "quit"),
-		)
-	case TabAudio:
-		return JoinFooter(
-			FooterHint("↑↓", "navigate"),
-			FooterHint("Tab", "section"),
+			FooterHint("Tab", "audio section"),
+			FooterHint("↑↓", "devices"),
 			FooterHint("Enter", "select"),
-			FooterHint("R", "refresh"),
-			FooterHint("1-5", "tabs"),
+			FooterHint("R", "refresh audio"),
+			FooterHint("1-4", "screens"),
 			FooterHint("q", "quit"),
 		)
 	case TabDoctor:
 		return JoinFooter(
 			FooterHint("R", "refresh"),
-			FooterHint("1-5", "tabs"),
+			FooterHint("1-4", "screens"),
 			FooterHint("q", "quit"),
 		)
 	case TabSessions:
@@ -44,14 +39,14 @@ func FooterForTab(tab TabID, awaitingConfirm bool) string {
 			FooterHint("o", "open folder"),
 			FooterHint("p", "play"),
 			FooterHint("R", "refresh"),
-			FooterHint("1-5", "tabs"),
+			FooterHint("1-4", "screens"),
 			FooterHint("q", "quit"),
 		)
 	case TabConfig:
 		return JoinFooter(
 			FooterHint("Ctrl+S", "save"),
 			FooterHint("R", "reload"),
-			FooterHint("1-5", "tabs"),
+			FooterHint("1-4", "screens"),
 			FooterHint("q", "quit"),
 		)
 	default:
@@ -62,8 +57,6 @@ func FooterForTab(tab TabID, awaitingConfirm bool) string {
 // ScreenToTab maps internal screen IDs to tab IDs.
 func ScreenToTab(screen string) TabID {
 	switch screen {
-	case "audio":
-		return TabAudio
 	case "doctor":
 		return TabDoctor
 	case "sessions":
@@ -78,8 +71,6 @@ func ScreenToTab(screen string) TabID {
 // TabToScreen maps tab IDs to internal screen IDs.
 func TabToScreen(tab TabID) string {
 	switch tab {
-	case TabAudio:
-		return "audio"
 	case TabDoctor:
 		return "doctor"
 	case TabSessions:
@@ -91,13 +82,13 @@ func TabToScreen(tab TabID) string {
 	}
 }
 
-// NextTab cycles to the next tab.
-func NextTab(current TabID) TabID {
+// NextScreen cycles to the next main screen.
+func NextScreen(current TabID) TabID {
 	return TabID((int(current) + 1) % len(tabLabels))
 }
 
-// PrevTab cycles to the previous tab.
-func PrevTab(current TabID) TabID {
+// PrevScreen cycles to the previous main screen.
+func PrevScreen(current TabID) TabID {
 	n := int(current) - 1
 	if n < 0 {
 		n = len(tabLabels) - 1

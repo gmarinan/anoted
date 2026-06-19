@@ -14,6 +14,7 @@ func (m Model) Init() tea.Cmd {
 		m.schedulePoll(),
 		m.scheduleDurationTick(),
 		resolveDeviceLabelsCmd(m),
+		loadAudioCatalogCmd(m),
 	)
 }
 

@@ -23,7 +23,14 @@ var (
 			Padding(0, 1)
 	boxTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("86"))
 	magentaStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("213"))
-	cyanStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("86"))
+	subTabActiveStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color("229")).
+				Background(lipgloss.Color("63")).
+				Padding(0, 1)
+	subTabInactiveStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("244")).
+				Padding(0, 1)
 	tabActiveStyle = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(lipgloss.Color("229")).
@@ -35,25 +42,24 @@ var (
 	keyStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("86"))
 )
 
-// TabID identifies a main navigation tab.
+// TabID identifies the active main screen (switch with 1–4, not Tab).
 type TabID int
 
 const (
 	TabHome TabID = iota
-	TabAudio
 	TabDoctor
 	TabSessions
 	TabConfig
 )
 
-var tabLabels = []string{"Home", "Audio", "Doctor", "Sessions", "Config"}
+var tabLabels = []string{"Home", "Doctor", "Sessions", "Config"}
 
 // Header renders the app title line.
 func Header() string {
 	return headerStyle.Render("meetctl") + subtleStyle.Render(" · "+AppSubtitle)
 }
 
-// TabBar renders the top navigation tabs.
+// TabBar renders the top main navigation tabs (visual only; use 1–4 to switch).
 func TabBar(active TabID) string {
 	var parts []string
 	for i, label := range tabLabels {
@@ -62,6 +68,20 @@ func TabBar(active TabID) string {
 			parts = append(parts, tabActiveStyle.Render(text))
 		} else {
 			parts = append(parts, tabInactiveStyle.Render(text))
+		}
+	}
+	return strings.Join(parts, " ")
+}
+
+// SubTabBar renders highlighted subsection tabs (e.g. Output / Microphone).
+func SubTabBar(labels []string, active int) string {
+	var parts []string
+	for i, label := range labels {
+		text := "[" + label + "]"
+		if i == active {
+			parts = append(parts, subTabActiveStyle.Render(text))
+		} else {
+			parts = append(parts, subTabInactiveStyle.Render(text))
 		}
 	}
 	return strings.Join(parts, " ")
