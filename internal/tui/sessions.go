@@ -7,12 +7,65 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"meetctl/internal/config"
 	"meetctl/internal/open"
+	"meetctl/internal/session"
 	"meetctl/internal/tui/components"
 )
+
+func (m Model) sessionsPageCount() int {
+	if len(m.sessions) == 0 {
+		return 1
+	}
+	return (len(m.sessions) + sessionsPageSize - 1) / sessionsPageSize
+}
+
+func (m Model) sessionsPageRecords() []session.Record {
+	start := m.sessionsPage * sessionsPageSize
+	if start >= len(m.sessions) {
+		return nil
+	}
+	end := start + sessionsPageSize
+	if end > len(m.sessions) {
+		end = len(m.sessions)
+	}
+	return m.sessions[start:end]
+}
+
+func (m Model) selectedSession() (session.Record, bool) {
+	idx := m.sessionsPage*sessionsPageSize + m.sessionCursor
+	if idx < 0 || idx >= len(m.sessions) {
+		return session.Record{}, false
+	}
+	return m.sessions[idx], true
+}
+
+func (m Model) clampSessionsCursor() Model {
+	if len(m.sessions) == 0 {
+		m.sessionsPage = 0
+		m.sessionCursor = 0
+		return m
+	}
+	global := m.sessionsPage*sessionsPageSize + m.sessionCursor
+	if global >= len(m.sessions) {
+		global = len(m.sessions) - 1
+	}
+	if global < 0 {
+		global = 0
+	}
+	m.sessionsPage = global / sessionsPageSize
+	m.sessionCursor = global % sessionsPageSize
+	pageLen := len(m.sessionsPageRecords())
+	if pageLen > 0 && m.sessionCursor >= pageLen {
+		m.sessionCursor = pageLen - 1
+	}
+	return m
+}
 
 func (m Model) handleSessionsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 
+	if m.sessionsDeleteConfirm {
+		return m.handleSessionsDeleteKey(key)
+	}
 	if m.sessionsOpenerPicker {
 		return m.handleSessionsOpenerKey(key)
 	}
@@ -21,11 +74,37 @@ func (m Model) handleSessionsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "up", "k":
 		if m.sessionCursor > 0 {
 			m.sessionCursor--
+		} else if m.sessionsPage > 0 {
+			m.sessionsPage--
+			page := m.sessionsPageRecords()
+			m.sessionCursor = len(page) - 1
 		}
 		return m, nil
 	case "down", "j":
-		if m.sessionCursor < len(m.sessions)-1 {
+		page := m.sessionsPageRecords()
+		if m.sessionCursor < len(page)-1 {
 			m.sessionCursor++
+		} else if m.sessionsPage < m.sessionsPageCount()-1 {
+			m.sessionsPage++
+			m.sessionCursor = 0
+		}
+		return m, nil
+	case "[", "pgup":
+		if m.sessionsPage > 0 {
+			m.sessionsPage--
+			page := m.sessionsPageRecords()
+			if m.sessionCursor >= len(page) {
+				m.sessionCursor = len(page) - 1
+			}
+		}
+		return m, nil
+	case "]", "pgdown":
+		if m.sessionsPage < m.sessionsPageCount()-1 {
+			m.sessionsPage++
+			page := m.sessionsPageRecords()
+			if m.sessionCursor >= len(page) {
+				m.sessionCursor = len(page) - 1
+			}
 		}
 		return m, nil
 	case "f":
@@ -38,12 +117,63 @@ func (m Model) handleSessionsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "p":
 		return m, m.openSessionPath(true)
 	case "t":
-		if m.transcribing || len(m.sessions) == 0 || m.sessionCursor < 0 || m.sessionCursor >= len(m.sessions) {
+		rec, ok := m.selectedSession()
+		if m.transcribing || !ok {
 			return m, nil
 		}
-		return m.startTranscribe(m.sessions[m.sessionCursor].Dir)
+		return m.startTranscribe(rec.Dir)
+	case "d", "delete":
+		rec, ok := m.selectedSession()
+		if !ok {
+			return m, nil
+		}
+		if m.recording && rec.Dir == m.sessionDir {
+			m.sessionsErr = "cannot delete the active recording session"
+			return m, nil
+		}
+		m.sessionsDeleteConfirm = true
+		m.sessionsDeleteCursor = 0
+		m.sessionsErr = ""
+		return m, nil
 	}
 	return m, nil
+}
+
+func (m Model) handleSessionsDeleteKey(key string) (tea.Model, tea.Cmd) {
+	switch key {
+	case "esc":
+		m.sessionsDeleteConfirm = false
+		return m, nil
+	case "up", "k", "down", "j", "left", "right", "tab":
+		m.sessionsDeleteCursor = 1 - m.sessionsDeleteCursor
+		return m, nil
+	case "enter", " ":
+		if m.sessionsDeleteCursor == 0 {
+			m.sessionsDeleteConfirm = false
+			return m, nil
+		}
+		m.sessionsDeleteConfirm = false
+		return m, m.deleteSelectedSessionCmd()
+	}
+	return m, nil
+}
+
+func (m Model) deleteSelectedSessionCmd() tea.Cmd {
+	rec, ok := m.selectedSession()
+	if !ok {
+		return nil
+	}
+	store := m.deps.Store
+	return func() tea.Msg {
+		if err := session.Remove(store, rec); err != nil {
+			return sessionsDeletedMsg{err: err}
+		}
+		records, err := loadSessionRecords(store)
+		if err != nil {
+			return sessionsDeletedMsg{err: err}
+		}
+		return sessionsDeletedMsg{records: records, note: "session deleted"}
+	}
 }
 
 func (m Model) handleSessionsOpenerKey(key string) (tea.Model, tea.Cmd) {
@@ -101,10 +231,11 @@ func (m Model) saveDesktopOpener(id string) tea.Cmd {
 }
 
 func (m Model) openSessionPath(play bool) tea.Cmd {
-	if len(m.sessions) == 0 || m.sessionCursor < 0 || m.sessionCursor >= len(m.sessions) {
+	rec, ok := m.selectedSession()
+	if !ok {
 		return nil
 	}
-	dir := m.sessions[m.sessionCursor].Dir
+	dir := rec.Dir
 	target := dir
 	cfg := m.deps.Config
 	if play {
@@ -126,6 +257,12 @@ type sessionsActionMsg struct {
 	err error
 }
 
+type sessionsDeletedMsg struct {
+	records []session.Record
+	note    string
+	err     error
+}
+
 type desktopOpenerSavedMsg struct {
 	cfg config.Config
 	id  string
@@ -136,6 +273,20 @@ func (m Model) handleSessionsAction(msg sessionsActionMsg) (tea.Model, tea.Cmd) 
 	if msg.err != nil {
 		m.sessionsErr = msg.err.Error()
 	}
+	return m, nil
+}
+
+func (m Model) handleSessionsDeleted(msg sessionsDeletedMsg) (tea.Model, tea.Cmd) {
+	if msg.err != nil {
+		m.sessionsErr = msg.err.Error()
+		return m, nil
+	}
+	m.sessions = msg.records
+	m.sessionsErr = ""
+	if msg.note != "" {
+		m.sessionsDesktopNote = msg.note
+	}
+	m = m.clampSessionsCursor()
 	return m, nil
 }
 

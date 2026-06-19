@@ -139,6 +139,21 @@ func (s *SQLiteStore) List(limit int) ([]Record, error) {
 	return out, rows.Err()
 }
 
+func (s *SQLiteStore) Delete(id int64) error {
+	res, err := s.db.Exec(`DELETE FROM sessions WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("delete session %d: %w", id, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("delete session rows affected: %w", err)
+	}
+	if n == 0 {
+		return fmt.Errorf("session %d not found", id)
+	}
+	return nil
+}
+
 type rowScanner interface {
 	Scan(dest ...any) error
 }

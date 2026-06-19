@@ -2,6 +2,8 @@ package session
 
 import (
 	"encoding/json"
+	"fmt"
+	"os"
 	"time"
 )
 
@@ -58,6 +60,22 @@ type Store interface {
 	Update(rec Record) error
 	Get(id int64) (Record, error)
 	List(limit int) ([]Record, error)
+	Delete(id int64) error
+}
+
+// Remove deletes the session directory and database row.
+func Remove(store Store, rec Record) error {
+	if rec.Dir != "" {
+		if err := os.RemoveAll(rec.Dir); err != nil {
+			return fmt.Errorf("remove session dir %s: %w", rec.Dir, err)
+		}
+	}
+	if store != nil {
+		if err := store.Delete(rec.ID); err != nil {
+			return fmt.Errorf("delete session row: %w", err)
+		}
+	}
+	return nil
 }
 
 // FormatLocalTime formats t in the system local timezone.

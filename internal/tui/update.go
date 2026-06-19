@@ -45,8 +45,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleDesktopOpenerSaved(msg)
 	case sessionsActionMsg:
 		return m.handleSessionsAction(msg)
-	case configEditorSaveMsg:
-		return m.handleConfigEditorSave(msg)
+	case sessionsDeletedMsg:
+		return m.handleSessionsDeleted(msg)
+	case configMenuSaveMsg:
+		return m.handleConfigMenuSave(msg)
 	case transcribeResultMsg:
 		return m.handleTranscribeResult(msg)
 	case deviceLabelsMsg:

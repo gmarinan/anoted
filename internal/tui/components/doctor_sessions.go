@@ -106,21 +106,55 @@ type FolderOpenerChoice struct {
 
 // SessionsView renders the Sessions tab.
 type SessionsView struct {
-	Records         []session.Record
+	PageRecords     []session.Record
 	Cursor          int
+	Page            int
+	PageCount       int
+	TotalCount      int
 	ErrMsg          string
 	Transcribing    bool
 	StatusNote      string
 	DesktopNote     string
 	Width           int
+	Height          int
 	OpenerPicker    bool
 	OpenerCursor    int
 	OpenerChoices   []FolderOpenerChoice
 	CurrentOpener   string
 	OpenerDetected  string
+	DeleteConfirm   bool
+	DeleteCursor    int
+	DeleteID        int64
+	DeletePath      string
 }
 
 func (v SessionsView) View() string {
+	if v.DeleteConfirm {
+		base := v.renderMainContent()
+		h := v.overlayHeight()
+		return FloatCenter(base, v.renderDeleteModal(), v.Width, h)
+	}
+	if v.OpenerPicker {
+		base := v.renderMainContent()
+		h := v.overlayHeight()
+		return FloatCenter(base, v.renderOpenerModal(), v.Width, h)
+	}
+	return v.renderMainContent()
+}
+
+func (v SessionsView) overlayHeight() int {
+	h := v.Height - 8
+	if h < 12 {
+		h = 12
+	}
+	baseH := lipgloss.Height(v.renderMainContent())
+	if baseH > h {
+		h = baseH
+	}
+	return h
+}
+
+func (v SessionsView) renderMainContent() string {
 	var b strings.Builder
 
 	tableW := v.Width
@@ -142,14 +176,80 @@ func (v SessionsView) View() string {
 	}
 	b.WriteString("\n\n")
 
-	if v.OpenerPicker {
-		b.WriteString(v.openerBox(tableW))
-		return b.String()
-	}
-
 	colW := v.columnWidth()
 	b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, v.detailsBox(colW), " ", v.actionsBox(colW)))
 	return b.String()
+}
+
+func (v SessionsView) renderOpenerModal() string {
+	var lines []string
+	lines = append(lines, row("Active", openerSettingLabel(v.CurrentOpener)))
+	lines = append(lines, row("Resolves to", truncate(v.OpenerDetected, v.Width-14)))
+	lines = append(lines, "")
+
+	for i, opt := range v.OpenerChoices {
+		marker := "  "
+		if i == v.OpenerCursor {
+			marker = "> "
+		}
+		sel := "○"
+		if opt.ID == v.CurrentOpener {
+			sel = "●"
+		}
+		line := fmt.Sprintf("%s%s %s", marker, sel, opt.Label)
+		if !opt.Available {
+			line += " " + Badge("N/A", "warn")
+		}
+		if i == v.OpenerCursor {
+			line = valueStyle.Bold(true).Render(line)
+		} else {
+			line = valueStyle.Render(line)
+		}
+		lines = append(lines, line)
+		if i == v.OpenerCursor && opt.Description != "" {
+			lines = append(lines, subtleStyle.Render("      "+truncate(opt.Description, v.Width-8)))
+		}
+	}
+	lines = append(lines, "")
+	lines = append(lines, subtleStyle.Render("↑↓ choose · Enter apply · Esc cancel"))
+	maxW := v.Width - 10
+	if maxW < 36 {
+		maxW = 36
+	}
+	if maxW > 64 {
+		maxW = 64
+	}
+	return PickerModal("Open folder with", strings.Join(lines, "\n"), maxW)
+}
+
+func (v SessionsView) renderDeleteModal() string {
+	var lines []string
+	lines = append(lines, warnStyle.Render(fmt.Sprintf("Delete session #%d?", v.DeleteID)))
+	lines = append(lines, "")
+	lines = append(lines, subtleStyle.Render(truncate(v.DeletePath, v.Width-12)))
+	lines = append(lines, "")
+	choices := []string{"No", "Yes, delete folder"}
+	for i, label := range choices {
+		marker := "  "
+		if i == v.DeleteCursor {
+			marker = "> "
+		}
+		style := valueStyle
+		if i == 0 && v.DeleteCursor == 0 {
+			style = valueStyle
+		}
+		lines = append(lines, marker+style.Render(label))
+	}
+	lines = append(lines, "")
+	lines = append(lines, subtleStyle.Render("↑↓ choose · Enter apply · Esc cancel"))
+	maxW := v.Width - 10
+	if maxW < 36 {
+		maxW = 36
+	}
+	if maxW > 56 {
+		maxW = 56
+	}
+	return PickerModal("Confirm delete", strings.Join(lines, "\n"), maxW)
 }
 
 func (v SessionsView) columnWidth() int {
@@ -164,14 +264,15 @@ func (v SessionsView) tableBox(width int) string {
 	if v.ErrMsg != "" {
 		return Box("Sessions", errStyle.Render(v.ErrMsg), width)
 	}
-	if len(v.Records) == 0 {
+	if v.TotalCount == 0 {
 		return Box("Sessions", subtleStyle.Render("No recordings yet."), width)
 	}
 
+	title := fmt.Sprintf("Sessions (%d/%d · %d total)", v.Page, v.PageCount, v.TotalCount)
 	header := fmt.Sprintf("%-4s  %-16s  %-14s  %-8s  %s",
 		"ID", "DATE", "MEET", "DUR", "PATH")
 	lines := []string{subtleStyle.Render(header)}
-	for i, r := range v.Records {
+	for i, r := range v.PageRecords {
 		line := v.formatRow(r)
 		if i == v.Cursor {
 			line = lipgloss.NewStyle().
@@ -181,7 +282,7 @@ func (v SessionsView) tableBox(width int) string {
 		}
 		lines = append(lines, line)
 	}
-	return Box("Sessions", strings.Join(lines, "\n"), width)
+	return Box(title, strings.Join(lines, "\n"), width)
 }
 
 func (v SessionsView) formatRow(r session.Record) string {
@@ -207,13 +308,13 @@ func (v SessionsView) formatRow(r session.Record) string {
 }
 
 func (v SessionsView) detailsBox(width int) string {
-	if len(v.Records) == 0 {
+	if v.TotalCount == 0 {
 		return Box("Details", subtleStyle.Render("Select a session"), width)
 	}
-	if v.Cursor < 0 || v.Cursor >= len(v.Records) {
+	if v.Cursor < 0 || v.Cursor >= len(v.PageRecords) {
 		return Box("Details", "", width)
 	}
-	r := v.Records[v.Cursor]
+	r := v.PageRecords[v.Cursor]
 	lines := []string{
 		row("ID", fmt.Sprintf("#%d", r.ID)),
 		row("Started", session.FormatLocalTime(r.StartedAt, "2006-01-02 15:04:05")),
@@ -238,45 +339,15 @@ func (v SessionsView) actionsBox(width int) string {
 		row("Setting", openerSettingLabel(v.CurrentOpener)),
 		"",
 		FooterHint("↑↓", "Navigate list"),
+		FooterHint("[ ]", "Page"),
 		FooterHint("t", "Transcribe (Whisper)"),
 		FooterHint("o", "Open session folder"),
 		FooterHint("f", "Choose folder opener"),
 		FooterHint("p", "Play recording"),
+		FooterHint("d", "Delete session"),
 		FooterHint("R", "Refresh list"),
 	}
 	return Box("Actions (keyboard)", strings.Join(lines, "\n"), width)
-}
-
-func (v SessionsView) openerBox(width int) string {
-	var lines []string
-	lines = append(lines, row("Active", openerSettingLabel(v.CurrentOpener)))
-	lines = append(lines, row("Resolves to", truncate(v.OpenerDetected, width-14)))
-	lines = append(lines, "")
-
-	for i, opt := range v.OpenerChoices {
-		marker := "  "
-		if i == v.OpenerCursor {
-			marker = "> "
-		}
-		sel := "○"
-		if opt.ID == v.CurrentOpener {
-			sel = "●"
-		}
-		line := fmt.Sprintf("%s%s %s", marker, sel, opt.Label)
-		if !opt.Available {
-			line += " " + Badge("N/A", "warn")
-		}
-		if i == v.OpenerCursor {
-			line = valueStyle.Bold(true).Render(line)
-		} else {
-			line = valueStyle.Render(line)
-		}
-		lines = append(lines, line)
-		if i == v.OpenerCursor && opt.Description != "" {
-			lines = append(lines, subtleStyle.Render("      "+truncate(opt.Description, width-8)))
-		}
-	}
-	return Box("Open folder with", strings.Join(lines, "\n"), width)
 }
 
 func openerSettingLabel(id string) string {

@@ -1,6 +1,7 @@
 package session
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -48,6 +49,53 @@ func TestSQLiteStoreCreateList(t *testing.T) {
 	}
 	if list[0].Provider != ProviderTeams {
 		t.Fatalf("unexpected provider %s", list[0].Provider)
+	}
+}
+
+func TestSQLiteStoreDelete(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "sessions.db")
+	store := NewSQLiteStore(dbPath)
+	if err := store.Open(); err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	dir := t.TempDir()
+	started := time.Now().UTC().Truncate(time.Second)
+	id, err := store.Create(Record{
+		Dir:       dir,
+		Provider:  ProviderTeams,
+		Platform:  "linux",
+		Backend:   "dummy",
+		StartedAt: started,
+		Status:    StatusStopped,
+		Metadata: Metadata{
+			StartedAt: started,
+			Provider:  ProviderTeams,
+			Platform:  "linux",
+			Backend:   "dummy",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rec, err := store.Get(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Remove(store, rec); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Fatalf("expected dir removed, stat err=%v", err)
+	}
+	list, err := store.List(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 0 {
+		t.Fatalf("expected 0 sessions, got %d", len(list))
 	}
 }
 

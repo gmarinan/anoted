@@ -10,10 +10,11 @@ type SessionsFooterMode int
 const (
 	SessionsFooterNormal SessionsFooterMode = iota
 	SessionsFooterOpenerPicker
+	SessionsFooterDeleteConfirm
 )
 
 // FooterForTab returns context-sensitive footer shortcuts.
-func FooterForTab(tab TabID, awaitingConfirm bool, sessionsMode SessionsFooterMode) string {
+func FooterForTab(tab TabID, awaitingConfirm bool, sessionsMode SessionsFooterMode, configMode ConfigFooterMode, configSaved, configErr string, width int) string {
 	switch tab {
 	case TabHome:
 		if awaitingConfirm {
@@ -41,6 +42,15 @@ func FooterForTab(tab TabID, awaitingConfirm bool, sessionsMode SessionsFooterMo
 			FooterHint("q", "quit"),
 		)
 	case TabSessions:
+		if sessionsMode == SessionsFooterDeleteConfirm {
+			return JoinFooter(
+				FooterHint("↑↓", "choose"),
+				FooterHint("Enter", "apply"),
+				FooterHint("Esc", "cancel"),
+				FooterHint("1-4", "screens"),
+				FooterHint("q", "quit"),
+			)
+		}
 		if sessionsMode == SessionsFooterOpenerPicker {
 			return JoinFooter(
 				FooterHint("↑↓", "choose"),
@@ -51,21 +61,18 @@ func FooterForTab(tab TabID, awaitingConfirm bool, sessionsMode SessionsFooterMo
 		}
 		return JoinFooter(
 			FooterHint("↑↓", "navigate"),
+			FooterHint("[ ]", "page"),
 			FooterHint("t", "transcribe"),
 			FooterHint("o", "open folder"),
 			FooterHint("f", "folder opener"),
 			FooterHint("p", "play"),
+			FooterHint("d", "delete"),
 			FooterHint("R", "refresh"),
 			FooterHint("1-4", "screens"),
 			FooterHint("q", "quit"),
 		)
 	case TabConfig:
-		return JoinFooter(
-			FooterHint("Ctrl+S", "save"),
-			FooterHint("R", "reload"),
-			FooterHint("1-4", "screens"),
-			FooterHint("q", "quit"),
-		)
+		return FooterForConfig(configMode, configSaved, configErr, width)
 	default:
 		return JoinFooter(FooterHint("q", "quit"))
 	}

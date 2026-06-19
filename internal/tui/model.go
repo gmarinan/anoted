@@ -85,14 +85,17 @@ type Model struct {
 	systemDevice     string // resolved label for main screen
 	micDevice        string
 
-	// Config YAML editor
-	configLines     []string
-	configCursorRow int
-	configCursorCol int
-	configScrollRow int
-	configDirty     bool
-	configErr       string
-	configSavedMsg  string
+	// Config interactive menu
+	configSection      int
+	configCursor       int
+	configListCursor   int
+	configEditing      bool
+	configInput        string
+	configModalOpen    bool
+	configModalCursor  int
+	configModalOptions []string
+	configErr          string
+	configSavedMsg     string
 
 	transcribing   bool
 	transcribeNote string
@@ -100,6 +103,9 @@ type Model struct {
 	sessionsOpenerPicker bool
 	sessionsOpenerCursor int
 	sessionsDesktopNote  string
+	sessionsPage         int
+	sessionsDeleteConfirm bool
+	sessionsDeleteCursor  int
 }
 
 // NewModel creates the initial TUI model.
@@ -162,9 +168,12 @@ func loadDoctorReport(cfg config.Config) doctor.Report {
 	return doctor.Run(cfg)
 }
 
+const sessionsListLimit = 500
+const sessionsPageSize = 15
+
 func loadSessionRecords(store session.Store) ([]session.Record, error) {
 	if store == nil {
 		return nil, nil
 	}
-	return store.List(50)
+	return store.List(sessionsListLimit)
 }

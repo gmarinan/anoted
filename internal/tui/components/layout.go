@@ -21,7 +21,16 @@ var (
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color("63")).
 			Padding(0, 1)
+	dimBoxStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("238")).
+			Padding(0, 1)
 	boxTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("86"))
+	modalBoxStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("63")).
+			Background(lipgloss.Color("235")).
+			Padding(0, 2)
 	magentaStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("213"))
 	subTabActiveStyle = lipgloss.NewStyle().
 				Bold(true).
@@ -89,16 +98,25 @@ func SubTabBar(labels []string, active int) string {
 
 // Box renders a titled bordered panel.
 func Box(title, content string, width int) string {
+	return renderBox(title, content, width, boxStyle, boxTitleStyle)
+}
+
+// DimBox renders a titled panel with a dim border for unfocused sections.
+func DimBox(title, content string, width int) string {
+	return renderBox(title, content, width, dimBoxStyle, boxTitleStyle)
+}
+
+func renderBox(title, content string, width int, style, titleStyle lipgloss.Style) string {
 	if width < 12 {
 		width = 40
 	}
-	titleLine := boxTitleStyle.Render(strings.ToUpper(title))
+	titleLine := titleStyle.Render(strings.ToUpper(title))
 	body := content
 	if body == "" {
 		body = subtleStyle.Render("(empty)")
 	}
 	inner := titleLine + "\n" + body
-	return boxStyle.Width(width).Render(inner)
+	return style.Width(width).Render(inner)
 }
 
 // Badge renders a small status pill.
@@ -125,4 +143,91 @@ func FooterHint(key, action string) string {
 // JoinFooter joins footer hints with separators.
 func JoinFooter(hints ...string) string {
 	return subtleStyle.Render(strings.Join(hints, "  ·  "))
+}
+
+// FooterWithTrailingStatus places status text flush-right on the footer line.
+func FooterWithTrailingStatus(hints, status string, width int) string {
+	if status == "" {
+		return hints
+	}
+	if width <= 0 {
+		return JoinFooter(hints, status)
+	}
+	gap := width - lipgloss.Width(hints) - lipgloss.Width(status)
+	if gap < 2 {
+		return JoinFooter(hints, status)
+	}
+	return hints + strings.Repeat(" ", gap) + status
+}
+
+// FloatCenter overlays content centered on a dimmed background.
+func FloatCenter(background, overlay string, width, height int) string {
+	if strings.TrimSpace(overlay) == "" {
+		return background
+	}
+
+	bgLines := strings.Split(strings.TrimRight(background, "\n"), "\n")
+	olLines := strings.Split(strings.TrimRight(overlay, "\n"), "\n")
+
+	modalH := len(olLines)
+	modalW := 0
+	for _, line := range olLines {
+		if w := lipgloss.Width(line); w > modalW {
+			modalW = w
+		}
+	}
+
+	if width <= 0 {
+		width = modalW
+	}
+	if height <= 0 {
+		height = len(bgLines)
+	}
+	if height < len(bgLines) {
+		height = len(bgLines)
+	}
+
+	startY := (height - modalH) / 2
+	if startY < 0 {
+		startY = 0
+	}
+	startX := (width - modalW) / 2
+	if startX < 0 {
+		startX = 0
+	}
+
+	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("238"))
+	out := make([]string, height)
+	for y := 0; y < height; y++ {
+		mi := y - startY
+		if mi >= 0 && mi < modalH {
+			out[y] = strings.Repeat(" ", startX) + olLines[mi]
+			continue
+		}
+		if y < len(bgLines) {
+			out[y] = dimStyle.Render(bgLines[y])
+		} else {
+			out[y] = ""
+		}
+	}
+	return strings.Join(out, "\n")
+}
+
+// PickerModal renders a compact floating picker dialog.
+func PickerModal(title string, body string, maxWidth int) string {
+	lines := strings.Split(body, "\n")
+	modalW := lipgloss.Width(boxTitleStyle.Render(strings.ToUpper(title))) + 4
+	for _, line := range lines {
+		if w := lipgloss.Width(line); w+4 > modalW {
+			modalW = w + 4
+		}
+	}
+	if modalW < 28 {
+		modalW = 28
+	}
+	if maxWidth > 0 && modalW > maxWidth {
+		modalW = maxWidth
+	}
+	inner := boxTitleStyle.Render(strings.ToUpper(title)) + "\n" + body
+	return modalBoxStyle.Width(modalW).Render(inner)
 }

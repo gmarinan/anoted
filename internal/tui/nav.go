@@ -24,7 +24,13 @@ func (m Model) switchScreen(screen Screen) (tea.Model, tea.Cmd) {
 		if m.sessionCursor >= len(m.sessions) {
 			m.sessionCursor = 0
 		}
+		m.sessionsPage = 0
+		if len(m.sessions) > 0 && m.sessionCursor > 0 {
+			m.sessionsPage = m.sessionCursor / sessionsPageSize
+			m.sessionCursor = m.sessionCursor % sessionsPageSize
+		}
 		m.sessionsOpenerPicker = false
+		m.sessionsDeleteConfirm = false
 	case ScreenMain:
 		m.audioMonitorWarn = m.deps.Audio.MonitorWarning(m.deps.Config.Audio.SystemMonitor)
 		if len(m.audioCatalog.Outputs) == 0 && !m.audioLoading {
@@ -33,7 +39,7 @@ func (m Model) switchScreen(screen Screen) (tea.Model, tea.Cmd) {
 		}
 		cmds = append(cmds, resolveDeviceLabelsCmd(m))
 	case ScreenConfig:
-		m = m.loadConfigEditor()
+		m = m.initConfigMenu()
 	}
 
 	return m, tea.Batch(cmds...)
@@ -64,8 +70,9 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if model, cmd, ok := m.handleTabSwitch(key); ok {
-		if m.screen == ScreenSessions && m.sessionsOpenerPicker {
+		if m.screen == ScreenSessions {
 			m.sessionsOpenerPicker = false
+			m.sessionsDeleteConfirm = false
 		}
 		return model, cmd
 	}
@@ -134,13 +141,13 @@ func (m Model) handleTabSwitch(key string) (tea.Model, tea.Cmd, bool) {
 	case "1":
 		model, cmd := m.switchTab(components.TabHome)
 		return model, cmd, true
-	case "2", "d":
+	case "2":
 		model, cmd := m.switchTab(components.TabDoctor)
 		return model, cmd, true
 	case "3":
 		model, cmd := m.switchTab(components.TabSessions)
 		return model, cmd, true
-	case "4", "c":
+	case "4":
 		model, cmd := m.switchTab(components.TabConfig)
 		return model, cmd, true
 	default:
@@ -160,8 +167,7 @@ func (m Model) handleRefresh() (tea.Model, tea.Cmd) {
 		m.audioErr = ""
 		return m, tea.Batch(loadAudioCatalogCmd(m), resolveDeviceLabelsCmd(m))
 	case ScreenConfig:
-		m = m.loadConfigEditor()
-		return m, nil
+		return m.reloadConfigFromDisk(), resolveDeviceLabelsCmd(m)
 	default:
 		return m, resolveDeviceLabelsCmd(m)
 	}

@@ -3,157 +3,258 @@ package components
 import (
 	"fmt"
 	"strings"
-	"unicode/utf8"
 
 	"charm.land/lipgloss/v2"
 )
 
-// ConfigView renders the Config tab YAML editor.
-type ConfigView struct {
-	Path      string
-	Lines     []string
-	CursorRow int
-	CursorCol int // rune index in line
-	ScrollRow int
-	Dirty     bool
-	ErrMsg    string
-	SavedMsg  string
-	Width     int
-	Height    int
+// ConfigFieldRow is one row in the config menu.
+type ConfigFieldRow struct {
+	Label    string
+	Value    string
+	Selected bool
+	Kind     string // bool, enum, text, int, list, readonly
+	ListItems []ConfigListItem
 }
 
-func (v ConfigView) View() string {
+// ConfigListItem is one item in an expandable list field.
+type ConfigListItem struct {
+	Text     string
+	Selected bool
+}
+
+// ConfigSectionPanel is one configuration section with its fields.
+type ConfigSectionPanel struct {
+	Label   string
+	Focused bool
+	Fields  []ConfigFieldRow
+}
+
+// ConfigMenuView renders the interactive Config tab.
+type ConfigMenuView struct {
+	Path          string
+	Sections      []ConfigSectionPanel
+	ModalOpen     bool
+	ModalTitle     string
+	ModalOptions   []string
+	ModalCursor    int
+	Editing        bool
+	InputValue     string
+	Width          int
+	Height         int
+}
+
+func (v ConfigMenuView) View() string {
+	base := v.renderBase()
+	if !v.ModalOpen {
+		return base
+	}
+	h := v.overlayHeight()
+	return FloatCenter(base, v.renderModal(), v.Width, h)
+}
+
+func (v ConfigMenuView) renderBase() string {
 	var b strings.Builder
-	if v.Dirty {
-		b.WriteString(warnStyle.Render(" ●"))
-	}
-	b.WriteString("\n")
-	b.WriteString(subtleStyle.Render("File: "+v.Path))
+	b.WriteString(subtleStyle.Render("File: " + v.Path))
 	b.WriteString("\n\n")
-
-	if v.ErrMsg != "" {
-		b.WriteString(errStyle.Render("✗ " + v.ErrMsg))
-		b.WriteString("\n")
-	}
-	if v.SavedMsg != "" {
-		b.WriteString(okStyle.Render("✓ " + v.SavedMsg))
-		b.WriteString("\n")
-	}
-
-	editorH := v.editorHeight()
-	content := v.renderEditor(editorH)
-	b.WriteString(Box("config.yaml", content, v.Width))
+	b.WriteString(v.renderAllSections())
 	return b.String()
 }
 
-func (v ConfigView) editorHeight() int {
-	h := v.Height - 9
-	if h < 6 {
-		h = 6
+func (v ConfigMenuView) overlayHeight() int {
+	h := v.Height - 8
+	if h < 12 {
+		h = 12
+	}
+	baseH := lipgloss.Height(v.renderBase())
+	if baseH > h {
+		h = baseH
 	}
 	return h
 }
 
-func (v ConfigView) renderEditor(visibleLines int) string {
-	if len(v.Lines) == 0 {
-		return subtleStyle.Render("(empty)")
+func (v ConfigMenuView) sectionWidth() int {
+	if v.Width >= 100 {
+		return (v.Width - 3) / 2
 	}
-
-	var out []string
-	for i := 0; i < visibleLines; i++ {
-		lineIdx := v.ScrollRow + i
-		if lineIdx >= len(v.Lines) {
-			out = append(out, "")
-			continue
-		}
-		line := v.Lines[lineIdx]
-		prefix := "  "
-		if lineIdx == v.CursorRow {
-			prefix = "> "
-		}
-		display := v.formatLine(line, lineIdx)
-		num := subtleStyle.Render(fmt.Sprintf("%3d ", lineIdx+1))
-		out = append(out, num+prefix+display)
+	if v.Width < 12 {
+		return 40
 	}
-	return strings.Join(out, "\n")
+	return v.Width
 }
 
-func (v ConfigView) formatLine(line string, lineIdx int) string {
-	maxW := v.Width - 10
-	if maxW < 20 {
-		maxW = 40
+func (v ConfigMenuView) renderAllSections() string {
+	if len(v.Sections) == 0 {
+		return subtleStyle.Render("(no sections)")
 	}
-	runes := []rune(line)
-	if lineIdx == v.CursorRow {
-		return v.renderCursorLine(runes, maxW)
-	}
-	return valueStyle.Render(truncateRunes(runes, maxW))
-}
+	w := v.sectionWidth()
+	twoCol := v.Width >= 100
 
-func (v ConfigView) renderCursorLine(runes []rune, maxW int) string {
-	col := v.CursorCol
-	if col > len(runes) {
-		col = len(runes)
-	}
-	start := 0
-	if col > maxW-1 {
-		start = col - maxW + 1
-	}
-	end := start + maxW
-	if end > len(runes) {
-		end = len(runes)
-	}
-	visible := runes[start:end]
-	var b strings.Builder
-	cursorStyle := lipgloss.NewStyle().Background(lipgloss.Color("63")).Foreground(lipgloss.Color("229"))
-	for i, r := range visible {
-		pos := start + i
-		if pos == col {
-			b.WriteString(cursorStyle.Render(string(r)))
+	var rows []string
+	for i := 0; i < len(v.Sections); i += 2 {
+		if twoCol && i+1 < len(v.Sections) {
+			left := v.renderSectionBox(v.Sections[i], w)
+			right := v.renderSectionBox(v.Sections[i+1], w)
+			left, right = equalizeBoxHeights(left, right)
+			rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Top, left, " ", right))
 		} else {
-			b.WriteString(valueStyle.Render(string(r)))
+			rows = append(rows, v.renderSectionBox(v.Sections[i], w))
 		}
 	}
-	if col == len(runes) {
-		b.WriteString(cursorStyle.Render(" "))
-	}
-	return b.String()
+	return strings.Join(rows, "\n")
 }
 
-func truncateRunes(runes []rune, max int) string {
-	if len(runes) <= max {
-		return string(runes)
+func equalizeBoxHeights(left, right string) (string, string) {
+	hLeft := lipgloss.Height(left)
+	hRight := lipgloss.Height(right)
+	if hLeft < hRight {
+		left = lipgloss.Place(lipgloss.Width(left), hRight, lipgloss.Left, lipgloss.Top, left)
+	} else if hRight < hLeft {
+		right = lipgloss.Place(lipgloss.Width(right), hLeft, lipgloss.Left, lipgloss.Top, right)
 	}
-	return string(runes[:max-1]) + "…"
+	return left, right
 }
 
-// LinesToText joins editor lines for saving.
-func LinesToText(lines []string) string {
+func (v ConfigMenuView) renderSectionBox(sec ConfigSectionPanel, width int) string {
+	body := v.renderSectionFields(sec)
+	if sec.Focused {
+		return Box(sec.Label, body, width)
+	}
+	return DimBox(sec.Label, body, width)
+}
+
+func (v ConfigMenuView) renderSectionFields(sec ConfigSectionPanel) string {
+	if len(sec.Fields) == 0 {
+		return subtleStyle.Render("(no fields)")
+	}
+	var lines []string
+	for _, f := range sec.Fields {
+		lines = append(lines, v.renderFieldLine(sec.Focused, f))
+		if f.Kind == "list" {
+			lines = append(lines, v.renderListItems(sec.Focused, f)...)
+		}
+	}
 	return strings.Join(lines, "\n")
 }
 
-// TextToLines splits file content into editor lines.
-func TextToLines(text string) []string {
-	text = strings.ReplaceAll(text, "\r\n", "\n")
-	text = strings.ReplaceAll(text, "\r", "\n")
-	if text == "" {
-		return []string{""}
+func (v ConfigMenuView) renderFieldLine(focused bool, f ConfigFieldRow) string {
+	marker := "  "
+	if focused && f.Selected {
+		marker = "> "
 	}
-	lines := strings.Split(text, "\n")
+	label := labelStyle.Render(f.Label + ":")
+	val := valueStyle.Render(f.Value)
+	if f.Kind == "readonly" {
+		val = subtleStyle.Render(f.Value)
+	}
+	if focused && f.Selected && v.Editing && f.Kind != "list" {
+		if v.InputValue != "" {
+			val = valueStyle.Render(v.InputValue + "_")
+		} else {
+			val = valueStyle.Render(f.Value + "_")
+		}
+	}
+	return marker + label + " " + val
+}
+
+func (v ConfigMenuView) renderListItems(focused bool, f ConfigFieldRow) []string {
+	var lines []string
+	if len(f.ListItems) == 0 {
+		hint := "      (empty)"
+		if focused && f.Selected {
+			hint += " — press a to add"
+		}
+		lines = append(lines, subtleStyle.Render(hint))
+		return lines
+	}
+	for _, item := range f.ListItems {
+		im := "      "
+		if focused && item.Selected {
+			im = "    > "
+		}
+		lines = append(lines, im+valueStyle.Render(item.Text))
+	}
+	if focused && f.Selected && v.Editing {
+		prompt := "      new: "
+		if v.InputValue != "" {
+			prompt += v.InputValue
+		}
+		lines = append(lines, valueStyle.Render(prompt+"_"))
+	}
 	return lines
 }
 
-// ClampCursorCol ensures the column is valid for the current line.
-func ClampCursorCol(lines []string, row, col int) int {
-	if row < 0 || row >= len(lines) {
-		return 0
+func (v ConfigMenuView) renderModal() string {
+	var lines []string
+	for i, opt := range v.ModalOptions {
+		marker := "  "
+		if i == v.ModalCursor {
+			marker = "> "
+		}
+		lines = append(lines, marker+valueStyle.Render(opt))
 	}
-	n := utf8.RuneCountInString(lines[row])
-	if col < 0 {
-		return 0
+	lines = append(lines, "")
+	lines = append(lines, subtleStyle.Render("↑↓ choose · Enter apply · Esc cancel"))
+	body := strings.Join(lines, "\n")
+	maxW := v.Width - 10
+	if maxW < 28 {
+		maxW = 28
 	}
-	if col > n {
-		return n
+	if maxW > 48 {
+		maxW = 48
 	}
-	return col
+	return PickerModal(v.ModalTitle, body, maxW)
+}
+
+// ConfigFooterMode selects footer shortcuts on the Config screen.
+type ConfigFooterMode int
+
+const (
+	ConfigFooterNormal ConfigFooterMode = iota
+	ConfigFooterModal
+	ConfigFooterEditing
+)
+
+// FooterForConfig returns context-sensitive footer for the Config tab.
+func FooterForConfig(mode ConfigFooterMode, savedMsg, errMsg string, width int) string {
+	var hints string
+	switch mode {
+	case ConfigFooterModal:
+		hints = JoinFooter(
+			FooterHint("↑↓", "choose"),
+			FooterHint("Enter", "apply"),
+			FooterHint("Esc", "cancel"),
+			FooterHint("1-4", "screens"),
+			FooterHint("q", "quit"),
+		)
+	case ConfigFooterEditing:
+		hints = JoinFooter(
+			FooterHint("Enter", "confirm"),
+			FooterHint("Esc", "cancel"),
+			FooterHint("1-4", "screens"),
+			FooterHint("q", "quit"),
+		)
+	default:
+		hints = JoinFooter(
+			FooterHint("Tab", "focus section"),
+			FooterHint("↑↓", "navigate"),
+			FooterHint("Enter", "edit"),
+			FooterHint("a/d", "patterns"),
+			FooterHint("R", "reload"),
+			FooterHint("1-4", "screens"),
+			FooterHint("q", "quit"),
+		)
+	}
+
+	if errMsg != "" {
+		return FooterWithTrailingStatus(hints, errStyle.Render("✗ "+errMsg), width)
+	}
+	if savedMsg != "" {
+		return FooterWithTrailingStatus(hints, okStyle.Render("✓ "+savedMsg), width)
+	}
+	return hints
+}
+
+// FormatConfigBool displays a bool for the menu.
+func FormatConfigBool(b bool) string {
+	return fmt.Sprintf("%v", b)
 }

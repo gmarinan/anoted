@@ -30,7 +30,7 @@ func (m Model) View() tea.View {
 	}
 
 	content.WriteString("\n\n")
-	content.WriteString(components.FooterForTab(tab, m.awaitingRecordConfirm, m.sessionsFooter()))
+	content.WriteString(components.FooterForTab(tab, m.awaitingRecordConfirm, m.sessionsFooter(), m.configFooter(), m.configSavedMsg, m.configErr, m.width))
 
 	v := tea.NewView(content.String())
 	v.AltScreen = true
@@ -99,41 +99,120 @@ func (m Model) doctorView() components.DoctorView {
 }
 
 func (m Model) sessionsView() components.SessionsView {
-	return components.SessionsView{
-		Records:         m.sessions,
-		Cursor:          m.sessionCursor,
+	rec, _ := m.selectedSession()
+	v := components.SessionsView{
+		PageRecords:    m.sessionsPageRecords(),
+		Cursor:         m.sessionCursor,
+		Page:           m.sessionsPage + 1,
+		PageCount:      m.sessionsPageCount(),
+		TotalCount:     len(m.sessions),
 		ErrMsg:          m.sessionsErr,
 		Transcribing:    m.transcribing,
 		StatusNote:      m.transcribeNote,
 		DesktopNote:     m.sessionsDesktopNote,
 		Width:           m.width,
+		Height:          m.height,
 		OpenerPicker:    m.sessionsOpenerPicker,
 		OpenerCursor:    m.sessionsOpenerCursor,
 		OpenerChoices:   m.sessionsOpenerChoices(),
 		CurrentOpener:   open.CurrentOpenerID(m.deps.Config.Desktop),
 		OpenerDetected:  open.Detected(m.deps.Config.Desktop, open.KindFolder),
+		DeleteConfirm:   m.sessionsDeleteConfirm,
+		DeleteCursor:    m.sessionsDeleteCursor,
 	}
+	if m.sessionsDeleteConfirm {
+		v.DeleteID = rec.ID
+		v.DeletePath = rec.Dir
+	}
+	return v
 }
 
 func (m Model) sessionsFooter() components.SessionsFooterMode {
+	if m.sessionsDeleteConfirm {
+		return components.SessionsFooterDeleteConfirm
+	}
 	if m.sessionsOpenerPicker {
 		return components.SessionsFooterOpenerPicker
 	}
 	return components.SessionsFooterNormal
 }
 
-func (m Model) configView() components.ConfigView {
-	return components.ConfigView{
-		Path:      m.deps.ConfigPath,
-		Lines:     m.configLines,
-		CursorRow: m.configCursorRow,
-		CursorCol: m.configCursorCol,
-		ScrollRow: m.configScrollRow,
-		Dirty:     m.configDirty,
-		ErrMsg:    m.configErr,
-		SavedMsg:  m.configSavedMsg,
-		Width:     m.width,
-		Height:    m.height,
+func (m Model) configView() components.ConfigMenuView {
+	cfg := m.deps.Config
+	sections := make([]components.ConfigSectionPanel, 0, configSectionCount)
+	for s := 0; s < configSectionCount; s++ {
+		fields := cfgFields(s)
+		rows := make([]components.ConfigFieldRow, 0, len(fields))
+		for i, f := range fields {
+			row := components.ConfigFieldRow{
+				Label:    f.label,
+				Value:    cfgFieldValue(f, cfg),
+				Selected: s == m.configSection && i == m.configCursor,
+				Kind:     configFieldKindName(f.kind),
+			}
+			if f.kind == fieldList && f.list != nil {
+				items := f.list(cfg)
+				for j, item := range items {
+					row.ListItems = append(row.ListItems, components.ConfigListItem{
+						Text:     item,
+						Selected: s == m.configSection && i == m.configCursor && j == m.configListCursor,
+					})
+				}
+			}
+			rows = append(rows, row)
+		}
+		sections = append(sections, components.ConfigSectionPanel{
+			Label:   configSectionLabels[s],
+			Focused: s == m.configSection,
+			Fields:  rows,
+		})
+	}
+
+	modalTitle := ""
+	if m.configModalOpen {
+		if f, ok := m.currentCfgField(); ok {
+			modalTitle = f.label
+		}
+	}
+
+	return components.ConfigMenuView{
+		Path:          m.deps.ConfigPath,
+		Sections:      sections,
+		ModalOpen:     m.configModalOpen,
+		ModalTitle:    modalTitle,
+		ModalOptions:  m.configModalOptions,
+		ModalCursor:   m.configModalCursor,
+		Editing:       m.configEditing,
+		InputValue:    m.configInput,
+		Width:         m.width,
+		Height:        m.height,
+	}
+}
+
+func (m Model) configFooter() components.ConfigFooterMode {
+	if m.configModalOpen {
+		return components.ConfigFooterModal
+	}
+	if m.configEditing {
+		return components.ConfigFooterEditing
+	}
+	return components.ConfigFooterNormal
+}
+
+func configFieldKindName(k cfgFieldKind) string {
+	switch k {
+	case fieldBool:
+		return "bool"
+	case fieldEnum:
+		return "enum"
+	case fieldText:
+		return "text"
+	case fieldInt:
+		return "int"
+	case fieldList:
+		return "list"
+	default:
+		return "readonly"
 	}
 }
 
