@@ -269,8 +269,8 @@ func (v SessionsView) tableBox(width int) string {
 	}
 
 	title := fmt.Sprintf("Sessions (%d/%d · %d total)", v.Page, v.PageCount, v.TotalCount)
-	header := fmt.Sprintf("%-4s  %-16s  %-14s  %-8s  %s",
-		"ID", "DATE", "MEET", "DUR", "PATH")
+	header := fmt.Sprintf("%-4s  %-16s  %-12s  %-8s  %-3s  %s",
+		"ID", "DATE", "MEET", "DUR", "TX", "PATH")
 	lines := []string{subtleStyle.Render(header)}
 	for i, r := range v.PageRecords {
 		line := v.formatRow(r)
@@ -293,17 +293,19 @@ func (v SessionsView) formatRow(r session.Record) string {
 	if dur == "" {
 		dur = "—"
 	}
-	meet := formatProvider(string(r.Provider))
+	meet := truncate(formatProvider(string(r.Provider)), 12)
+	tx := "no"
 	if transcribe.HasTranscript(r.Dir) {
-		meet = truncate(meet, 10) + " " + Badge("TX", "ok")
+		tx = "yes"
 	}
 	path := filepath.Join(r.Dir, sessionAudioName)
-	return fmt.Sprintf("#%-3d  %-16s  %-14s  %-8s  %s",
+	return fmt.Sprintf("#%-3d  %-16s  %-12s  %-8s  %-3s  %s",
 		r.ID,
 		session.FormatLocalTime(r.StartedAt, "2006-01-02 15:04"),
-		truncate(meet, 14),
+		meet,
 		truncate(dur, 8),
-		truncate(path, 40),
+		tx,
+		truncate(path, 36),
 	)
 }
 
@@ -326,9 +328,6 @@ func (v SessionsView) detailsBox(width int) string {
 	}
 	if r.Metadata.Duration != "" {
 		lines = append(lines, row("Duration", r.Metadata.Duration))
-	}
-	if files := transcribe.ListTranscriptFiles(r.Dir); len(files) > 0 {
-		lines = append(lines, row("Transcript", truncate(filepath.Base(files[0]), width-12)))
 	}
 	return Box("Details", strings.Join(lines, "\n"), width)
 }
