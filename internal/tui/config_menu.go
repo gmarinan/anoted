@@ -914,7 +914,7 @@ func (m Model) configAbsorbsKeys() bool {
 
 func (m Model) isTabSwitchKey(key string) bool {
 	switch key {
-	case "1", "2", "3", "4":
+	case "1", "2", "3":
 		return true
 	default:
 		return false

@@ -54,10 +54,64 @@ func (m Model) clampSessionsCursor() Model {
 	m.sessionsPage = global / sessionsPageSize
 	m.sessionCursor = global % sessionsPageSize
 	pageLen := len(m.sessionsPageRecords())
-	if pageLen > 0 && m.sessionCursor >= pageLen {
+	if pageLen == 0 {
+		m.sessionCursor = 0
+	} else if m.sessionCursor >= pageLen {
 		m.sessionCursor = pageLen - 1
 	}
+	if m.sessionCursor < 0 {
+		m.sessionCursor = 0
+	}
 	return m
+}
+
+// sessionsNavigate moves the selection by delta rows across page boundaries.
+func (m Model) sessionsNavigate(delta int) Model {
+	if len(m.sessions) == 0 {
+		m.sessionsPage = 0
+		m.sessionCursor = 0
+		return m
+	}
+	global := m.sessionsPage*sessionsPageSize + m.sessionCursor + delta
+	if global < 0 {
+		global = 0
+	}
+	if global >= len(m.sessions) {
+		global = len(m.sessions) - 1
+	}
+	m.sessionsPage = global / sessionsPageSize
+	m.sessionCursor = global % sessionsPageSize
+	return m.clampSessionsCursor()
+}
+
+func (m Model) sessionsPageJump(delta int) Model {
+	if len(m.sessions) == 0 {
+		m.sessionsPage = 0
+		m.sessionCursor = 0
+		return m
+	}
+	page := m.sessionsPage + delta
+	maxPage := m.sessionsPageCount() - 1
+	if page < 0 {
+		page = 0
+	}
+	if page > maxPage {
+		page = maxPage
+	}
+	m.sessionsPage = page
+	return m.clampSessionsCursor()
+}
+
+func (m Model) refreshSessions() Model {
+	recs, err := loadSessionRecords(m.deps.Store)
+	if err != nil {
+		m.sessionsErr = err.Error()
+		m.sessions = nil
+	} else {
+		m.sessionsErr = ""
+		m.sessions = recs
+	}
+	return m.clampSessionsCursor()
 }
 
 func (m Model) handleSessionsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
@@ -72,42 +126,19 @@ func (m Model) handleSessionsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	switch key {
 	case "up", "k":
-		if m.sessionCursor > 0 {
-			m.sessionCursor--
-		} else if m.sessionsPage > 0 {
-			m.sessionsPage--
-			page := m.sessionsPageRecords()
-			m.sessionCursor = len(page) - 1
-		}
+		m = m.sessionsNavigate(-1)
 		return m, nil
 	case "down", "j":
-		page := m.sessionsPageRecords()
-		if m.sessionCursor < len(page)-1 {
-			m.sessionCursor++
-		} else if m.sessionsPage < m.sessionsPageCount()-1 {
-			m.sessionsPage++
-			m.sessionCursor = 0
-		}
+		m = m.sessionsNavigate(1)
 		return m, nil
-	case "[", "pgup":
-		if m.sessionsPage > 0 {
-			m.sessionsPage--
-			page := m.sessionsPageRecords()
-			if m.sessionCursor >= len(page) {
-				m.sessionCursor = len(page) - 1
-			}
-		}
+	case "[":
+		m = m.sessionsPageJump(-1)
 		return m, nil
-	case "]", "pgdown":
-		if m.sessionsPage < m.sessionsPageCount()-1 {
-			m.sessionsPage++
-			page := m.sessionsPageRecords()
-			if m.sessionCursor >= len(page) {
-				m.sessionCursor = len(page) - 1
-			}
-		}
+	case "]":
+		m = m.sessionsPageJump(1)
 		return m, nil
 	case "f":
+		sessionScroll.reset()
 		m.sessionsOpenerPicker = true
 		m.sessionsOpenerCursor = m.openerCursorIndex()
 		m.sessionsDesktopNote = ""
@@ -136,6 +167,7 @@ func (m Model) handleSessionsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.sessionsErr = "cannot delete the active recording session"
 			return m, nil
 		}
+		sessionScroll.reset()
 		m.sessionsDeleteConfirm = true
 		m.sessionsDeleteCursor = 0
 		m.sessionsErr = ""

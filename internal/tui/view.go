@@ -23,8 +23,6 @@ func (m Model) View() tea.View {
 	switch m.screen {
 	case ScreenDoctor:
 		content.WriteString(m.doctorView().View())
-	case ScreenSessions:
-		content.WriteString(m.sessionsView().View())
 	case ScreenConfig:
 		content.WriteString(m.configView().View())
 	default:
@@ -37,6 +35,7 @@ func (m Model) View() tea.View {
 
 	v := tea.NewView(content.String())
 	v.AltScreen = true
+	v.MouseMode = tea.MouseModeCellMotion
 	v.WindowTitle = "anoted"
 	if m.deps.Config.Privacy.ShowRecordingIndicator && m.recording {
 		v.WindowTitle = "anoted ● RECORDING"
@@ -49,14 +48,8 @@ func (m Model) homeView() components.HomeView {
 	if m.recording && !m.recordStart.IsZero() {
 		duration = time.Since(m.recordStart)
 	}
-	backend := m.deps.Recorder.Name()
-	if m.recStatus.Backend != "" {
-		backend = m.recStatus.Backend
-	}
 	return components.HomeView{
 		AppState:        string(m.appState),
-		Platform:        m.deps.Platform.Name(),
-		Backend:         backend,
 		SystemDevice:    m.systemDevice,
 		MicDevice:       m.micDevice,
 		Provider:        displayProvider(m.provider, m.detection.Title),
@@ -70,6 +63,7 @@ func (m Model) homeView() components.HomeView {
 		DetectionWarn:   m.detection.Warning,
 		ErrorMsg:        m.errMsg,
 		Width:           m.width,
+		Height:          m.height,
 
 		SystemBands:    m.systemBands,
 		MicBands:       m.micBands,
@@ -77,28 +71,12 @@ func (m Model) homeView() components.HomeView {
 		LevelAvailable: m.deps.LevelMonitor != nil && m.deps.LevelMonitor.Available(),
 		MonitorWarn:    m.audioMonitorWarn,
 		LevelFrame:     m.levelFrame,
+
+		Sessions: m.sessionsPanel(),
 	}
 }
 
-func (m Model) doctorView() components.DoctorView {
-	backend := m.deps.Recorder.Name()
-	if m.recStatus.Backend != "" {
-		backend = m.recStatus.Backend
-	}
-	return components.DoctorView{
-		Report:        m.doctorReport,
-		AppState:      string(m.appState),
-		Platform:      m.deps.Platform.Name(),
-		Backend:       backend,
-		Provider:      displayProvider(m.provider, m.detection.Title),
-		SystemDevice:  m.systemDevice,
-		MicDevice:     m.micDevice,
-		DetectionWarn: m.detection.Warning,
-		Width:         m.width,
-	}
-}
-
-func (m Model) sessionsView() components.SessionsView {
+func (m Model) sessionsPanel() components.SessionsView {
 	rec, _ := m.selectedSession()
 	preview := ""
 	if rec.Dir != "" && transcribe.HasTranscript(rec.Dir) && !(m.transcribeActive && rec.Dir == m.transcribeSessionDir) {
@@ -138,6 +116,24 @@ func (m Model) sessionsView() components.SessionsView {
 		v.DeletePath = rec.Dir
 	}
 	return v
+}
+
+func (m Model) doctorView() components.DoctorView {
+	backend := m.deps.Recorder.Name()
+	if m.recStatus.Backend != "" {
+		backend = m.recStatus.Backend
+	}
+	return components.DoctorView{
+		Report:        m.doctorReport,
+		AppState:      string(m.appState),
+		Platform:      m.deps.Platform.Name(),
+		Backend:       backend,
+		Provider:      displayProvider(m.provider, m.detection.Title),
+		SystemDevice:  m.systemDevice,
+		MicDevice:     m.micDevice,
+		DetectionWarn: m.detection.Warning,
+		Width:         m.width,
+	}
 }
 
 func (m Model) sessionsFooter() components.SessionsFooterMode {

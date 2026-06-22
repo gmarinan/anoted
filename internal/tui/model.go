@@ -32,10 +32,9 @@ const (
 type Screen string
 
 const (
-	ScreenMain     Screen = "main"
-	ScreenDoctor   Screen = "doctor"
-	ScreenSessions Screen = "sessions"
-	ScreenConfig   Screen = "config"
+	ScreenMain   Screen = "main"
+	ScreenDoctor Screen = "doctor"
+	ScreenConfig Screen = "config"
 )
 
 // Deps bundles injected services for the TUI.
@@ -198,7 +197,7 @@ func loadDoctorReport(cfg config.Config) doctor.Report {
 }
 
 const sessionsListLimit = 500
-const sessionsPageSize = 15
+const sessionsPageSize = 6
 
 func loadSessionRecords(store session.Store) ([]session.Record, error) {
 	if store == nil {

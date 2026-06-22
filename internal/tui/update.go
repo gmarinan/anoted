@@ -14,14 +14,30 @@ func (m Model) Init() tea.Cmd {
 		m.schedulePoll(),
 		m.scheduleDurationTick(),
 		resolveDeviceLabelsCmd(m),
+		m.loadSessionsCmd(),
 		func() tea.Msg { return homeEnterLevelsMsg{} },
 	)
+}
+
+type sessionsLoadedMsg struct {
+	records []session.Record
+	err     error
+}
+
+func (m Model) loadSessionsCmd() tea.Cmd {
+	store := m.deps.Store
+	return func() tea.Msg {
+		recs, err := loadSessionRecords(store)
+		return sessionsLoadedMsg{records: recs, err: err}
+	}
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
+	case sessionScrollTickMsg:
+		return m.handleSessionScrollTick()
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -40,6 +56,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			var cmds []tea.Cmd
 			m, cmds = m.enterHomeLevels()
 			return m, tea.Batch(cmds...)
+		}
+		return m, nil
+	case sessionsLoadedMsg:
+		if msg.err != nil {
+			m.sessionsErr = msg.err.Error()
+			m.sessions = nil
+		} else {
+			m.sessionsErr = ""
+			m.sessions = msg.records
+			m = m.clampSessionsCursor()
 		}
 		return m, nil
 	case levelStartMsg:
@@ -147,11 +173,8 @@ func (m Model) handleRecordToggle(msg recordToggleResultMsg) (tea.Model, tea.Cmd
 	} else {
 		m.sessionDir = ""
 	}
-	if m.screen == ScreenSessions {
-		recs, err := loadSessionRecords(m.deps.Store)
-		if err == nil {
-			m.sessions = recs
-		}
+	if m.screen == ScreenMain {
+		m = m.refreshSessions()
 	}
 	if m.detection.InMeeting {
 		m.appState = StateInMeeting

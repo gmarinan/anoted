@@ -73,11 +73,10 @@ type TabID int
 const (
 	TabHome TabID = iota
 	TabDoctor
-	TabSessions
 	TabConfig
 )
 
-var tabLabels = []string{"Home", "Doctor", "Sessions", "Config"}
+var tabLabels = []string{"Home", "Doctor", "Config"}
 
 // Header renders the app title line.
 func Header(subtitle string) string {

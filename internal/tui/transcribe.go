@@ -149,11 +149,8 @@ func (m Model) handleTranscribeResult(msg transcribeResultMsg) (tea.Model, tea.C
 	m.sessionsErr = ""
 	m.transcribePercent = 100
 	m.transcribeSessionDir = ""
-	if m.screen == ScreenSessions {
-		recs, err := loadSessionRecords(m.deps.Store)
-		if err == nil {
-			m.sessions = recs
-		}
+	if m.screen == ScreenMain {
+		m = m.refreshSessions()
 	}
 	return m, nil
 }

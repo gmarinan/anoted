@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"charm.land/lipgloss/v2"
 )
 
-// HomeView renders the Home screen.
+// HomeView renders the Home screen (live status + session library).
 type HomeView struct {
 	AppState        string
-	Platform        string
-	Backend         string
 	Provider        string
 	SystemDevice    string
 	MicDevice       string
@@ -24,6 +24,7 @@ type HomeView struct {
 	DetectionWarn   string
 	ErrorMsg        string
 	Width           int
+	Height          int
 
 	SystemBands    []float64
 	MicBands       []float64
@@ -31,19 +32,51 @@ type HomeView struct {
 	LevelEnabled   bool
 	LevelAvailable bool
 	MonitorWarn    string
+
+	Sessions SessionsView
 }
 
 func (v HomeView) View() string {
 	layout := NewPanelLayout(v.Width)
 	colW := layout.ColumnWidth()
-	var b strings.Builder
 
-	status := v.statusBox(colW)
-	audio := v.audioBox(colW)
-	b.WriteString(layout.JoinColumns(status, audio))
-	b.WriteString("\n\n")
-	b.WriteString(v.activityBox(layout.FullWidth()))
-	return b.String()
+	sess := v.Sessions
+	sess.Height = v.Height
+	sess.Width = v.Width
+	if layout.TwoColumn() {
+		sess.Width = colW
+	}
+	sessionsBlock := sess.renderMainContent()
+
+	var content string
+	if layout.TwoColumn() {
+		leftCol := JoinBlocksVertical(v.statusBox(colW), sessionsBlock)
+		content = layout.JoinColumns(leftCol, v.audioBox(colW))
+	} else {
+		content = JoinBlocksVertical(v.statusBox(colW), sessionsBlock, v.audioBox(colW))
+	}
+
+	if sess.DeleteConfirm {
+		h := v.overlayHeight(content)
+		return FloatCenter(content, sess.renderDeleteModal(), v.Width, h)
+	}
+	if sess.OpenerPicker {
+		h := v.overlayHeight(content)
+		return FloatCenter(content, sess.renderOpenerModal(), v.Width, h)
+	}
+	return content
+}
+
+func (v HomeView) overlayHeight(base string) int {
+	h := v.Height - 8
+	if h < 12 {
+		h = 12
+	}
+	baseH := lipgloss.Height(base)
+	if baseH > h {
+		h = baseH
+	}
+	return h
 }
 
 func (v HomeView) statusBox(width int) string {
@@ -52,8 +85,6 @@ func (v HomeView) statusBox(width int) string {
 		lines = append(lines, recStyle.Render(IconRecording+" RECORDING"))
 	}
 	lines = append(lines, row("State", displayState(v.AppState)))
-	lines = append(lines, row("Platform", v.Platform))
-	lines = append(lines, row("Backend", v.Backend))
 	lines = append(lines, row("Meeting", v.Provider))
 	lines = append(lines, row("Auto-record", fmt.Sprintf("%v", v.AutoRecord)))
 	if v.Recording {
@@ -98,27 +129,6 @@ func (v HomeView) audioBox(width int) string {
 		Width:          width,
 	}
 	return Box("Audio", viz.Render(), width)
-}
-
-func (v HomeView) activityBox(width int) string {
-	var msg string
-	var badge string
-	switch {
-	case v.Recording:
-		msg = IconRecording + " Recording meeting audio…"
-		badge = Badge(IconRecording+" REC", "rec")
-	case v.AwaitingConfirm:
-		msg = "Meeting detected — confirm recording"
-		badge = Badge("CONFIRM", "warn")
-	case v.AppState == "in_meeting" || v.AppState == "awaiting_record_confirm":
-		msg = "Meeting active — " + v.Provider
-		badge = Badge("IN MEET", "meet")
-	default:
-		msg = "Watching for Teams / Google Meet…"
-		badge = Badge("READY", "ready")
-	}
-	body := msg + "  " + badge
-	return Box("Activity", body, width)
 }
 
 func displayState(state string) string {

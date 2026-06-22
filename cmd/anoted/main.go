@@ -142,7 +142,7 @@ func runTUI(cmd *cobra.Command, args []string) error {
 		Transcriber:  transcribe.New(cfg),
 	}
 
-	p := tea.NewProgram(tui.NewModel(deps))
+	p := tea.NewProgram(tui.NewModel(deps), tea.WithFilter(tui.SessionScrollFilter))
 	if _, err := p.Run(); err != nil {
 		return fmt.Errorf("tui: %w", err)
 	}

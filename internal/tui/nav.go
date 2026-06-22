@@ -9,6 +9,10 @@ func (m Model) switchScreen(screen Screen) (tea.Model, tea.Cmd) {
 	leavingMain := m.screen == ScreenMain && screen != ScreenMain
 	enteringMain := m.screen != ScreenMain && screen == ScreenMain
 
+	if leavingMain {
+		sessionScroll.reset()
+	}
+
 	var cmds []tea.Cmd
 	if leavingMain {
 		var leaveCmds []tea.Cmd
@@ -21,26 +25,8 @@ func (m Model) switchScreen(screen Screen) (tea.Model, tea.Cmd) {
 	switch screen {
 	case ScreenDoctor:
 		m.doctorReport = loadDoctorReport(m.deps.Config)
-	case ScreenSessions:
-		recs, err := loadSessionRecords(m.deps.Store)
-		if err != nil {
-			m.sessionsErr = err.Error()
-			m.sessions = nil
-		} else {
-			m.sessionsErr = ""
-			m.sessions = recs
-		}
-		if m.sessionCursor >= len(m.sessions) {
-			m.sessionCursor = 0
-		}
-		m.sessionsPage = 0
-		if len(m.sessions) > 0 && m.sessionCursor > 0 {
-			m.sessionsPage = m.sessionCursor / sessionsPageSize
-			m.sessionCursor = m.sessionCursor % sessionsPageSize
-		}
-		m.sessionsOpenerPicker = false
-		m.sessionsDeleteConfirm = false
 	case ScreenMain:
+		m = m.refreshSessions()
 		m.audioMonitorWarn = m.deps.Audio.MonitorWarning(m.deps.Config.Audio.SystemMonitor)
 		cmds = append(cmds, resolveDeviceLabelsCmd(m))
 		if enteringMain {
@@ -94,7 +80,7 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if model, cmd, ok := m.handleTabSwitch(key); ok {
-		if m.screen == ScreenSessions {
+		if m.screen == ScreenMain {
 			m.sessionsOpenerPicker = false
 			m.sessionsDeleteConfirm = false
 		}
@@ -102,8 +88,31 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	switch m.screen {
-	case ScreenSessions:
+	case ScreenMain:
+		return m.handleHomeKey(msg)
+	}
+
+	switch key {
+	case "R":
+		return m.handleRefresh()
+	}
+	return m, nil
+}
+
+func (m Model) handleHomeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	key := msg.String()
+
+	if m.sessionsDeleteConfirm || m.sessionsOpenerPicker {
 		return m.handleSessionsKey(msg)
+	}
+
+	switch key {
+	case "up", "down", "k", "j", "[", "]", "pgup", "pgdown", "t", "o", "p", "f", "d", "delete":
+		return m.handleSessionsKey(msg)
+	case "s":
+		if m.transcribeActive {
+			return m.handleSessionsKey(msg)
+		}
 	}
 
 	switch key {
@@ -158,9 +167,6 @@ func (m Model) handleTabSwitch(key string) (tea.Model, tea.Cmd, bool) {
 		model, cmd := m.switchTab(components.TabDoctor)
 		return model, cmd, true
 	case "3":
-		model, cmd := m.switchTab(components.TabSessions)
-		return model, cmd, true
-	case "4":
 		model, cmd := m.switchTab(components.TabConfig)
 		return model, cmd, true
 	default:
@@ -173,9 +179,8 @@ func (m Model) handleRefresh() (tea.Model, tea.Cmd) {
 	case ScreenDoctor:
 		m.doctorReport = loadDoctorReport(m.deps.Config)
 		return m, nil
-	case ScreenSessions:
-		return m.switchScreen(ScreenSessions)
 	case ScreenMain:
+		m = m.refreshSessions()
 		return m, tea.Batch(resolveDeviceLabelsCmd(m), m.startSystemLevelCmd())
 	case ScreenConfig:
 		return m.reloadConfigFromDisk(), resolveDeviceLabelsCmd(m)

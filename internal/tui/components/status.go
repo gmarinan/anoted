@@ -18,24 +18,6 @@ const (
 func FooterForTab(tab TabID, awaitingConfirm bool, sessionsMode SessionsFooterMode, configMode ConfigFooterMode, configSaved, configErr string, width int) string {
 	switch tab {
 	case TabHome:
-		if awaitingConfirm {
-			return JoinFooter(
-				FooterHint("y", "start recording"),
-				FooterHint("n", "dismiss"),
-				FooterHint("q", "quit"),
-			)
-		}
-		return JoinFooter(
-			FooterHint("r", "record"),
-			FooterHint("a", "auto-record"),
-			FooterHint("q", "quit"),
-		)
-	case TabDoctor:
-		return JoinFooter(
-			FooterHint("R", "refresh"),
-			FooterHint("q", "quit"),
-		)
-	case TabSessions:
 		if sessionsMode == SessionsFooterDeleteConfirm {
 			return JoinFooter(
 				FooterHint("↑↓", "choose"),
@@ -52,24 +34,38 @@ func FooterForTab(tab TabID, awaitingConfirm bool, sessionsMode SessionsFooterMo
 				FooterHint("q", "quit"),
 			)
 		}
+		if awaitingConfirm {
+			return JoinFooter(
+				FooterHint("y", "start recording"),
+				FooterHint("n", "dismiss"),
+				FooterHint("q", "quit"),
+			)
+		}
 		if sessionsMode == SessionsFooterTranscribing {
 			return JoinFooter(
 				FooterHint("s", "stop transcribe"),
 				FooterHint("↑↓", "navigate"),
 				FooterHint("[ ]", "page"),
 				FooterHint("o", "open folder"),
+				FooterHint("r", "record"),
 				FooterHint("R", "refresh"),
 				FooterHint("q", "quit"),
 			)
 		}
 		return JoinFooter(
+			FooterHint("r", "record"),
+			FooterHint("a", "auto-record"),
 			FooterHint("↑↓", "navigate"),
-			FooterHint("[ ]", "page"),
 			FooterHint("t", "transcribe"),
 			FooterHint("o", "open folder"),
 			FooterHint("f", "folder opener"),
 			FooterHint("p", "play"),
 			FooterHint("d", "delete"),
+			FooterHint("R", "refresh"),
+			FooterHint("q", "quit"),
+		)
+	case TabDoctor:
+		return JoinFooter(
 			FooterHint("R", "refresh"),
 			FooterHint("q", "quit"),
 		)
@@ -85,8 +81,6 @@ func ScreenToTab(screen string) TabID {
 	switch screen {
 	case "doctor":
 		return TabDoctor
-	case "sessions":
-		return TabSessions
 	case "config":
 		return TabConfig
 	default:
@@ -99,8 +93,6 @@ func TabToScreen(tab TabID) string {
 	switch tab {
 	case TabDoctor:
 		return "doctor"
-	case TabSessions:
-		return "sessions"
 	case TabConfig:
 		return "config"
 	default:

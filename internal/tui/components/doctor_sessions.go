@@ -98,7 +98,7 @@ type FolderOpenerChoice struct {
 	Available   bool
 }
 
-// SessionsView renders the Sessions tab.
+// SessionsView renders the session library (embedded in Home).
 type SessionsView struct {
 	PageRecords          []session.Record
 	Cursor               int
