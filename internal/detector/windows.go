@@ -22,7 +22,24 @@ type windowsDetector struct {
 func (d *windowsDetector) Name() string { return "windows" }
 
 func (d *windowsDetector) Poll(ctx context.Context) (Snapshot, error) {
+	mode := d.cfg.Mode
+	if mode == "" {
+		mode = ModeWindow
+	}
+
+	switch mode {
+	case ModeNone:
+		return Snapshot{State: MeetingState{}, CheckedAt: time.Now()}, nil
+	default:
+		return d.pollWindow(ctx, mode)
+	}
+}
+
+func (d *windowsDetector) pollWindow(ctx context.Context, mode string) (Snapshot, error) {
 	state := MeetingState{}
+	if mode == ModeMic {
+		state.Warning = "mic detection is not available on Windows; using window/process detection"
+	}
 
 	procs, err := listProcesses(ctx)
 	if err != nil {
@@ -33,9 +50,6 @@ func (d *windowsDetector) Poll(ctx context.Context) (Snapshot, error) {
 
 	teamsProcs := map[string]bool{
 		"ms-teams": true, "teams": true, "msteams": true,
-	}
-	browserProcs := map[string]bool{
-		"chrome": true, "msedge": true, "firefox": true, "brave": true,
 	}
 
 	for _, p := range procs {
@@ -59,8 +73,6 @@ func (d *windowsDetector) Poll(ctx context.Context) (Snapshot, error) {
 			break
 		}
 	}
-
-	_ = browserProcs // reserved for future per-process title correlation
 
 	return Snapshot{State: state, CheckedAt: time.Now()}, nil
 }

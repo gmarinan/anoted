@@ -69,7 +69,11 @@ func Run(cfg config.Config, cfgPath string, plat platform.Info, opts Options) (c
 	fmt.Fprintln(out, "[3/4] Meeting detection")
 	mode := opts.Mode
 	if mode == "" {
-		mode = chooseDetectionMode(in, out, plat)
+		if plat.OS == platform.OSWindows {
+			mode = chooseWindowsDetectionMode(in, out)
+		} else {
+			mode = chooseDetectionMode(in, out, plat)
+		}
 	}
 	cfg.Detection.Mode = mode
 
@@ -77,13 +81,17 @@ func Run(cfg config.Config, cfgPath string, plat platform.Info, opts Options) (c
 	case DetNone:
 		fmt.Fprintln(out, "\n  ○ Meeting detection disabled (manual record with r)")
 	case DetMic:
-		fmt.Fprintln(out, "\n  Using PipeWire mic activity (pactl)")
-		if _, err := exec.LookPath("pactl"); err != nil {
-			fmt.Fprintln(out, "  ⚠ pactl not found — install pipewire-pulse or pulseaudio")
-		} else if err := verifyPactl(context.Background()); err != nil {
-			fmt.Fprintf(out, "  ⚠ pactl check failed: %v\n", err)
+		if plat.OS == platform.OSWindows {
+			fmt.Fprintln(out, "\n  Using window/process detection (mic mode maps to window on Windows)")
 		} else {
-			fmt.Fprintln(out, "  ✓ pactl ready")
+			fmt.Fprintln(out, "\n  Using PipeWire mic activity (pactl)")
+			if _, err := exec.LookPath("pactl"); err != nil {
+				fmt.Fprintln(out, "  ⚠ pactl not found — install pipewire-pulse or pulseaudio")
+			} else if err := verifyPactl(context.Background()); err != nil {
+				fmt.Fprintf(out, "  ⚠ pactl check failed: %v\n", err)
+			} else {
+				fmt.Fprintln(out, "  ✓ pactl ready")
+			}
 		}
 	case DetWindow, DetBoth:
 		if plat.Session == "wayland" {
@@ -280,5 +288,20 @@ func NeedsSetup(cfg config.Config, plat platform.Info) bool {
 	if cfg.SetupCompleted {
 		return false
 	}
-	return plat.OS == platform.OSLinux || plat.Session == "x11" || plat.Session == "wayland"
+	return plat.OS == platform.OSLinux || plat.OS == platform.OSWindows || plat.Session == "x11" || plat.Session == "wayland"
+}
+
+func chooseWindowsDetectionMode(in io.Reader, out io.Writer) string {
+	fmt.Fprintln(out, "  How should anoted detect meetings?")
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, "    1) Window titles — browser tab titles via PowerShell (recommended)")
+	fmt.Fprintln(out, "    2) Skip          — manual recording only")
+	fmt.Fprintln(out)
+	choice := askChoice(in, out, "  Choice [1]: ", "1")
+	switch choice {
+	case "2":
+		return DetNone
+	default:
+		return DetWindow
+	}
 }

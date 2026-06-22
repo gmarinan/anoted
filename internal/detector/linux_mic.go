@@ -9,13 +9,6 @@ import (
 	"time"
 )
 
-const (
-	ModeMic    = "mic"
-	ModeWindow = "window"
-	ModeBoth   = "both"
-	ModeNone   = "none"
-)
-
 // micCapture is an app actively recording from the microphone via PipeWire/PulseAudio.
 type micCapture struct {
 	Binary    string

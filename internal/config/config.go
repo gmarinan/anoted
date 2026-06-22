@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -217,10 +218,18 @@ func EnsureDefault() (string, error) {
 		}
 	}
 
-	if err := Save(path, Default()); err != nil {
+	if err := Save(path, platformDefault()); err != nil {
 		return "", err
 	}
 	return path, nil
+}
+
+func platformDefault() Config {
+	cfg := Default()
+	if runtime.GOOS == "windows" {
+		cfg.Detection.Mode = "window"
+	}
+	return cfg
 }
 
 // ExpandPath expands ~ in paths to the user home directory.

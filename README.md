@@ -17,8 +17,8 @@ Cross-platform TUI for meeting detection and local audio recording.
 
 - Go 1.22+
 - Linux: optional `pw-cat`, `ffmpeg`, `pactl`, `xdotool`, `wmctrl`
-- Windows: WASAPI helper (skeleton; full capture coming later)
-- WSL2: TUI runs in Linux; real Windows audio via `windows-recorder.exe`
+- Windows 10+: native WASAPI capture (single `anoted.exe`; build on Windows or cross-compile with MinGW + `CGO_ENABLED=1`)
+- WSL2: TUI runs in Linux; real Windows audio via `windows-recorder.exe` (future)
 
 ## Install
 
@@ -35,17 +35,22 @@ anoted watch
 
 ### Windows (native)
 
+Single executable with in-process WASAPI (system loopback + microphone). Config: `%AppData%\anoted\config.yaml`. Recordings default to `~\Music\anoted\`.
+
 ```powershell
 go build -o anoted.exe ./cmd/anoted
+.\anoted.exe setup
 .\anoted.exe doctor
 .\anoted.exe watch
 ```
 
-Or cross-compile from Linux:
+Or cross-compile from Linux (requires MinGW-w64 for CGO):
 
 ```bash
-make build-windows
+CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc make build-windows
 ```
+
+**Limitations:** loopback capture follows Windows privacy policies; meeting detection uses window titles (`MainWindowTitle`) and process names.
 
 ### WSL2
 
@@ -152,7 +157,7 @@ internal/session     SQLite + metadata
 internal/config      YAML config
 internal/platform    OS / WSL2 detection
 internal/doctor      Dependency checks
-tools/windows-recorder   Windows WASAPI helper (skeleton)
+tools/windows-recorder   Windows WASAPI helper (WSL2; optional)
 ```
 
 ## License

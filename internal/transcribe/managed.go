@@ -21,17 +21,6 @@ func legacyManagedVenvDir() string {
 	return managedVenvDirForApp(config.LegacyAppName)
 }
 
-func managedVenvDirForApp(appName string) string {
-	if xdg := os.Getenv("XDG_DATA_HOME"); xdg != "" {
-		return filepath.Join(xdg, appName, managedVenvName)
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return filepath.Join(".local", "share", appName, managedVenvName)
-	}
-	return filepath.Join(home, ".local", "share", appName, managedVenvName)
-}
-
 func resolveManagedVenvDir() string {
 	current := ManagedVenvDir()
 	if whisperInstalledIn(current) {
@@ -45,13 +34,13 @@ func resolveManagedVenvDir() string {
 }
 
 func whisperInstalledIn(venvDir string) bool {
-	_, err := os.Stat(filepath.Join(venvDir, "bin", "whisper"))
+	_, err := os.Stat(venvWhisperPath(venvDir))
 	return err == nil
 }
 
 // ManagedWhisperBinary returns the whisper CLI path inside the managed venv.
 func ManagedWhisperBinary() string {
-	return filepath.Join(resolveManagedVenvDir(), "bin", "whisper")
+	return venvWhisperPath(resolveManagedVenvDir())
 }
 
 // IsManagedBinary reports whether path is the anoted-managed whisper binary.
@@ -63,7 +52,11 @@ func IsManagedBinary(path string) bool {
 	if err != nil {
 		return false
 	}
-	for _, candidate := range []string{ManagedWhisperBinary(), filepath.Join(ManagedVenvDir(), "bin", "whisper"), filepath.Join(legacyManagedVenvDir(), "bin", "whisper")} {
+	for _, candidate := range []string{
+		ManagedWhisperBinary(),
+		venvWhisperPath(ManagedVenvDir()),
+		venvWhisperPath(legacyManagedVenvDir()),
+	} {
 		absManaged, err := filepath.Abs(candidate)
 		if err != nil {
 			continue
@@ -94,7 +87,7 @@ func InstallManaged(out io.Writer) error {
 		return fmt.Errorf("create data dir: %w", err)
 	}
 
-	python := filepath.Join(venv, "bin", "python")
+	python := venvPythonPath(venv)
 	if _, err := os.Stat(python); err != nil {
 		fmt.Fprintf(out, "  Creating venv at %s\n", venv)
 		if err := runCmd(py, "-m", "venv", venv); err != nil {
@@ -102,7 +95,7 @@ func InstallManaged(out io.Writer) error {
 		}
 	}
 
-	pip := filepath.Join(venv, "bin", "pip")
+	pip := venvPipPath(venv)
 	steps := []struct {
 		desc string
 		args []string
@@ -130,7 +123,7 @@ func UpgradeManagedTorchCUDA(out io.Writer) error {
 	if !ManagedWhisperInstalled() {
 		return fmt.Errorf("managed venv not installed — run anoted setup first")
 	}
-	pip := filepath.Join(resolveManagedVenvDir(), "bin", "pip")
+	pip := venvPipPath(resolveManagedVenvDir())
 	indexes := []string{
 		"https://download.pytorch.org/whl/cu126",
 		"https://download.pytorch.org/whl/cu124",
@@ -157,7 +150,7 @@ func UpgradeManagedTorchCUDA(out io.Writer) error {
 
 // ManagedTorchCUDAAvailable reports whether the managed venv can use CUDA.
 func ManagedTorchCUDAAvailable() bool {
-	python := filepath.Join(resolveManagedVenvDir(), "bin", "python")
+	python := venvPythonPath(resolveManagedVenvDir())
 	cmd := exec.Command(python, "-c", "import torch; raise SystemExit(0 if torch.cuda.is_available() else 1)")
 	return cmd.Run() == nil
 }

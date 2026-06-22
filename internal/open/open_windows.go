@@ -1,4 +1,4 @@
-//go:build !linux && !windows
+//go:build windows
 
 package open
 
@@ -31,41 +31,55 @@ func Open(path string, cfg config.DesktopConfig, kind Kind) error {
 
 // Detected returns a human-readable description of the opener that would be used.
 func Detected(cfg config.DesktopConfig, kind Kind) string {
-	cmd, args, err := resolveCommand("/tmp", cfg, kind)
+	cmd, args, err := resolveCommand(`C:\`, cfg, kind)
 	if err != nil {
 		return err.Error()
 	}
 	if len(args) == 0 {
 		return cmd
 	}
-	return strings.Join(append([]string{cmd}, args[:len(args)-1]...), " ") + " <path>"
+	return strings.Join(append([]string{cmd}, args...), " ")
 }
 
 func resolveCommand(path string, cfg config.DesktopConfig, kind Kind) (string, []string, error) {
-	opener := strings.ToLower(strings.TrimSpace(cfg.Opener))
-	if opener == "" {
-		opener = "auto"
-	}
-
 	if kind == KindFile {
 		fileOpener := strings.ToLower(strings.TrimSpace(cfg.FileOpener))
-		if fileOpener == "" {
-			fileOpener = "xdg-open"
+		if fileOpener == "" || fileOpener == "auto" || fileOpener == "xdg-open" {
+			return fileOpenerCommand(path)
 		}
 		return commandFor(fileOpener, cfg.OpenCommand, path)
 	}
 
+	opener := strings.ToLower(strings.TrimSpace(cfg.Opener))
+	if opener == "" {
+		opener = "auto"
+	}
 	switch opener {
 	case "custom":
 		return commandFor("custom", cfg.OpenCommand, path)
+	case "explorer":
+		return explorerCommand(path)
 	case "auto":
-		if bin, err := exec.LookPath("xdg-open"); err == nil {
-			return bin, []string{path}, nil
-		}
-		return "", nil, fmt.Errorf("no folder opener found")
+		return explorerCommand(path)
 	default:
 		return commandFor(opener, cfg.OpenCommand, path)
 	}
+}
+
+func explorerCommand(path string) (string, []string, error) {
+	bin, err := exec.LookPath("explorer.exe")
+	if err != nil {
+		return "", nil, fmt.Errorf("explorer.exe not found")
+	}
+	return bin, []string{path}, nil
+}
+
+func fileOpenerCommand(path string) (string, []string, error) {
+	bin, err := exec.LookPath("cmd.exe")
+	if err != nil {
+		return "", nil, fmt.Errorf("cmd.exe not found")
+	}
+	return bin, []string{"/c", "start", "", path}, nil
 }
 
 func commandFor(opener string, custom []string, path string) (string, []string, error) {
@@ -94,5 +108,5 @@ func expandCustomCommand(parts []string, path string) (string, []string, error) 
 
 // AvailableOpeners lists configured and auto-detected folder openers.
 func AvailableOpeners() []string {
-	return []string{"auto", "xdg-open", "custom"}
+	return []string{"auto", "explorer", "custom"}
 }

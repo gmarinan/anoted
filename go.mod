@@ -5,6 +5,7 @@ go 1.24.2
 require (
 	charm.land/bubbletea/v2 v2.0.0
 	charm.land/lipgloss/v2 v2.0.0
+	github.com/gen2brain/malgo v0.11.25
 	github.com/spf13/cobra v1.9.1
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.34.5

@@ -36,9 +36,7 @@ func Run(cfg config.Config) Report {
 		outputDirCheck(cfg),
 	)
 
-	for _, tool := range []string{"ffmpeg", "pw-cat", "pactl", "xdotool", "wmctrl"} {
-		rep.Checks = append(rep.Checks, commandCheck(tool))
-	}
+	rep.Checks = append(rep.Checks, optionalToolChecks(cfg)...)
 
 	rep.Checks = append(rep.Checks, audioDeviceChecks(cfg)...)
 	rep.Checks = append(rep.Checks, detectionChecks(plat, cfg)...)

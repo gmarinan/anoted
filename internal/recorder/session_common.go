@@ -1,5 +1,3 @@
-//go:build linux
-
 package recorder
 
 import (
@@ -7,6 +5,9 @@ import (
 	"path/filepath"
 	"time"
 )
+
+// SessionAudioFile is the mixed system + microphone recording filename.
+const SessionAudioFile = "recording.wav"
 
 func sessionDir(sess SessionConfig) string {
 	name := fmt.Sprintf("%s_%s", time.Now().Format("2006-01-02_15-04-05"), sess.Provider)

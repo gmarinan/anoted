@@ -9,9 +9,6 @@ import (
 	"strconv"
 )
 
-// SessionAudioFile is the mixed system + microphone recording filename.
-const SessionAudioFile = "recording.wav"
-
 // startDualCapture records system monitor and microphone in a single process.
 // Two parallel pw-cat/ffmpeg instances conflict on PipeWire and may capture the same source.
 func startDualCapture(devs resolvedDevices, sess SessionConfig, dir string) (*exec.Cmd, error) {

@@ -7,7 +7,7 @@ build:
 	go build -ldflags "-s -w" -o bin/$(BINARY) ./cmd/anoted
 
 build-windows:
-	GOOS=windows GOARCH=amd64 go build -ldflags "-s -w" -o bin/$(BINARY).exe ./cmd/anoted
+	CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -ldflags "-s -w" -o bin/$(BINARY).exe ./cmd/anoted
 
 build-windows-helper:
 	GOOS=windows GOARCH=amd64 go build -ldflags "-s -w" -o bin/windows-recorder.exe ./tools/windows-recorder

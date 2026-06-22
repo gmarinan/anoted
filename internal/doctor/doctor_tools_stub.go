@@ -4,4 +4,6 @@ package doctor
 
 import "anoted/internal/config"
 
-func audioDeviceChecks(_ config.Config) []Check { return nil }
+func optionalToolChecks(_ config.Config) []Check {
+	return nil
+}

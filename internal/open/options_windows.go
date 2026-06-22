@@ -1,4 +1,4 @@
-//go:build !linux && !windows
+//go:build windows
 
 package open
 
@@ -14,9 +14,12 @@ type OpenerOption struct {
 
 // OpenerOptions returns choices for the Sessions folder-opener picker.
 func OpenerOptions(cfg config.DesktopConfig) []OpenerOption {
+	_, _, err := explorerCommand(`C:\`)
+	explorerOK := err == nil
 	return []OpenerOption{
-		{ID: "auto", Label: "Auto-detect", Description: "System default", Available: true},
-		{ID: "xdg-open", Label: "xdg-open", Description: "System handler", Available: true},
+		{ID: "auto", Label: "Auto-detect", Description: "explorer.exe", Available: explorerOK},
+		{ID: "explorer", Label: "Explorer", Description: "Windows File Explorer", Available: explorerOK},
+		{ID: "custom", Label: "Custom command", Description: "desktop.open_command", Available: len(cfg.OpenCommand) > 0},
 	}
 }
 
