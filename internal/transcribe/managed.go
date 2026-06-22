@@ -196,21 +196,11 @@ func firstPython() string {
 }
 
 func resolvePython(name string) (string, bool) {
-	if path := findExecutable(name); path != "" {
-		return path, true
+	path, err := exec.LookPath(name)
+	if err != nil {
+		return "", false
 	}
-	return "", false
-}
-
-// PythonInstallHint returns how to install Python on this system.
-func PythonInstallHint() string {
-	if hasCmd("pacman") {
-		return "install: sudo pacman -S python"
-	}
-	if hasCmd("apt-get") {
-		return "install: sudo apt install python3 python3-venv"
-	}
-	return "install Python 3.8+ with venv support"
+	return path, true
 }
 
 func hasCmd(name string) bool {

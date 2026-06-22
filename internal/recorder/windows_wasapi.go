@@ -101,7 +101,7 @@ func (r *WindowsWASAPIRecorder) Start(_ context.Context, sess SessionConfig) err
 		AutoRecord:   sess.AutoRecord,
 		Manual:       sess.Manual,
 	}); err != nil {
-		_ = r.dual.Stop()
+		r.dual.Stop()
 		r.dual = nil
 		return err
 	}

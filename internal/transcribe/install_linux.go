@@ -26,3 +26,14 @@ func WhisperCppHint() string {
 	}
 	return "build whisper.cpp from https://github.com/ggml-org/whisper.cpp"
 }
+
+// PythonInstallHint returns how to install Python on Linux.
+func PythonInstallHint() string {
+	if hasCmd("pacman") {
+		return "install: sudo pacman -S python"
+	}
+	if hasCmd("apt-get") {
+		return "install: sudo apt install python3 python3-venv"
+	}
+	return "install Python 3.8+ with venv support"
+}

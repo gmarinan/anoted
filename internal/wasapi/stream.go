@@ -67,7 +67,7 @@ func StartLoopback(cfg LoopbackStreamConfig) (*Stream, error) {
 		return nil, fmt.Errorf("init loopback device: %w", err)
 	}
 	if err := dev.Start(); err != nil {
-		_ = dev.Uninit()
+		dev.Uninit()
 		return nil, fmt.Errorf("start loopback device: %w", err)
 	}
 	s.device = dev
@@ -107,7 +107,7 @@ func StartCapture(cfg CaptureStreamConfig) (*Stream, error) {
 		return nil, fmt.Errorf("init capture device: %w", err)
 	}
 	if err := dev.Start(); err != nil {
-		_ = dev.Uninit()
+		dev.Uninit()
 		return nil, fmt.Errorf("start capture device: %w", err)
 	}
 	s.device = dev
@@ -137,7 +137,7 @@ func (s *Stream) Stop() error {
 	close(s.ch)
 	if s.device != nil {
 		_ = s.device.Stop()
-		_ = s.device.Uninit()
+		s.device.Uninit()
 		s.device = nil
 	}
 	return nil

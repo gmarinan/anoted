@@ -1,4 +1,4 @@
-//go:build !linux
+//go:build !linux && !windows
 
 package transcribe
 
@@ -22,4 +22,9 @@ func PacmanHint() string {
 // WhisperCppHint documents the optional whisper.cpp path.
 func WhisperCppHint() string {
 	return "build whisper.cpp from https://github.com/ggml-org/whisper.cpp"
+}
+
+// PythonInstallHint returns how to install Python on this system.
+func PythonInstallHint() string {
+	return "install Python 3.8+ with venv support"
 }
