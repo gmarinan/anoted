@@ -1,5 +1,5 @@
 ---
-description: Bubble Tea v2 TUI patterns for meetctl
+description: Bubble Tea v2 TUI patterns for anoted
 globs: internal/tui/**
 alwaysApply: false
 ---

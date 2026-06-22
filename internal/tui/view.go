@@ -5,17 +5,17 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"meetctl/internal/config"
-	"meetctl/internal/open"
-	"meetctl/internal/transcribe"
-	"meetctl/internal/tui/components"
+	"anoted/internal/config"
+	"anoted/internal/open"
+	"anoted/internal/transcribe"
+	"anoted/internal/tui/components"
 )
 
 func (m Model) View() tea.View {
 	var content strings.Builder
 
 	tab := components.ScreenToTab(string(m.screen))
-	content.WriteString(components.Header())
+	content.WriteString(components.Header(m.deps.Platform.Subtitle()))
 	content.WriteString("\n")
 	content.WriteString(components.TabBar(tab))
 	content.WriteString("\n\n")
@@ -37,9 +37,9 @@ func (m Model) View() tea.View {
 
 	v := tea.NewView(content.String())
 	v.AltScreen = true
-	v.WindowTitle = "meetctl"
+	v.WindowTitle = "anoted"
 	if m.deps.Config.Privacy.ShowRecordingIndicator && m.recording {
-		v.WindowTitle = "meetctl ● RECORDING"
+		v.WindowTitle = "anoted ● RECORDING"
 	}
 	return v
 }

@@ -2,7 +2,7 @@
 
 package recorder
 
-import "meetctl/internal/config"
+import "anoted/internal/config"
 
 func resolveAudioDevices(_ config.Config) (systemMonitor, microphone string, err error) {
 	return "", "", nil

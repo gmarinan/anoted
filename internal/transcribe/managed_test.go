@@ -7,16 +7,16 @@ import (
 )
 
 func TestManagedVenvDir(t *testing.T) {
-	t.Setenv("XDG_DATA_HOME", "/tmp/meetctl-test-data")
+	t.Setenv("XDG_DATA_HOME", "/tmp/anoted-test-data")
 	got := ManagedVenvDir()
-	want := filepath.Join("/tmp/meetctl-test-data", "meetctl", "whisper-venv")
+	want := filepath.Join("/tmp/anoted-test-data", "anoted", "whisper-venv")
 	if got != want {
 		t.Fatalf("got %q want %q", got, want)
 	}
 }
 
 func TestManagedWhisperBinary(t *testing.T) {
-	t.Setenv("XDG_DATA_HOME", "/tmp/meetctl-test-data")
+	t.Setenv("XDG_DATA_HOME", "/tmp/anoted-test-data")
 	got := ManagedWhisperBinary()
 	if !filepath.IsAbs(got) {
 		t.Fatalf("expected absolute path, got %q", got)
@@ -27,7 +27,7 @@ func TestManagedWhisperBinary(t *testing.T) {
 }
 
 func TestIsManagedBinary(t *testing.T) {
-	t.Setenv("XDG_DATA_HOME", "/tmp/meetctl-test-data")
+	t.Setenv("XDG_DATA_HOME", "/tmp/anoted-test-data")
 	if IsManagedBinary("/usr/bin/whisper") {
 		t.Fatal("system whisper should not be managed")
 	}
@@ -41,7 +41,7 @@ func TestInstallHint(t *testing.T) {
 	if hint == "" {
 		t.Fatal("empty hint")
 	}
-	if !strings.Contains(hint, "meetctl") && !strings.Contains(hint, "whisper-venv") {
+	if !strings.Contains(hint, "anoted") && !strings.Contains(hint, "whisper-venv") {
 		t.Fatalf("unexpected hint: %s", hint)
 	}
 }

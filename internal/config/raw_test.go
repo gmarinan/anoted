@@ -32,7 +32,7 @@ func TestReadRawMissingFile(t *testing.T) {
 func TestSaveRawRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")
-	content := "auto_record: true\noutput_dir: ~/Music/meetctl\n"
+	content := "auto_record: true\noutput_dir: ~/Music/anoted\n"
 	cfg, err := SaveRaw(path, content)
 	if err != nil {
 		t.Fatal(err)

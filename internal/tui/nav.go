@@ -2,7 +2,7 @@ package tui
 
 import (
 	tea "charm.land/bubbletea/v2"
-	"meetctl/internal/tui/components"
+	"anoted/internal/tui/components"
 )
 
 func (m Model) switchScreen(screen Screen) (tea.Model, tea.Cmd) {

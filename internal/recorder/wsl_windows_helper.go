@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"os/exec"
 
-	"meetctl/internal/config"
+	"anoted/internal/config"
 )
 
 // WSLHelperRecorder delegates capture to a native Windows helper executable.
@@ -65,7 +65,7 @@ func (r *WSLHelperRecorder) helperAvailable(ctx context.Context) bool {
 func cfgExpandHelperPath() string {
 	// Typical location when built on Windows and invoked from WSL.
 	candidates := []string{
-		"/mnt/c/Program Files/meetctl/windows-recorder.exe",
+		"/mnt/c/Program Files/anoted/windows-recorder.exe",
 		"windows-recorder.exe",
 	}
 	for _, c := range candidates {

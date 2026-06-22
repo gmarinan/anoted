@@ -1,12 +1,11 @@
 package components
 
 import (
+	"fmt"
 	"strings"
 
 	"charm.land/lipgloss/v2"
 )
-
-const AppSubtitle = "PipeWire Edition"
 
 var (
 	headerStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("86"))
@@ -81,15 +80,18 @@ const (
 var tabLabels = []string{"Home", "Doctor", "Sessions", "Config"}
 
 // Header renders the app title line.
-func Header() string {
-	return headerStyle.Render("meetctl") + subtleStyle.Render(" · "+AppSubtitle)
+func Header(subtitle string) string {
+	if subtitle == "" {
+		return headerStyle.Render("anoted")
+	}
+	return headerStyle.Render("anoted") + subtleStyle.Render(" · "+subtitle)
 }
 
 // TabBar renders the top main navigation tabs (visual only; use 1–4 to switch).
 func TabBar(active TabID) string {
 	var parts []string
 	for i, label := range tabLabels {
-		text := "[" + label + "]"
+		text := fmt.Sprintf("[%d]", i+1) + "[" + label + "]"
 		if TabID(i) == active {
 			parts = append(parts, tabActiveStyle.Render(text))
 		} else {

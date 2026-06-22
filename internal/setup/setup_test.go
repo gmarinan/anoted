@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"meetctl/internal/config"
-	"meetctl/internal/platform"
+	"anoted/internal/config"
+	"anoted/internal/platform"
 )
 
 func TestNeedsSetupIncomplete(t *testing.T) {

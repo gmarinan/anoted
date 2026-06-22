@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"meetctl/internal/audio"
+	"anoted/internal/audio"
 )
 
 // AudioSection is which device list has focus.

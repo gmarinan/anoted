@@ -5,10 +5,10 @@ import (
 	"path/filepath"
 
 	tea "charm.land/bubbletea/v2"
-	"meetctl/internal/config"
-	"meetctl/internal/open"
-	"meetctl/internal/session"
-	"meetctl/internal/tui/components"
+	"anoted/internal/config"
+	"anoted/internal/open"
+	"anoted/internal/session"
+	"anoted/internal/tui/components"
 )
 
 func (m Model) sessionsPageCount() int {

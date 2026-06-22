@@ -9,8 +9,8 @@ import (
 	"os/exec"
 	"strings"
 
-	"meetctl/internal/config"
-	"meetctl/internal/transcribe"
+	"anoted/internal/config"
+	"anoted/internal/transcribe"
 )
 
 func setupTranscription(in io.Reader, out io.Writer, cfg *config.Config, autoInstall bool) {
@@ -44,7 +44,7 @@ func setupTranscription(in io.Reader, out io.Writer, cfg *config.Config, autoIns
 
 	if !whisperReady {
 		fmt.Fprintln(out)
-		fmt.Fprintln(out, "  ○ Transcription skipped — run meetctl setup again later")
+		fmt.Fprintln(out, "  ○ Transcription skipped — run anoted setup again later")
 		fmt.Fprintln(out)
 		return
 	}

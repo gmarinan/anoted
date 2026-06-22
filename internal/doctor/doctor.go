@@ -6,10 +6,10 @@ import (
 	"os/exec"
 	"strings"
 
-	"meetctl/internal/config"
-	"meetctl/internal/platform"
-	"meetctl/internal/recorder"
-	"meetctl/internal/transcribe"
+	"anoted/internal/config"
+	"anoted/internal/platform"
+	"anoted/internal/recorder"
+	"anoted/internal/transcribe"
 )
 
 // Check describes a single diagnostic result.
@@ -91,7 +91,7 @@ func commandCheck(name string) Check {
 
 func helperCheck() Check {
 	candidates := []string{
-		"/mnt/c/Program Files/meetctl/windows-recorder.exe",
+		"/mnt/c/Program Files/anoted/windows-recorder.exe",
 		"windows-recorder.exe",
 	}
 	for _, c := range candidates {
@@ -105,7 +105,7 @@ func helperCheck() Check {
 // Format renders the report as human-readable text.
 func Format(rep Report) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "meetctl doctor\n")
+	fmt.Fprintf(&b, "anoted doctor\n")
 	fmt.Fprintf(&b, "Platform: %s (session: %s)\n\n", rep.Platform.Name(), rep.Platform.Session)
 	for _, c := range rep.Checks {
 		fmt.Fprintf(&b, "[%s] %s: %s\n", c.Status, c.Name, c.Detail)

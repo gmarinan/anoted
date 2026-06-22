@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"meetctl/internal/config"
+	"anoted/internal/config"
 )
 
 func transcribeOpenAI(ctx context.Context, cfg config.TranscriptionConfig, bin, audioPath, sessionDir string, onProgress ProgressFunc) (Result, error) {

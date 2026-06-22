@@ -3,7 +3,7 @@ package tui
 import (
 	"testing"
 
-	"meetctl/internal/config"
+	"anoted/internal/config"
 )
 
 func TestAppendConfigInputRuneIntField(t *testing.T) {

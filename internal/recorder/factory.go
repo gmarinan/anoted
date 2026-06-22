@@ -1,8 +1,8 @@
 package recorder
 
 import (
-	"meetctl/internal/config"
-	"meetctl/internal/platform"
+	"anoted/internal/config"
+	"anoted/internal/platform"
 )
 
 // New selects the best available recorder for the platform.

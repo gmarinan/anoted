@@ -7,7 +7,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"meetctl/internal/transcribe"
+	"anoted/internal/transcribe"
 )
 
 const transcribeLogMax = 30

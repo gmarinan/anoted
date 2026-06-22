@@ -2,7 +2,7 @@
 
 package detector
 
-import "meetctl/internal/platform"
+import "anoted/internal/platform"
 
 func newPlatformDetector(cfg Config, _ platform.Info) Detector {
 	return NewMockDetector()

@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
-	"meetctl/internal/config"
-	"meetctl/internal/tui/components"
+	"anoted/internal/config"
+	"anoted/internal/tui/components"
 )
 
 const configSectionCount = 6

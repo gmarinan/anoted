@@ -1,4 +1,4 @@
-// Windows native audio capture helper for meetctl (WSL2 and native Windows).
+// Windows native audio capture helper for anoted (WSL2 and native Windows).
 //
 // Communicates via JSON lines on stdin/stdout.
 package main

@@ -11,7 +11,7 @@ func InstallCommand() ([]string, string, bool) {
 
 // InstallHint returns a human-readable install suggestion.
 func InstallHint() string {
-	return fmt.Sprintf("meetctl setup  # or managed venv: %s", ManagedWhisperBinary())
+	return fmt.Sprintf("anoted setup  # or managed venv: %s", ManagedWhisperBinary())
 }
 
 // PacmanHint documents the optional system-wide Arch package (heavy deps).

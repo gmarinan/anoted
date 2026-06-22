@@ -3,7 +3,7 @@
 package recorder
 
 import (
-	"meetctl/internal/config"
+	"anoted/internal/config"
 )
 
 // WindowsWASAPIRecorder is a placeholder for native WASAPI capture.

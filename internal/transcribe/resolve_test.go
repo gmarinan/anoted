@@ -3,7 +3,7 @@ package transcribe
 import (
 	"testing"
 
-	"meetctl/internal/config"
+	"anoted/internal/config"
 )
 
 func TestDetectBackend(t *testing.T) {

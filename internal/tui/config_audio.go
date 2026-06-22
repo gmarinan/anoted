@@ -4,9 +4,9 @@ import (
 	"fmt"
 
 	tea "charm.land/bubbletea/v2"
-	"meetctl/internal/audio"
-	"meetctl/internal/config"
-	"meetctl/internal/tui/components"
+	"anoted/internal/audio"
+	"anoted/internal/config"
+	"anoted/internal/tui/components"
 )
 
 func (m Model) configDeviceCursorForSelection() int {

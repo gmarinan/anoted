@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"meetctl/internal/session"
+	"anoted/internal/session"
 )
 
 // Status describes recorder state.

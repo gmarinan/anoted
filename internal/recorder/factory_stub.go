@@ -3,8 +3,8 @@
 package recorder
 
 import (
-	"meetctl/internal/config"
-	"meetctl/internal/platform"
+	"anoted/internal/config"
+	"anoted/internal/platform"
 )
 
 func newPlatformRecorder(_ config.Config, _ platform.Info) Recorder {

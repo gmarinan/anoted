@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"meetctl/internal/config"
+	"anoted/internal/config"
 )
 
 // Setup configures structured logging to stderr and optionally a log file.
@@ -33,5 +33,5 @@ func logFilePath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "meetctl.log"), nil
+	return filepath.Join(dir, "anoted.log"), nil
 }

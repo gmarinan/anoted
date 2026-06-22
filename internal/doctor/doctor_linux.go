@@ -5,9 +5,9 @@ package doctor
 import (
 	"os/exec"
 
-	"meetctl/internal/config"
-	"meetctl/internal/platform"
-	"meetctl/internal/recorder"
+	"anoted/internal/config"
+	"anoted/internal/platform"
+	"anoted/internal/recorder"
 )
 
 func audioDeviceChecks(cfg config.Config) []Check {
@@ -98,12 +98,12 @@ func windowToolCheck(want string) []Check {
 		if ok, p := checkTool("xdotool"); ok {
 			return []Check{{Name: "meeting_detection_window", Status: "ok", Detail: "xdotool · " + p}}
 		}
-		return []Check{{Name: "meeting_detection_window", Status: "warn", Detail: "xdotool missing — run meetctl setup"}}
+		return []Check{{Name: "meeting_detection_window", Status: "warn", Detail: "xdotool missing — run anoted setup"}}
 	case "wmctrl":
 		if ok, p := checkTool("wmctrl"); ok {
 			return []Check{{Name: "meeting_detection_window", Status: "ok", Detail: "wmctrl · " + p}}
 		}
-		return []Check{{Name: "meeting_detection_window", Status: "warn", Detail: "wmctrl missing — run meetctl setup"}}
+		return []Check{{Name: "meeting_detection_window", Status: "warn", Detail: "wmctrl missing — run anoted setup"}}
 	default:
 		_, xErr := exec.LookPath("xdotool")
 		_, wErr := exec.LookPath("wmctrl")

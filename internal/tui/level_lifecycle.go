@@ -4,7 +4,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"meetctl/internal/config"
+	"anoted/internal/config"
 )
 
 func (m Model) levelMeterEnabled() bool {

@@ -3,8 +3,8 @@ package doctor
 import (
 	"strings"
 
-	"meetctl/internal/config"
-	"meetctl/internal/open"
+	"anoted/internal/config"
+	"anoted/internal/open"
 )
 
 func desktopCheck(cfg config.Config) Check {

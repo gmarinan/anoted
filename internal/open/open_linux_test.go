@@ -16,11 +16,11 @@ func TestIsDiskUsageHandler(t *testing.T) {
 }
 
 func TestAutoFolderCommandPrefersFM(t *testing.T) {
-	cmd, args, err := autoFolderCommand("/tmp/meetctl-test")
+	cmd, args, err := autoFolderCommand("/tmp/anoted-test")
 	if err != nil {
 		t.Skip(err)
 	}
-	if len(args) != 1 || args[0] != "/tmp/meetctl-test" {
+	if len(args) != 1 || args[0] != "/tmp/anoted-test" {
 		t.Fatalf("unexpected args: %v", args)
 	}
 	if cmd == "" {

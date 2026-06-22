@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"meetctl/internal/config"
-	"meetctl/internal/session"
+	"anoted/internal/config"
+	"anoted/internal/session"
 )
 
 // LinuxFFmpegRecorder uses ffmpeg as a fallback backend.

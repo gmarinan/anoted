@@ -53,11 +53,11 @@ func TestExpandPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := ExpandPath("~/Music/meetctl")
+	got, err := ExpandPath("~/Music/anoted")
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := filepath.Join(home, "Music/meetctl")
+	want := filepath.Join(home, "Music/anoted")
 	if got != want {
 		t.Fatalf("got %q want %q", got, want)
 	}

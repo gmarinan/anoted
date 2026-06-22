@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"meetctl/internal/transcribe"
+	"anoted/internal/transcribe"
 )
 
 // TranscribeProgressBar renders TX: [████░░░░] 65% - ETA: 0m 15s

@@ -2,7 +2,7 @@ package tui
 
 import (
 	tea "charm.land/bubbletea/v2"
-	"meetctl/internal/audio"
+	"anoted/internal/audio"
 )
 
 func loadAudioCatalogCmd(m Model) tea.Cmd {

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"meetctl/internal/config"
+	"anoted/internal/config"
 )
 
 func TestRun(t *testing.T) {
@@ -16,7 +16,7 @@ func TestRun(t *testing.T) {
 		t.Fatal("expected checks")
 	}
 	text := Format(rep)
-	if !strings.Contains(text, "meetctl doctor") {
+	if !strings.Contains(text, "anoted doctor") {
 		t.Fatal("expected formatted header")
 	}
 }

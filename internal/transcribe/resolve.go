@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"meetctl/internal/config"
+	"anoted/internal/config"
 )
 
 var whisperCppNames = []string{"whisper-cli", "whisper-cpp", "whisper.cpp"}
@@ -33,7 +33,7 @@ func resolveBinary(cfg config.TranscriptionConfig) (path, backend string, err er
 		if p, err := exec.LookPath("whisper"); err == nil {
 			return p, BackendOpenAI, nil
 		}
-		return "", "", fmt.Errorf("whisper not found — run meetctl setup or install openai-whisper")
+		return "", "", fmt.Errorf("whisper not found — run anoted setup or install openai-whisper")
 	}
 
 	switch want {

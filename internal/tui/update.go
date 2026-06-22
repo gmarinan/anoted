@@ -5,8 +5,8 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"meetctl/internal/recorder"
-	"meetctl/internal/session"
+	"anoted/internal/recorder"
+	"anoted/internal/session"
 )
 
 func (m Model) Init() tea.Cmd {

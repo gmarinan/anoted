@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"meetctl/internal/session"
+	"anoted/internal/session"
 )
 
 func TestDummyRecorderStartStop(t *testing.T) {

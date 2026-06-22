@@ -3,8 +3,8 @@
 package recorder
 
 import (
-	"meetctl/internal/audio"
-	"meetctl/internal/config"
+	"anoted/internal/audio"
+	"anoted/internal/config"
 )
 
 type resolvedDevices struct {

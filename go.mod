@@ -1,4 +1,4 @@
-module meetctl
+module anoted
 
 go 1.24.2
 

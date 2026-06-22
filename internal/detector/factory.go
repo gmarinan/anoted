@@ -1,8 +1,8 @@
 package detector
 
 import (
-	"meetctl/internal/config"
-	"meetctl/internal/platform"
+	"anoted/internal/config"
+	"anoted/internal/platform"
 	"time"
 )
 

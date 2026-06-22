@@ -8,18 +8,18 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/spf13/cobra"
-	"meetctl/internal/audio"
-	"meetctl/internal/config"
-	"meetctl/internal/detector"
-	"meetctl/internal/doctor"
-	"meetctl/internal/level"
-	"meetctl/internal/logging"
-	"meetctl/internal/platform"
-	"meetctl/internal/recorder"
-	"meetctl/internal/session"
-	"meetctl/internal/setup"
-	"meetctl/internal/transcribe"
-	"meetctl/internal/tui"
+	"anoted/internal/audio"
+	"anoted/internal/config"
+	"anoted/internal/detector"
+	"anoted/internal/doctor"
+	"anoted/internal/level"
+	"anoted/internal/logging"
+	"anoted/internal/platform"
+	"anoted/internal/recorder"
+	"anoted/internal/session"
+	"anoted/internal/setup"
+	"anoted/internal/transcribe"
+	"anoted/internal/tui"
 )
 
 var (
@@ -36,12 +36,23 @@ func main() {
 
 func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:   "meetctl",
+		Use:   "anoted",
 		Short: "Meeting detection and audio recording TUI",
 		RunE:  runTUI,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			_, err := config.EnsureDefault()
-			return err
+			path, err := config.EnsureDefault()
+			if err != nil {
+				return err
+			}
+			cfgDir, err := config.ConfigDir()
+			if err != nil {
+				return err
+			}
+			if err := session.MigrateLegacyIfEmpty(filepath.Join(cfgDir, "sessions.db")); err != nil {
+				return err
+			}
+			_ = path
+			return nil
 		},
 	}
 
@@ -109,7 +120,7 @@ func runTUI(cmd *cobra.Command, args []string) error {
 
 	plat := platform.Detect()
 	if setup.NeedsSetup(cfg, plat) {
-		fmt.Fprintln(os.Stderr, "Tip: run 'meetctl setup' to configure meeting detection.")
+		fmt.Fprintln(os.Stderr, "Tip: run 'anoted setup' to configure meeting detection.")
 	}
 
 	store, err := openStore()

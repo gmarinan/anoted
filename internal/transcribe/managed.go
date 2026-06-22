@@ -6,41 +6,73 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	"anoted/internal/config"
 )
 
 const managedVenvName = "whisper-venv"
 
-// ManagedVenvDir is the meetctl-managed Python venv for OpenAI Whisper.
+// ManagedVenvDir is the anoted-managed Python venv for OpenAI Whisper.
 func ManagedVenvDir() string {
+	return managedVenvDirForApp(config.AppName)
+}
+
+func legacyManagedVenvDir() string {
+	return managedVenvDirForApp(config.LegacyAppName)
+}
+
+func managedVenvDirForApp(appName string) string {
 	if xdg := os.Getenv("XDG_DATA_HOME"); xdg != "" {
-		return filepath.Join(xdg, "meetctl", managedVenvName)
+		return filepath.Join(xdg, appName, managedVenvName)
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return filepath.Join(".local", "share", "meetctl", managedVenvName)
+		return filepath.Join(".local", "share", appName, managedVenvName)
 	}
-	return filepath.Join(home, ".local", "share", "meetctl", managedVenvName)
+	return filepath.Join(home, ".local", "share", appName, managedVenvName)
+}
+
+func resolveManagedVenvDir() string {
+	current := ManagedVenvDir()
+	if whisperInstalledIn(current) {
+		return current
+	}
+	legacy := legacyManagedVenvDir()
+	if whisperInstalledIn(legacy) {
+		return legacy
+	}
+	return current
+}
+
+func whisperInstalledIn(venvDir string) bool {
+	_, err := os.Stat(filepath.Join(venvDir, "bin", "whisper"))
+	return err == nil
 }
 
 // ManagedWhisperBinary returns the whisper CLI path inside the managed venv.
 func ManagedWhisperBinary() string {
-	return filepath.Join(ManagedVenvDir(), "bin", "whisper")
+	return filepath.Join(resolveManagedVenvDir(), "bin", "whisper")
 }
 
-// IsManagedBinary reports whether path is the meetctl-managed whisper binary.
+// IsManagedBinary reports whether path is the anoted-managed whisper binary.
 func IsManagedBinary(path string) bool {
 	if path == "" {
-		return false
-	}
-	absManaged, err := filepath.Abs(ManagedWhisperBinary())
-	if err != nil {
 		return false
 	}
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return false
 	}
-	return absPath == absManaged
+	for _, candidate := range []string{ManagedWhisperBinary(), filepath.Join(ManagedVenvDir(), "bin", "whisper"), filepath.Join(legacyManagedVenvDir(), "bin", "whisper")} {
+		absManaged, err := filepath.Abs(candidate)
+		if err != nil {
+			continue
+		}
+		if absPath == absManaged {
+			return true
+		}
+	}
+	return false
 }
 
 // ManagedWhisperInstalled reports whether the managed venv whisper exists.
@@ -49,7 +81,7 @@ func ManagedWhisperInstalled() bool {
 	return err == nil
 }
 
-// InstallManaged creates/updates the meetctl venv with CPU PyTorch + openai-whisper.
+// InstallManaged creates/updates the anoted venv with CPU PyTorch + openai-whisper.
 // No root required; downloads from PyPI (~400–600 MB).
 func InstallManaged(out io.Writer) error {
 	py, err := findPython()
@@ -57,7 +89,7 @@ func InstallManaged(out io.Writer) error {
 		return err
 	}
 
-	venv := ManagedVenvDir()
+	venv := resolveManagedVenvDir()
 	if err := os.MkdirAll(filepath.Dir(venv), 0o755); err != nil {
 		return fmt.Errorf("create data dir: %w", err)
 	}
@@ -96,9 +128,9 @@ func InstallManaged(out io.Writer) error {
 // UpgradeManagedTorchCUDA replaces CPU PyTorch with a CUDA build in the managed venv.
 func UpgradeManagedTorchCUDA(out io.Writer) error {
 	if !ManagedWhisperInstalled() {
-		return fmt.Errorf("managed venv not installed — run meetctl setup first")
+		return fmt.Errorf("managed venv not installed — run anoted setup first")
 	}
-	pip := filepath.Join(ManagedVenvDir(), "bin", "pip")
+	pip := filepath.Join(resolveManagedVenvDir(), "bin", "pip")
 	indexes := []string{
 		"https://download.pytorch.org/whl/cu126",
 		"https://download.pytorch.org/whl/cu124",
@@ -125,7 +157,7 @@ func UpgradeManagedTorchCUDA(out io.Writer) error {
 
 // ManagedTorchCUDAAvailable reports whether the managed venv can use CUDA.
 func ManagedTorchCUDAAvailable() bool {
-	python := filepath.Join(ManagedVenvDir(), "bin", "python")
+	python := filepath.Join(resolveManagedVenvDir(), "bin", "python")
 	cmd := exec.Command(python, "-c", "import torch; raise SystemExit(0 if torch.cuda.is_available() else 1)")
 	return cmd.Run() == nil
 }

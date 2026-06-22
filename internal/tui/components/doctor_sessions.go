@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"charm.land/lipgloss/v2"
-	"meetctl/internal/doctor"
-	"meetctl/internal/session"
-	"meetctl/internal/transcribe"
+	"anoted/internal/doctor"
+	"anoted/internal/session"
+	"anoted/internal/transcribe"
 )
 
 // DoctorView renders the Doctor tab.

@@ -4,16 +4,16 @@ import (
 	"context"
 	"time"
 
-	"meetctl/internal/audio"
-	"meetctl/internal/config"
-	"meetctl/internal/detector"
-	"meetctl/internal/doctor"
-	"meetctl/internal/level"
-	"meetctl/internal/platform"
-	"meetctl/internal/recorder"
-	"meetctl/internal/session"
-	"meetctl/internal/transcribe"
-	"meetctl/internal/tui/components"
+	"anoted/internal/audio"
+	"anoted/internal/config"
+	"anoted/internal/detector"
+	"anoted/internal/doctor"
+	"anoted/internal/level"
+	"anoted/internal/platform"
+	"anoted/internal/recorder"
+	"anoted/internal/session"
+	"anoted/internal/transcribe"
+	"anoted/internal/tui/components"
 )
 
 // AppState is the high-level UI state.

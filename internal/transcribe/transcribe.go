@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"meetctl/internal/config"
-	"meetctl/internal/recorder"
+	"anoted/internal/config"
+	"anoted/internal/recorder"
 )
 
 const (

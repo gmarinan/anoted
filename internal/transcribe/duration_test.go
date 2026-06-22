@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"meetctl/internal/recorder"
+	"anoted/internal/recorder"
 )
 
 func TestAudioDuration(t *testing.T) {

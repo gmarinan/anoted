@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"meetctl/internal/session"
+	"anoted/internal/session"
 )
 
 // DummyRecorder creates empty WAV placeholders and metadata for MVP testing.

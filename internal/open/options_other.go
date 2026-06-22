@@ -2,7 +2,7 @@
 
 package open
 
-import "meetctl/internal/config"
+import "anoted/internal/config"
 
 // OpenerOption is a selectable folder opener in the TUI.
 type OpenerOption struct {

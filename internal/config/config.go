@@ -12,7 +12,7 @@ import (
 
 const (
 	DefaultFilename = "config.yaml"
-	AppName         = "meetctl"
+	AppName         = "anoted"
 )
 
 // Config holds application settings loaded from YAML.
@@ -83,7 +83,7 @@ func Default() Config {
 	return Config{
 		AutoRecord:                     false,
 		AutoRecordRequiresConfirmation: true,
-		OutputDir:                      "~/Music/meetctl",
+		OutputDir:                      "~/Music/anoted",
 		Audio: AudioConfig{
 			LinuxBackendPriority:   []string{"pipewire", "pulseaudio", "ffmpeg"},
 			WindowsBackendPriority: []string{"wasapi"},
@@ -197,10 +197,26 @@ func EnsureDefault() (string, error) {
 		return "", err
 	}
 	if _, statErr := os.Stat(path); statErr == nil {
+		if err := MigrateLegacyIfNeeded(path); err != nil {
+			return "", err
+		}
 		return path, nil
 	} else if !errors.Is(statErr, os.ErrNotExist) {
 		return "", fmt.Errorf("stat config %s: %w", path, statErr)
 	}
+
+	legacyPath, err := LegacyConfigPath()
+	if err == nil {
+		if _, err := os.Stat(legacyPath); err == nil {
+			cfg, loadErr := Load(legacyPath)
+			if loadErr == nil {
+				if saveErr := Save(path, cfg); saveErr == nil {
+					return path, nil
+				}
+			}
+		}
+	}
+
 	if err := Save(path, Default()); err != nil {
 		return "", err
 	}

@@ -1,8 +1,8 @@
-# meetctl
+# anoted
 
 Cross-platform TUI for meeting detection and local audio recording.
 
-**Privacy notice:** You are responsible for complying with applicable laws, company policies, and obtaining consent from meeting participants before recording. meetctl never uploads audio to the cloud and does not record secretly — recording state is always visible in the TUI.
+**Privacy notice:** You are responsible for complying with applicable laws, company policies, and obtaining consent from meeting participants before recording. anoted never uploads audio to the cloud and does not record secretly — recording state is always visible in the TUI.
 
 ## Features (MVP)
 
@@ -11,7 +11,7 @@ Cross-platform TUI for meeting detection and local audio recording.
 - Local audio recording with pluggable backends
 - SQLite session store
 - YAML configuration
-- `meetctl doctor` for dependency checks
+- `anoted doctor` for dependency checks
 
 ## Requirements
 
@@ -25,20 +25,20 @@ Cross-platform TUI for meeting detection and local audio recording.
 ### Linux (native)
 
 ```bash
-git clone <repo-url> meetctl
-cd meetctl
+git clone <repo-url> anoted
+cd anoted
 make build
-sudo mv bin/meetctl /usr/local/bin/   # optional
-meetctl doctor
-meetctl watch
+sudo mv bin/anoted /usr/local/bin/   # optional
+anoted doctor
+anoted watch
 ```
 
 ### Windows (native)
 
 ```powershell
-go build -o meetctl.exe ./cmd/meetctl
-.\meetctl.exe doctor
-.\meetctl.exe watch
+go build -o anoted.exe ./cmd/anoted
+.\anoted.exe doctor
+.\anoted.exe watch
 ```
 
 Or cross-compile from Linux:
@@ -53,28 +53,28 @@ make build-windows
 
 ```bash
 make build
-./bin/meetctl watch
+./bin/anoted watch
 ```
 
 2. Build the Windows helper on Windows (or cross-compile):
 
 ```bash
 make build-windows-helper
-# Copy bin/windows-recorder.exe to e.g. C:\Program Files\meetctl\
+# Copy bin/windows-recorder.exe to e.g. C:\Program Files\anoted\
 ```
 
-meetctl detects WSL2 and will use the helper for real Windows audio when the protocol is implemented.
+anoted detects WSL2 and will use the helper for real Windows audio when the protocol is implemented.
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `meetctl setup` | Guided setup (pick xdotool/wmctrl, install, save config) |
-| `meetctl` / `meetctl watch` | Start the TUI |
-| `meetctl status` | Print detection and recorder status |
-| `meetctl sessions` | List recorded sessions |
-| `meetctl config` | Show config file |
-| `meetctl doctor` | Check OS, tools, output path |
+| `anoted setup` | Guided setup (pick xdotool/wmctrl, install, save config) |
+| `anoted` / `anoted watch` | Start the TUI |
+| `anoted status` | Print detection and recorder status |
+| `anoted sessions` | List recorded sessions |
+| `anoted config` | Show config file |
+| `anoted doctor` | Check OS, tools, output path |
 
 ## TUI keys
 
@@ -96,13 +96,13 @@ meetctl detects WSL2 and will use the helper for real Windows audio when the pro
 
 Default config is created at:
 
-- Linux: `~/.config/meetctl/config.yaml`
-- Windows: `%AppData%\meetctl\config.yaml`
+- Linux: `~/.config/anoted/config.yaml`
+- Windows: `%AppData%\anoted\config.yaml`
 
-Recordings are saved under `~/Music/meetctl/` by default:
+Recordings are saved under `~/Music/anoted/` by default:
 
 ```
-~/Music/meetctl/YYYY-MM-DD_HH-mm-ss_<provider>/
+~/Music/anoted/YYYY-MM-DD_HH-mm-ss_<provider>/
 ├── recording.wav
 ├── transcript.txt    # after Whisper transcription
 ├── transcript.srt
@@ -122,7 +122,7 @@ transcription:
   language: ""                  # empty = auto-detect
 ```
 
-Install: run `meetctl setup` (installs a local venv at `~/.local/share/meetctl/whisper-venv`, no sudo). Optional: `sudo pacman -S python-openai-whisper` or `yay -S whisper.cpp` for GPU.
+Install: run `anoted setup` (installs a local venv at `~/.local/share/anoted/whisper-venv`, no sudo). Optional: `sudo pacman -S python-openai-whisper` or `yay -S whisper.cpp` for GPU.
 
 ### Desktop (open folder / play file)
 
@@ -138,13 +138,13 @@ make lint
 make run
 
 # Mock detector + dummy recorder (no real audio):
-./bin/meetctl watch --mock-detector --dummy-recorder
+./bin/anoted watch --mock-detector --dummy-recorder
 ```
 
 ## Architecture
 
 ```
-cmd/meetctl          CLI entrypoint
+cmd/anoted          CLI entrypoint
 internal/tui         Bubble Tea UI (platform-agnostic)
 internal/detector    Meeting detection (build tags)
 internal/recorder    Audio backends (build tags)

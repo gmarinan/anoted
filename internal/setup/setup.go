@@ -9,8 +9,8 @@ import (
 	"os/exec"
 	"strings"
 
-	"meetctl/internal/config"
-	"meetctl/internal/platform"
+	"anoted/internal/config"
+	"anoted/internal/platform"
 )
 
 const (
@@ -45,7 +45,7 @@ func Run(cfg config.Config, cfgPath string, plat platform.Info, opts Options) (c
 		out = os.Stdout
 	}
 
-	fmt.Fprintln(out, "meetctl setup")
+	fmt.Fprintln(out, "anoted setup")
 	fmt.Fprintln(out, "─────────────")
 	fmt.Fprintln(out)
 
@@ -117,13 +117,13 @@ func Run(cfg config.Config, cfgPath string, plat platform.Info, opts Options) (c
 	if cfg.Transcription.AutoAfterRecording {
 		fmt.Fprintln(out, "  transcription.auto_after_recording: true")
 	}
-	fmt.Fprintln(out, "  meetctl watch   — open the TUI")
-	fmt.Fprintln(out, "  meetctl doctor  — check dependencies")
+	fmt.Fprintln(out, "  anoted watch   — open the TUI")
+	fmt.Fprintln(out, "  anoted doctor  — check dependencies")
 	return cfg, nil
 }
 
 func chooseDetectionMode(in io.Reader, out io.Writer, plat platform.Info) string {
-	fmt.Fprintln(out, "  How should meetctl detect meetings?")
+	fmt.Fprintln(out, "  How should anoted detect meetings?")
 	fmt.Fprintln(out)
 	fmt.Fprintln(out, "    1) PipeWire mic  — when Meet/Teams uses your microphone (recommended)")
 	fmt.Fprintln(out, "    2) Window titles — browser tab titles via xdotool/wmctrl (X11)")
@@ -275,7 +275,7 @@ func verifyTitles(ctx context.Context, tool string) error {
 	return nil
 }
 
-// NeedsSetup reports whether the user should run meetctl setup.
+// NeedsSetup reports whether the user should run anoted setup.
 func NeedsSetup(cfg config.Config, plat platform.Info) bool {
 	if cfg.SetupCompleted {
 		return false

@@ -3,7 +3,7 @@ package transcribe
 import (
 	"fmt"
 
-	"meetctl/internal/config"
+	"anoted/internal/config"
 )
 
 // Check is a doctor-style diagnostic row.

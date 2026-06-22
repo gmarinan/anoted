@@ -6,7 +6,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"meetctl/internal/config"
+	"anoted/internal/config"
 )
 
 // OpenerOption is a selectable folder opener in the TUI.

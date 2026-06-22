@@ -22,21 +22,17 @@ func FooterForTab(tab TabID, awaitingConfirm bool, sessionsMode SessionsFooterMo
 			return JoinFooter(
 				FooterHint("y", "start recording"),
 				FooterHint("n", "dismiss"),
-				FooterHint("1-4", "screens"),
 				FooterHint("q", "quit"),
 			)
 		}
 		return JoinFooter(
 			FooterHint("r", "record"),
 			FooterHint("a", "auto-record"),
-			FooterHint("4", "audio devices"),
-			FooterHint("1-4", "screens"),
 			FooterHint("q", "quit"),
 		)
 	case TabDoctor:
 		return JoinFooter(
 			FooterHint("R", "refresh"),
-			FooterHint("1-4", "screens"),
 			FooterHint("q", "quit"),
 		)
 	case TabSessions:
@@ -45,7 +41,6 @@ func FooterForTab(tab TabID, awaitingConfirm bool, sessionsMode SessionsFooterMo
 				FooterHint("↑↓", "choose"),
 				FooterHint("Enter", "apply"),
 				FooterHint("Esc", "cancel"),
-				FooterHint("1-4", "screens"),
 				FooterHint("q", "quit"),
 			)
 		}
@@ -64,7 +59,6 @@ func FooterForTab(tab TabID, awaitingConfirm bool, sessionsMode SessionsFooterMo
 				FooterHint("[ ]", "page"),
 				FooterHint("o", "open folder"),
 				FooterHint("R", "refresh"),
-				FooterHint("1-4", "screens"),
 				FooterHint("q", "quit"),
 			)
 		}
@@ -77,7 +71,6 @@ func FooterForTab(tab TabID, awaitingConfirm bool, sessionsMode SessionsFooterMo
 			FooterHint("p", "play"),
 			FooterHint("d", "delete"),
 			FooterHint("R", "refresh"),
-			FooterHint("1-4", "screens"),
 			FooterHint("q", "quit"),
 		)
 	case TabConfig:

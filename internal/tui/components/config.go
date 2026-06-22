@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
-	"meetctl/internal/audio"
+	"anoted/internal/audio"
 )
 
 // ConfigFieldRow is one row in the config menu.
@@ -284,14 +284,12 @@ func FooterForConfig(mode ConfigFooterMode, savedMsg, errMsg string, width int) 
 			FooterHint("↑↓", "choose"),
 			FooterHint("Enter", "apply"),
 			FooterHint("Esc", "cancel"),
-			FooterHint("1-4", "screens"),
 			FooterHint("q", "quit"),
 		)
 	case ConfigFooterEditing:
 		hints = JoinFooter(
 			FooterHint("Enter", "confirm"),
 			FooterHint("Esc", "cancel"),
-			FooterHint("1-4", "screens"),
 			FooterHint("q", "quit"),
 		)
 	default:
@@ -301,7 +299,6 @@ func FooterForConfig(mode ConfigFooterMode, savedMsg, errMsg string, width int) 
 			FooterHint("Enter", "edit"),
 			FooterHint("a/d", "patterns"),
 			FooterHint("R", "reload"),
-			FooterHint("1-4", "screens"),
 			FooterHint("q", "quit"),
 		)
 	}

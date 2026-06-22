@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"meetctl/internal/platform"
+	"anoted/internal/platform"
 )
 
 func newPlatformDetector(cfg Config, plat platform.Info) Detector {

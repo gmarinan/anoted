@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"meetctl/internal/platform"
+	"anoted/internal/platform"
 )
 
 func newPlatformDetector(cfg Config, _ platform.Info) Detector {

@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"meetctl/internal/config"
+	"anoted/internal/config"
 )
 
 // Open launches the desktop handler for path (folder or file).

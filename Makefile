@@ -1,13 +1,13 @@
 .PHONY: build test lint run clean build-windows build-windows-helper
 
-BINARY=meetctl
+BINARY=anoted
 VERSION?=dev
 
 build:
-	go build -ldflags "-s -w" -o bin/$(BINARY) ./cmd/meetctl
+	go build -ldflags "-s -w" -o bin/$(BINARY) ./cmd/anoted
 
 build-windows:
-	GOOS=windows GOARCH=amd64 go build -ldflags "-s -w" -o bin/$(BINARY).exe ./cmd/meetctl
+	GOOS=windows GOARCH=amd64 go build -ldflags "-s -w" -o bin/$(BINARY).exe ./cmd/anoted
 
 build-windows-helper:
 	GOOS=windows GOARCH=amd64 go build -ldflags "-s -w" -o bin/windows-recorder.exe ./tools/windows-recorder
