@@ -2,6 +2,7 @@ package components
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -106,26 +107,33 @@ type FolderOpenerChoice struct {
 
 // SessionsView renders the Sessions tab.
 type SessionsView struct {
-	PageRecords     []session.Record
-	Cursor          int
-	Page            int
-	PageCount       int
-	TotalCount      int
-	ErrMsg          string
-	Transcribing    bool
-	StatusNote      string
-	DesktopNote     string
-	Width           int
-	Height          int
-	OpenerPicker    bool
-	OpenerCursor    int
-	OpenerChoices   []FolderOpenerChoice
-	CurrentOpener   string
-	OpenerDetected  string
-	DeleteConfirm   bool
-	DeleteCursor    int
-	DeleteID        int64
-	DeletePath      string
+	PageRecords          []session.Record
+	Cursor               int
+	Page                 int
+	PageCount            int
+	TotalCount           int
+	ErrMsg               string
+	DesktopNote          string
+	Width                int
+	Height               int
+	OpenerPicker         bool
+	OpenerCursor         int
+	OpenerChoices        []FolderOpenerChoice
+	CurrentOpener        string
+	OpenerDetected       string
+	DeleteConfirm        bool
+	DeleteCursor         int
+	DeleteID             int64
+	DeletePath           string
+	TranscribeActive     bool
+	TranscribeSessionDir string
+	TranscribePercent    float64
+	TranscribeETA        time.Duration
+	TranscribeBlink      bool
+	TranscribeLog        []string
+	TranscribeErr        string
+	TranscribeErrDir     string
+	PreviewText          string
 }
 
 func (v SessionsView) View() string {
@@ -162,23 +170,55 @@ func (v SessionsView) renderMainContent() string {
 		tableW = 80
 	}
 	b.WriteString(v.tableBox(tableW))
-	if v.StatusNote != "" {
-		b.WriteString("\n")
-		if v.Transcribing {
-			b.WriteString(warnStyle.Render("⏳ " + v.StatusNote))
-		} else {
-			b.WriteString(okStyle.Render("✓ " + v.StatusNote))
-		}
-	}
 	if v.DesktopNote != "" {
 		b.WriteString("\n")
 		b.WriteString(okStyle.Render("✓ " + v.DesktopNote))
 	}
 	b.WriteString("\n\n")
 
-	colW := v.columnWidth()
-	b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, v.detailsBox(colW), " ", v.actionsBox(colW)))
+	detailsW := v.detailsWidth()
+	previewW := v.Width - detailsW - 1
+	if previewW < 20 {
+		previewW = 20
+	}
+	b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, v.detailsBox(detailsW), " ", v.previewBox(previewW)))
 	return b.String()
+}
+
+func (v SessionsView) detailsWidth() int {
+	w := int(float64(v.Width) * 0.42)
+	if w < 28 {
+		w = 28
+	}
+	if w > v.Width-24 {
+		w = v.Width - 24
+	}
+	return w
+}
+
+func (v SessionsView) previewMode() PreviewMode {
+	if v.TranscribeActive {
+		rec, ok := v.selectedRecord()
+		if ok && rec.Dir == v.TranscribeSessionDir {
+			return PreviewTranscribing
+		}
+	}
+	rec, ok := v.selectedRecord()
+	if ok && transcribe.HasTranscript(rec.Dir) {
+		return PreviewTranscript
+	}
+	return PreviewIdle
+}
+
+func (v SessionsView) selectedRecord() (session.Record, bool) {
+	if v.Cursor < 0 || v.Cursor >= len(v.PageRecords) {
+		return session.Record{}, false
+	}
+	return v.PageRecords[v.Cursor], true
+}
+
+func (v SessionsView) previewBox(width int) string {
+	return PreviewPanel(v.previewMode(), v.PreviewText, v.TranscribeLog, width)
 }
 
 func (v SessionsView) renderOpenerModal() string {
@@ -252,14 +292,6 @@ func (v SessionsView) renderDeleteModal() string {
 	return PickerModal("Confirm delete", strings.Join(lines, "\n"), maxW)
 }
 
-func (v SessionsView) columnWidth() int {
-	w := v.Width
-	if w < 60 {
-		return 36
-	}
-	return (w - 3) / 2
-}
-
 func (v SessionsView) tableBox(width int) string {
 	if v.ErrMsg != "" {
 		return Box("Sessions", errStyle.Render(v.ErrMsg), width)
@@ -269,11 +301,11 @@ func (v SessionsView) tableBox(width int) string {
 	}
 
 	title := fmt.Sprintf("Sessions (%d/%d · %d total)", v.Page, v.PageCount, v.TotalCount)
-	header := fmt.Sprintf("%-4s  %-16s  %-12s  %-8s  %-3s  %s",
+	header := fmt.Sprintf("%-4s  %-16s  %-12s  %-8s  %-28s  %s",
 		"ID", "DATE", "MEET", "DUR", "TX", "PATH")
 	lines := []string{subtleStyle.Render(header)}
 	for i, r := range v.PageRecords {
-		line := v.formatRow(r)
+		line := v.formatRow(r, width)
 		if i == v.Cursor {
 			line = lipgloss.NewStyle().
 				Background(lipgloss.Color("63")).
@@ -285,7 +317,7 @@ func (v SessionsView) tableBox(width int) string {
 	return Box(title, strings.Join(lines, "\n"), width)
 }
 
-func (v SessionsView) formatRow(r session.Record) string {
+func (v SessionsView) formatRow(r session.Record, tableWidth int) string {
 	dur := r.Metadata.Duration
 	if dur == "" && !r.EndedAt.IsZero() {
 		dur = r.EndedAt.Sub(r.StartedAt).Round(time.Second).String()
@@ -294,12 +326,9 @@ func (v SessionsView) formatRow(r session.Record) string {
 		dur = "—"
 	}
 	meet := truncate(formatProvider(string(r.Provider)), 12)
-	tx := "no"
-	if transcribe.HasTranscript(r.Dir) {
-		tx = "yes"
-	}
+	tx := v.formatTXColumn(r, tableWidth)
 	path := filepath.Join(r.Dir, sessionAudioName)
-	return fmt.Sprintf("#%-3d  %-16s  %-12s  %-8s  %-3s  %s",
+	return fmt.Sprintf("#%-3d  %-16s  %-12s  %-8s  %-28s  %s",
 		r.ID,
 		session.FormatLocalTime(r.StartedAt, "2006-01-02 15:04"),
 		meet,
@@ -307,6 +336,31 @@ func (v SessionsView) formatRow(r session.Record) string {
 		tx,
 		truncate(path, 36),
 	)
+}
+
+func (v SessionsView) formatTXColumn(r session.Record, tableWidth int) string {
+	if v.TranscribeErrDir == r.Dir && v.TranscribeErr != "" {
+		return txErrorStyle.Render("err")
+	}
+	if v.TranscribeActive && r.Dir == v.TranscribeSessionDir {
+		barW := 12
+		if tableWidth > 100 {
+			barW = 14
+		}
+		return TranscribeProgressBar(v.TranscribePercent, barW, v.TranscribeETA, v.TranscribeBlink)
+	}
+	if transcribe.HasTranscript(r.Dir) {
+		return TXStatusLabel("yes")
+	}
+	if audioExists(r.Dir) {
+		return TXStatusLabel("no")
+	}
+	return TXStatusLabel("no")
+}
+
+func audioExists(sessionDir string) bool {
+	_, err := os.Stat(filepath.Join(sessionDir, sessionAudioName))
+	return err == nil
 }
 
 func (v SessionsView) detailsBox(width int) string {
@@ -325,28 +379,16 @@ func (v SessionsView) detailsBox(width int) string {
 		row("Status", string(r.Status)),
 		row("Path", truncate(r.Dir, width-8)),
 		row("File", sessionAudioName),
+		row("Open folders", truncate(v.OpenerDetected, width-14)),
+		row("Setting", openerSettingLabel(v.CurrentOpener)),
 	}
 	if r.Metadata.Duration != "" {
 		lines = append(lines, row("Duration", r.Metadata.Duration))
 	}
-	return Box("Details", strings.Join(lines, "\n"), width)
-}
-
-func (v SessionsView) actionsBox(width int) string {
-	lines := []string{
-		row("Open folders", v.OpenerDetected),
-		row("Setting", openerSettingLabel(v.CurrentOpener)),
-		"",
-		FooterHint("↑↓", "Navigate list"),
-		FooterHint("[ ]", "Page"),
-		FooterHint("t", "Transcribe (Whisper)"),
-		FooterHint("o", "Open session folder"),
-		FooterHint("f", "Choose folder opener"),
-		FooterHint("p", "Play recording"),
-		FooterHint("d", "Delete session"),
-		FooterHint("R", "Refresh list"),
+	if v.TranscribeActive && r.Dir == v.TranscribeSessionDir {
+		lines = append(lines, row("TX", warnStyle.Render("transcribing…")))
 	}
-	return Box("Actions (keyboard)", strings.Join(lines, "\n"), width)
+	return Box("Details", strings.Join(lines, "\n"), width)
 }
 
 func openerSettingLabel(id string) string {

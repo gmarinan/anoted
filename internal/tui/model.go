@@ -1,12 +1,14 @@
 package tui
 
 import (
+	"context"
 	"time"
 
 	"meetctl/internal/audio"
 	"meetctl/internal/config"
 	"meetctl/internal/detector"
 	"meetctl/internal/doctor"
+	"meetctl/internal/level"
 	"meetctl/internal/platform"
 	"meetctl/internal/recorder"
 	"meetctl/internal/session"
@@ -45,6 +47,7 @@ type Deps struct {
 	Recorder   recorder.Recorder
 	Store       session.Store
 	Audio       audio.Provider
+	LevelMonitor level.Monitor
 	Transcriber *transcribe.Service
 }
 
@@ -74,16 +77,24 @@ type Model struct {
 	height       int
 	quitting     bool
 
-	// Audio device picker
-	audioSection     components.AudioSection
-	audioCursor      int
-	audioCatalog     audio.Catalog
-	audioLoading     bool
-	audioErr         string
-	audioSaved       string
+	// Resolved device labels for display
+	systemDevice string
+	micDevice    string
 	audioMonitorWarn string
-	systemDevice     string // resolved label for main screen
-	micDevice        string
+
+	// Config audio device picker
+	configDevicePickerOpen bool
+	configDeviceSection    components.AudioSection
+	configDeviceCursor     int
+	configDeviceCatalog    audio.Catalog
+	configDeviceLoading    bool
+	configDeviceErr        string
+
+	// Live audio level visualization (Home)
+	systemBands []float64
+	micBands    []float64
+	levelGen    int
+	levelFrame  uint64 // bumps each level tick so View content changes every frame
 
 	// Config interactive menu
 	configSection      int
@@ -97,8 +108,14 @@ type Model struct {
 	configErr          string
 	configSavedMsg     string
 
-	transcribing   bool
-	transcribeNote string
+	transcribeActive     bool
+	transcribeSessionDir string
+	transcribePercent    float64
+	transcribeETA        time.Duration
+	transcribeLog        []string
+	transcribeErr        string
+	transcribeBlink      bool
+	transcribeCancel     context.CancelFunc
 
 	sessionsOpenerPicker bool
 	sessionsOpenerCursor int
@@ -117,7 +134,6 @@ func NewModel(deps Deps) Model {
 		provider:   "none",
 		autoRecord:   deps.Config.AutoRecord,
 		recStatus:    deps.Recorder.Status(),
-		audioLoading: true,
 	}
 }
 
@@ -129,12 +145,25 @@ func (m Model) pollInterval() time.Duration {
 	return time.Duration(ms) * time.Millisecond
 }
 
+func (m Model) levelTickInterval() time.Duration {
+	ms := m.deps.Config.Audio.LevelUITickMS
+	if ms <= 0 {
+		ms = 33
+	}
+	return time.Duration(ms) * time.Millisecond
+}
+
 func (m Model) tickDuration() time.Duration {
 	return time.Second
 }
 
 type pollTickMsg struct{}
 type durationTickMsg struct{}
+type levelTickMsg struct {
+	gen int
+}
+
+type homeEnterLevelsMsg struct{}
 
 type detectionResultMsg struct {
 	snap detector.Snapshot

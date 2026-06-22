@@ -9,6 +9,7 @@ type SessionsFooterMode int
 
 const (
 	SessionsFooterNormal SessionsFooterMode = iota
+	SessionsFooterTranscribing
 	SessionsFooterOpenerPicker
 	SessionsFooterDeleteConfirm
 )
@@ -28,10 +29,7 @@ func FooterForTab(tab TabID, awaitingConfirm bool, sessionsMode SessionsFooterMo
 		return JoinFooter(
 			FooterHint("r", "record"),
 			FooterHint("a", "auto-record"),
-			FooterHint("Tab", "audio section"),
-			FooterHint("↑↓", "devices"),
-			FooterHint("Enter", "select"),
-			FooterHint("R", "refresh audio"),
+			FooterHint("4", "audio devices"),
 			FooterHint("1-4", "screens"),
 			FooterHint("q", "quit"),
 		)
@@ -56,6 +54,17 @@ func FooterForTab(tab TabID, awaitingConfirm bool, sessionsMode SessionsFooterMo
 				FooterHint("↑↓", "choose"),
 				FooterHint("Enter", "apply"),
 				FooterHint("Esc", "cancel"),
+				FooterHint("q", "quit"),
+			)
+		}
+		if sessionsMode == SessionsFooterTranscribing {
+			return JoinFooter(
+				FooterHint("s", "stop transcribe"),
+				FooterHint("↑↓", "navigate"),
+				FooterHint("[ ]", "page"),
+				FooterHint("o", "open folder"),
+				FooterHint("R", "refresh"),
+				FooterHint("1-4", "screens"),
 				FooterHint("q", "quit"),
 			)
 		}

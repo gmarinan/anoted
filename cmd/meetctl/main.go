@@ -12,6 +12,7 @@ import (
 	"meetctl/internal/config"
 	"meetctl/internal/detector"
 	"meetctl/internal/doctor"
+	"meetctl/internal/level"
 	"meetctl/internal/logging"
 	"meetctl/internal/platform"
 	"meetctl/internal/recorder"
@@ -117,15 +118,17 @@ func runTUI(cmd *cobra.Command, args []string) error {
 	}
 	defer store.Close()
 
+	audioProvider := audio.NewProvider()
 	deps := tui.Deps{
-		Config:     cfg,
-		ConfigPath: path,
-		Platform:   plat,
-		Detector:   detector.New(cfg, plat, useMock),
-		Recorder:   recorder.New(cfg, plat, forceDummy),
-		Store:       store,
-		Audio:       audio.NewProvider(),
-		Transcriber: transcribe.New(cfg),
+		Config:       cfg,
+		ConfigPath:   path,
+		Platform:     plat,
+		Detector:     detector.New(cfg, plat, useMock),
+		Recorder:     recorder.New(cfg, plat, forceDummy),
+		Store:        store,
+		Audio:        audioProvider,
+		LevelMonitor: level.NewMonitor(audioProvider),
+		Transcriber:  transcribe.New(cfg),
 	}
 
 	p := tea.NewProgram(tui.NewModel(deps))

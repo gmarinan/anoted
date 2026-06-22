@@ -5,8 +5,10 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"meetctl/internal/tui/components"
+	"meetctl/internal/config"
 	"meetctl/internal/open"
+	"meetctl/internal/transcribe"
+	"meetctl/internal/tui/components"
 )
 
 func (m Model) View() tea.View {
@@ -29,8 +31,9 @@ func (m Model) View() tea.View {
 		content.WriteString(m.homeView().View())
 	}
 
-	content.WriteString("\n\n")
-	content.WriteString(components.FooterForTab(tab, m.awaitingRecordConfirm, m.sessionsFooter(), m.configFooter(), m.configSavedMsg, m.configErr, m.width))
+	content.WriteString("\n")
+	footer := components.FooterForTab(tab, m.awaitingRecordConfirm, m.sessionsFooter(), m.configFooter(), m.configSavedMsg, m.configErr, m.width)
+	content.WriteString(components.FooterBar(footer, m.width))
 
 	v := tea.NewView(content.String())
 	v.AltScreen = true
@@ -68,15 +71,12 @@ func (m Model) homeView() components.HomeView {
 		ErrorMsg:        m.errMsg,
 		Width:           m.width,
 
-		AudioCatalog:  m.audioCatalog,
-		AudioSection:  m.audioSection,
-		AudioCursor:   m.audioCursor,
-		SystemMonitor: m.deps.Config.Audio.SystemMonitor,
-		Microphone:    m.deps.Config.Audio.Microphone,
-		AudioLoading:  m.audioLoading,
-		AudioErr:      m.audioErr,
-		AudioSaved:    m.audioSaved,
-		MonitorWarn:   m.audioMonitorWarn,
+		SystemBands:    m.systemBands,
+		MicBands:       m.micBands,
+		LevelEnabled:   config.LevelMeterEnabled(m.deps.Config),
+		LevelAvailable: m.deps.LevelMonitor != nil && m.deps.LevelMonitor.Available(),
+		MonitorWarn:    m.audioMonitorWarn,
+		LevelFrame:     m.levelFrame,
 	}
 }
 
@@ -100,25 +100,38 @@ func (m Model) doctorView() components.DoctorView {
 
 func (m Model) sessionsView() components.SessionsView {
 	rec, _ := m.selectedSession()
+	preview := ""
+	if rec.Dir != "" && transcribe.HasTranscript(rec.Dir) && !(m.transcribeActive && rec.Dir == m.transcribeSessionDir) {
+		if text, err := transcribe.ReadPreview(rec.Dir, 12); err == nil {
+			preview = text
+		}
+	}
 	v := components.SessionsView{
-		PageRecords:    m.sessionsPageRecords(),
-		Cursor:         m.sessionCursor,
-		Page:           m.sessionsPage + 1,
-		PageCount:      m.sessionsPageCount(),
-		TotalCount:     len(m.sessions),
-		ErrMsg:          m.sessionsErr,
-		Transcribing:    m.transcribing,
-		StatusNote:      m.transcribeNote,
-		DesktopNote:     m.sessionsDesktopNote,
-		Width:           m.width,
-		Height:          m.height,
-		OpenerPicker:    m.sessionsOpenerPicker,
-		OpenerCursor:    m.sessionsOpenerCursor,
-		OpenerChoices:   m.sessionsOpenerChoices(),
-		CurrentOpener:   open.CurrentOpenerID(m.deps.Config.Desktop),
-		OpenerDetected:  open.Detected(m.deps.Config.Desktop, open.KindFolder),
-		DeleteConfirm:   m.sessionsDeleteConfirm,
-		DeleteCursor:    m.sessionsDeleteCursor,
+		PageRecords:          m.sessionsPageRecords(),
+		Cursor:               m.sessionCursor,
+		Page:                 m.sessionsPage + 1,
+		PageCount:            m.sessionsPageCount(),
+		TotalCount:           len(m.sessions),
+		ErrMsg:               m.sessionsErr,
+		DesktopNote:          m.sessionsDesktopNote,
+		Width:                m.width,
+		Height:               m.height,
+		OpenerPicker:         m.sessionsOpenerPicker,
+		OpenerCursor:         m.sessionsOpenerCursor,
+		OpenerChoices:        m.sessionsOpenerChoices(),
+		CurrentOpener:        open.CurrentOpenerID(m.deps.Config.Desktop),
+		OpenerDetected:       open.Detected(m.deps.Config.Desktop, open.KindFolder),
+		DeleteConfirm:        m.sessionsDeleteConfirm,
+		DeleteCursor:         m.sessionsDeleteCursor,
+		TranscribeActive:     m.transcribeActive,
+		TranscribeSessionDir: m.transcribeSessionDir,
+		TranscribePercent:    m.transcribePercent,
+		TranscribeETA:        m.transcribeETA,
+		TranscribeBlink:      m.transcribeBlink,
+		TranscribeLog:        append([]string(nil), m.transcribeLog...),
+		TranscribeErr:        m.transcribeErr,
+		TranscribeErrDir:     m.transcribeSessionDir,
+		PreviewText:          preview,
 	}
 	if m.sessionsDeleteConfirm {
 		v.DeleteID = rec.ID
@@ -134,6 +147,9 @@ func (m Model) sessionsFooter() components.SessionsFooterMode {
 	if m.sessionsOpenerPicker {
 		return components.SessionsFooterOpenerPicker
 	}
+	if m.transcribeActive {
+		return components.SessionsFooterTranscribing
+	}
 	return components.SessionsFooterNormal
 }
 
@@ -144,11 +160,23 @@ func (m Model) configView() components.ConfigMenuView {
 		fields := cfgFields(s)
 		rows := make([]components.ConfigFieldRow, 0, len(fields))
 		for i, f := range fields {
+			value := cfgFieldValue(f, cfg)
+			if f.kind == fieldDevice {
+				if f.deviceSection == components.AudioSectionOutput && m.systemDevice != "" {
+					value = m.systemDevice
+				}
+				if f.deviceSection == components.AudioSectionMic && m.micDevice != "" {
+					value = m.micDevice
+				}
+			}
 			row := components.ConfigFieldRow{
 				Label:    f.label,
-				Value:    cfgFieldValue(f, cfg),
+				Value:    value,
 				Selected: s == m.configSection && i == m.configCursor,
 				Kind:     configFieldKindName(f.kind),
+			}
+			if f.editable != nil && !f.editable(cfg) {
+				row.Kind = "readonly"
 			}
 			if f.kind == fieldList && f.list != nil {
 				items := f.list(cfg)
@@ -175,21 +203,42 @@ func (m Model) configView() components.ConfigMenuView {
 		}
 	}
 
+	deviceTitle := ""
+	if m.configDevicePickerOpen {
+		if m.configDeviceSection == components.AudioSectionOutput {
+			deviceTitle = "system_monitor"
+		} else {
+			deviceTitle = "microphone"
+		}
+	}
+
 	return components.ConfigMenuView{
-		Path:          m.deps.ConfigPath,
-		Sections:      sections,
-		ModalOpen:     m.configModalOpen,
-		ModalTitle:    modalTitle,
-		ModalOptions:  m.configModalOptions,
-		ModalCursor:   m.configModalCursor,
-		Editing:       m.configEditing,
-		InputValue:    m.configInput,
-		Width:         m.width,
-		Height:        m.height,
+		Path:             m.deps.ConfigPath,
+		Sections:         sections,
+		ModalOpen:        m.configModalOpen,
+		ModalTitle:       modalTitle,
+		ModalOptions:     m.configModalOptions,
+		ModalCursor:      m.configModalCursor,
+		DevicePickerOpen: m.configDevicePickerOpen,
+		DeviceTitle:      deviceTitle,
+		DeviceSection:    m.configDeviceSection,
+		DeviceCatalog:    m.configDeviceCatalog,
+		DeviceCursor:     m.configDeviceCursor,
+		DeviceLoading:    m.configDeviceLoading,
+		DeviceErr:        m.configDeviceErr,
+		SystemMonitor:    m.deps.Config.Audio.SystemMonitor,
+		Microphone:       m.deps.Config.Audio.Microphone,
+		Editing:          m.configEditing,
+		InputValue:       m.configInput,
+		Width:            m.width,
+		Height:           m.height,
 	}
 }
 
 func (m Model) configFooter() components.ConfigFooterMode {
+	if m.configDevicePickerOpen {
+		return components.ConfigFooterDevicePicker
+	}
 	if m.configModalOpen {
 		return components.ConfigFooterModal
 	}
@@ -211,6 +260,8 @@ func configFieldKindName(k cfgFieldKind) string {
 		return "int"
 	case fieldList:
 		return "list"
+	case fieldDevice:
+		return "device"
 	default:
 		return "readonly"
 	}

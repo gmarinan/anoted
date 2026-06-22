@@ -14,7 +14,7 @@ func (m Model) Init() tea.Cmd {
 		m.schedulePoll(),
 		m.scheduleDurationTick(),
 		resolveDeviceLabelsCmd(m),
-		loadAudioCatalogCmd(m),
+		func() tea.Msg { return homeEnterLevelsMsg{} },
 	)
 }
 
@@ -33,6 +33,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.scheduleDurationTick()
 		}
 		return m, nil
+	case levelTickMsg:
+		return m.handleLevelTick(msg)
+	case homeEnterLevelsMsg:
+		if m.screen == ScreenMain {
+			var cmds []tea.Cmd
+			m, cmds = m.enterHomeLevels()
+			return m, tea.Batch(cmds...)
+		}
+		return m, nil
+	case levelStartMsg:
+		if msg.err != nil && m.screen == ScreenMain {
+			m.errMsg = msg.err.Error()
+		}
+		return m, nil
+	case levelStopMsg:
+		return m, nil
 	case detectionResultMsg:
 		return m.handleDetection(msg)
 	case recordToggleResultMsg:
@@ -49,8 +65,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleSessionsDeleted(msg)
 	case configMenuSaveMsg:
 		return m.handleConfigMenuSave(msg)
-	case transcribeResultMsg:
-		return m.handleTranscribeResult(msg)
+	case transcribeEnvelopeMsg:
+		return m.handleTranscribeEnvelope(msg)
+	case transcribeBlinkMsg:
+		return m.handleTranscribeBlink()
 	case deviceLabelsMsg:
 		m = m.handleDeviceLabels(msg)
 		return m, nil
@@ -117,11 +135,13 @@ func (m Model) handleRecordToggle(msg recordToggleResultMsg) (tea.Model, tea.Cmd
 		m.stopWhenMeetingEnds = m.detection.InMeeting
 		m.statusNote = ""
 		m.appState = StateRecording
-		return m, m.scheduleDurationTick()
+		m.micBands = nil
+		return m, tea.Batch(m.scheduleDurationTick(), m.startMicLevelCmd())
 	}
 
 	m.recording = false
 	m.stopWhenMeetingEnds = false
+	m.micBands = nil
 	if msg.meetingEnded && msg.savedDir != "" {
 		m.statusNote = "Meeting ended — saved to " + msg.savedDir
 	} else {
@@ -144,11 +164,10 @@ func (m Model) handleRecordToggle(msg recordToggleResultMsg) (tea.Model, tea.Cmd
 		savedDir = st.SessionDir
 	}
 	if savedDir != "" && m.deps.Config.Transcription.AutoAfterRecording {
-		m.transcribing = true
-		m.transcribeNote = "auto-transcribing…"
-		return m, transcribeSessionCmd(m, savedDir)
+		m, cmd := m.startTranscribe(savedDir)
+		return m, tea.Batch(cmd, m.stopMicLevelCmd())
 	}
-	return m, nil
+	return m, m.stopMicLevelCmd()
 }
 
 func (m Model) schedulePoll() tea.Cmd {
@@ -161,8 +180,11 @@ func (m Model) scheduleDurationTick() tea.Cmd {
 
 func (m Model) pollDetection() tea.Cmd {
 	d := m.deps.Detector
+	interval := m.pollInterval()
 	return func() tea.Msg {
-		snap, err := d.Poll(context.Background())
+		ctx, cancel := context.WithTimeout(context.Background(), interval/2)
+		defer cancel()
+		snap, err := d.Poll(ctx)
 		return detectionResultMsg{snap: snap, err: err}
 	}
 }

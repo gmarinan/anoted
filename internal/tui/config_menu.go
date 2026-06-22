@@ -7,6 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"meetctl/internal/config"
+	"meetctl/internal/tui/components"
 )
 
 const configSectionCount = 6
@@ -24,17 +25,20 @@ const (
 	fieldInt
 	fieldList
 	fieldReadonly
+	fieldDevice
 )
 
 type cfgField struct {
-	label   string
-	kind    cfgFieldKind
-	options []string
-	get     func(c config.Config) string
-	set     func(c *config.Config, v string) error
-	list    func(c config.Config) []string
-	addItem func(c *config.Config, v string)
-	delItem func(c *config.Config, i int)
+	label         string
+	kind          cfgFieldKind
+	options       []string
+	deviceSection components.AudioSection
+	editable      func(c config.Config) bool
+	get           func(c config.Config) string
+	set           func(c *config.Config, v string) error
+	list          func(c config.Config) []string
+	addItem       func(c *config.Config, v string)
+	delItem       func(c *config.Config, i int)
 }
 
 func cfgFields(section int) []cfgField {
@@ -131,21 +135,114 @@ func audioCfgFields() []cfgField {
 			},
 		},
 		{
-			label: "system_monitor",
-			kind:  fieldReadonly,
+			label:   "level_meter",
+			kind:    fieldEnum,
+			options: config.LevelPresetOptions(),
+			get: func(c config.Config) string {
+				if c.Audio.LevelPreset == "" {
+					return config.LevelPresetLabel(config.InferLevelPreset(
+						c.Audio.LevelLatencyMsec, c.Audio.LevelProcessTimeMsec, c.Audio.LevelUITickMS,
+					))
+				}
+				return config.LevelPresetLabel(c.Audio.LevelPreset)
+			},
+			set: func(c *config.Config, v string) error {
+				return config.ApplyLevelPreset(c, config.LevelPresetID(v))
+			},
+		},
+		{
+			label: "level_latency_msec",
+			kind:  fieldInt,
+			editable: func(c config.Config) bool {
+				return c.Audio.LevelPreset == config.LevelPresetCustom
+			},
+			get: func(c config.Config) string {
+				return strconv.Itoa(c.Audio.LevelLatencyMsec)
+			},
+			set: func(c *config.Config, v string) error {
+				n, err := strconv.Atoi(v)
+				if err != nil {
+					return fmt.Errorf("invalid level_latency_msec: %w", err)
+				}
+				if n < 10 {
+					return fmt.Errorf("level_latency_msec must be >= 10")
+				}
+				c.Audio.LevelLatencyMsec = n
+				if c.Audio.LevelProcessTimeMsec > n {
+					c.Audio.LevelProcessTimeMsec = n
+				}
+				config.MarkLevelPresetCustom(c)
+				return nil
+			},
+		},
+		{
+			label: "level_process_time_msec",
+			kind:  fieldInt,
+			editable: func(c config.Config) bool {
+				return c.Audio.LevelPreset == config.LevelPresetCustom
+			},
+			get: func(c config.Config) string {
+				return strconv.Itoa(c.Audio.LevelProcessTimeMsec)
+			},
+			set: func(c *config.Config, v string) error {
+				n, err := strconv.Atoi(v)
+				if err != nil {
+					return fmt.Errorf("invalid level_process_time_msec: %w", err)
+				}
+				if n < 5 {
+					return fmt.Errorf("level_process_time_msec must be >= 5")
+				}
+				if c.Audio.LevelLatencyMsec > 0 && n > c.Audio.LevelLatencyMsec {
+					return fmt.Errorf("level_process_time_msec must be <= level_latency_msec")
+				}
+				c.Audio.LevelProcessTimeMsec = n
+				config.MarkLevelPresetCustom(c)
+				return nil
+			},
+		},
+		{
+			label: "level_ui_tick_ms",
+			kind:  fieldInt,
+			editable: func(c config.Config) bool {
+				return c.Audio.LevelPreset == config.LevelPresetCustom
+			},
+			get: func(c config.Config) string {
+				return strconv.Itoa(c.Audio.LevelUITickMS)
+			},
+			set: func(c *config.Config, v string) error {
+				n, err := strconv.Atoi(v)
+				if err != nil {
+					return fmt.Errorf("invalid level_ui_tick_ms: %w", err)
+				}
+				if n < 16 {
+					return fmt.Errorf("level_ui_tick_ms must be >= 16")
+				}
+				if n > 2000 {
+					return fmt.Errorf("level_ui_tick_ms must be <= 2000")
+				}
+				c.Audio.LevelUITickMS = n
+				config.MarkLevelPresetCustom(c)
+				return nil
+			},
+		},
+		{
+			label:         "system_monitor",
+			kind:          fieldDevice,
+			deviceSection: components.AudioSectionOutput,
 			get: func(c config.Config) string {
 				if c.Audio.SystemMonitor == "" {
-					return "(auto — choose on Home tab)"
+					return "(auto)"
 				}
 				return c.Audio.SystemMonitor
 			},
 		},
 		{
-			label: "microphone",
-			kind:  fieldReadonly,
+			label:         "microphone",
+			kind:          fieldDevice,
+			deviceSection: components.AudioSectionMic,
 			get: func(c config.Config) string {
 				if c.Audio.Microphone == "" {
-					return "(auto — choose on Home tab)"
+					return "(auto)"
 				}
 				return c.Audio.Microphone
 			},
@@ -464,6 +561,10 @@ func (m Model) initConfigMenu() Model {
 	m.configModalOpen = false
 	m.configModalCursor = 0
 	m.configModalOptions = nil
+	m.configDevicePickerOpen = false
+	m.configDeviceLoading = false
+	m.configDeviceErr = ""
+	m.configDeviceCursor = 0
 	m.configErr = ""
 	m.configSavedMsg = ""
 	return m
@@ -513,6 +614,9 @@ func (m Model) clampConfigCursor() Model {
 func (m Model) handleConfigKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 
+	if m.configDevicePickerOpen {
+		return m.handleConfigDeviceModalKey(key)
+	}
 	if m.configModalOpen {
 		return m.handleConfigModalKey(key)
 	}
@@ -603,21 +707,31 @@ func (m Model) handleConfigInputKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
-	if msg.Text != "" {
-		for _, r := range msg.Text {
-			if r == '\n' || r == '\r' {
-				continue
-			}
-			f, ok := m.currentCfgField()
-			if ok && f.kind == fieldInt {
-				if r < '0' || r > '9' {
-					continue
-				}
-			}
-			m.configInput += string(r)
+	k := msg.Key()
+	if k.Text != "" {
+		for _, r := range k.Text {
+			m = m.appendConfigInputRune(r)
 		}
+		return m, nil
+	}
+	if len(key) == 1 {
+		m = m.appendConfigInputRune(rune(key[0]))
 	}
 	return m, nil
+}
+
+func (m Model) appendConfigInputRune(r rune) Model {
+	if r == '\n' || r == '\r' {
+		return m
+	}
+	f, ok := m.currentCfgField()
+	if ok && f.kind == fieldInt {
+		if r < '0' || r > '9' {
+			return m
+		}
+	}
+	m.configInput += string(r)
+	return m
 }
 
 func (m Model) activateConfigField() (tea.Model, tea.Cmd) {
@@ -647,6 +761,9 @@ func (m Model) activateConfigField() (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case fieldText, fieldInt:
+		if f.editable != nil && !f.editable(m.deps.Config) {
+			return m, nil
+		}
 		m.configEditing = true
 		val := f.get(m.deps.Config)
 		if val == "(auto-detect)" || val == "(default)" || val == "(empty)" {
@@ -661,6 +778,8 @@ func (m Model) activateConfigField() (tea.Model, tea.Cmd) {
 			return m.startConfigListAdd()
 		}
 		return m, nil
+	case fieldDevice:
+		return m.openConfigDevicePicker(f.deviceSection)
 	}
 	return m, nil
 }
@@ -741,7 +860,19 @@ func (m Model) handleConfigMenuSave(msg configMenuSaveMsg) (tea.Model, tea.Cmd) 
 	m.autoRecord = msg.cfg.AutoRecord
 	m.audioMonitorWarn = m.deps.Audio.MonitorWarning(msg.cfg.Audio.SystemMonitor)
 	m = m.clampConfigCursor()
-	return m, resolveDeviceLabelsCmd(m)
+	var cmds []tea.Cmd
+	cmds = append(cmds, resolveDeviceLabelsCmd(m))
+	if m.screen == ScreenMain {
+		m.systemBands = nil
+		m.micBands = nil
+		m.levelGen++
+		if config.LevelMeterEnabled(msg.cfg) {
+			cmds = append(cmds, m.startSystemLevelCmd(), m.scheduleLevelTick(m.levelGen))
+		} else {
+			cmds = append(cmds, m.stopSystemLevelCmd(), m.stopMicLevelCmd())
+		}
+	}
+	return m, tea.Batch(cmds...)
 }
 
 func (m Model) configNavUp() Model {
@@ -775,6 +906,10 @@ func (m Model) configNavDown() Model {
 		m.configListCursor = 0
 	}
 	return m
+}
+
+func (m Model) configAbsorbsKeys() bool {
+	return m.configEditing || m.configModalOpen || m.configDevicePickerOpen
 }
 
 func (m Model) isTabSwitchKey(key string) bool {

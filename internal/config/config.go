@@ -55,6 +55,11 @@ type AudioConfig struct {
 	Channels               int      `yaml:"channels"`
 	SystemMonitor          string   `yaml:"system_monitor"` // empty = auto (default sink monitor)
 	Microphone             string   `yaml:"microphone"`     // empty = auto (default source)
+	// LevelLatencyMsec and LevelProcessTimeMsec tune parec on Linux (lower = smoother bars, more CPU).
+	LevelLatencyMsec     int    `yaml:"level_latency_msec"`
+	LevelProcessTimeMsec int    `yaml:"level_process_time_msec"`
+	LevelUITickMS        int    `yaml:"level_ui_tick_ms"`
+	LevelPreset          string `yaml:"level_preset"` // responsive, balanced, economy, custom
 }
 
 type DetectConfig struct {
@@ -84,6 +89,10 @@ func Default() Config {
 			WindowsBackendPriority: []string{"wasapi"},
 			SampleRate:             48000,
 			Channels:               2,
+			LevelLatencyMsec:       50,
+			LevelProcessTimeMsec:   20,
+			LevelUITickMS:          33,
+			LevelPreset:            LevelPresetResponsive,
 		},
 		Detection: DetectConfig{
 			PollIntervalMS: 2000,
@@ -234,6 +243,20 @@ func (c *Config) applyDefaults() {
 	}
 	if len(c.Audio.WindowsBackendPriority) == 0 {
 		c.Audio.WindowsBackendPriority = def.Audio.WindowsBackendPriority
+	}
+	if c.Audio.LevelLatencyMsec == 0 {
+		c.Audio.LevelLatencyMsec = def.Audio.LevelLatencyMsec
+	}
+	if c.Audio.LevelProcessTimeMsec == 0 {
+		c.Audio.LevelProcessTimeMsec = def.Audio.LevelProcessTimeMsec
+	}
+	if c.Audio.LevelUITickMS == 0 {
+		c.Audio.LevelUITickMS = def.Audio.LevelUITickMS
+	}
+	if c.Audio.LevelPreset == "" {
+		c.Audio.LevelPreset = InferLevelPreset(c.Audio.LevelLatencyMsec, c.Audio.LevelProcessTimeMsec, c.Audio.LevelUITickMS)
+	} else if c.Audio.LevelPreset != LevelPresetCustom && c.Audio.LevelPreset != LevelPresetOff {
+		_ = ApplyLevelPreset(c, c.Audio.LevelPreset)
 	}
 	if c.Detection.PollIntervalMS == 0 {
 		c.Detection.PollIntervalMS = def.Detection.PollIntervalMS

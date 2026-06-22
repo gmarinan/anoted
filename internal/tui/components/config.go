@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"meetctl/internal/audio"
 )
 
 // ConfigFieldRow is one row in the config menu.
@@ -34,9 +35,18 @@ type ConfigMenuView struct {
 	Path          string
 	Sections      []ConfigSectionPanel
 	ModalOpen     bool
-	ModalTitle     string
-	ModalOptions   []string
-	ModalCursor    int
+	ModalTitle    string
+	ModalOptions  []string
+	ModalCursor   int
+	DevicePickerOpen bool
+	DeviceTitle      string
+	DeviceSection    AudioSection
+	DeviceCatalog    audio.Catalog
+	DeviceCursor     int
+	DeviceLoading    bool
+	DeviceErr        string
+	SystemMonitor    string
+	Microphone       string
 	Editing        bool
 	InputValue     string
 	Width          int
@@ -45,6 +55,10 @@ type ConfigMenuView struct {
 
 func (v ConfigMenuView) View() string {
 	base := v.renderBase()
+	if v.DevicePickerOpen {
+		h := v.overlayHeight()
+		return FloatCenter(base, v.renderDeviceModal(), v.Width, h)
+	}
 	if !v.ModalOpen {
 		return base
 	}
@@ -143,7 +157,7 @@ func (v ConfigMenuView) renderFieldLine(focused bool, f ConfigFieldRow) string {
 	}
 	label := labelStyle.Render(f.Label + ":")
 	val := valueStyle.Render(f.Value)
-	if f.Kind == "readonly" {
+	if f.Kind == "readonly" || f.Kind == "device" {
 		val = subtleStyle.Render(f.Value)
 	}
 	if focused && f.Selected && v.Editing && f.Kind != "list" {
@@ -205,12 +219,59 @@ func (v ConfigMenuView) renderModal() string {
 	return PickerModal(v.ModalTitle, body, maxW)
 }
 
+func (v ConfigMenuView) renderDeviceModal() string {
+	var lines []string
+	lines = append(lines, row("Selección", v.deviceSelectionLabel()))
+	lines = append(lines, "")
+
+	if v.DeviceLoading {
+		lines = append(lines, subtleStyle.Render("  Loading devices…"))
+	} else if v.DeviceErr != "" {
+		lines = append(lines, errStyle.Render("  ✗ "+v.DeviceErr))
+	} else {
+		panel := AudioPanel{
+			Catalog:       v.DeviceCatalog,
+			Section:       v.DeviceSection,
+			Cursor:        v.DeviceCursor,
+			SystemMonitor: v.SystemMonitor,
+			Microphone:    v.Microphone,
+		}
+		lines = append(lines, panel.renderDeviceList())
+	}
+
+	lines = append(lines, "")
+	lines = append(lines, subtleStyle.Render("↑↓ choose · Enter apply · Esc cancel"))
+	body := strings.Join(lines, "\n")
+	maxW := v.Width - 10
+	if maxW < 36 {
+		maxW = 36
+	}
+	if maxW > 72 {
+		maxW = 72
+	}
+	return PickerModal(v.DeviceTitle, body, maxW)
+}
+
+func (v ConfigMenuView) deviceSelectionLabel() string {
+	if v.DeviceSection == AudioSectionOutput {
+		if v.SystemMonitor == "" {
+			return "(auto)"
+		}
+		return truncate(v.SystemMonitor, v.Width-14)
+	}
+	if v.Microphone == "" {
+		return "(auto)"
+	}
+	return truncate(v.Microphone, v.Width-14)
+}
+
 // ConfigFooterMode selects footer shortcuts on the Config screen.
 type ConfigFooterMode int
 
 const (
 	ConfigFooterNormal ConfigFooterMode = iota
 	ConfigFooterModal
+	ConfigFooterDevicePicker
 	ConfigFooterEditing
 )
 
@@ -218,7 +279,7 @@ const (
 func FooterForConfig(mode ConfigFooterMode, savedMsg, errMsg string, width int) string {
 	var hints string
 	switch mode {
-	case ConfigFooterModal:
+	case ConfigFooterModal, ConfigFooterDevicePicker:
 		hints = JoinFooter(
 			FooterHint("↑↓", "choose"),
 			FooterHint("Enter", "apply"),

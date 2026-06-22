@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"charm.land/lipgloss/v2"
-	"meetctl/internal/audio"
 )
 
 // HomeView renders the Home screen.
@@ -28,16 +27,12 @@ type HomeView struct {
 	ErrorMsg        string
 	Width           int
 
-	// Audio device picker (subsection tabs inside Audio panel)
-	AudioCatalog    audio.Catalog
-	AudioSection    AudioSection
-	AudioCursor     int
-	SystemMonitor   string
-	Microphone      string
-	AudioLoading    bool
-	AudioErr        string
-	AudioSaved      string
-	MonitorWarn     string
+	SystemBands    []float64
+	MicBands       []float64
+	LevelFrame     uint64
+	LevelEnabled   bool
+	LevelAvailable bool
+	MonitorWarn    string
 }
 
 func (v HomeView) View() string {
@@ -63,7 +58,7 @@ func (v HomeView) columnWidth() int {
 func (v HomeView) statusBox(width int) string {
 	var lines []string
 	if v.Recording {
-		lines = append(lines, recStyle.Render("● RECORDING"))
+		lines = append(lines, recStyle.Render(IconRecording+" RECORDING"))
 	}
 	lines = append(lines, row("State", displayState(v.AppState)))
 	lines = append(lines, row("Platform", v.Platform))
@@ -99,42 +94,19 @@ func (v HomeView) audioBox(width int) string {
 		mic = subtleStyle.Render("(loading…)")
 	}
 
-	var body strings.Builder
-	body.WriteString(row("System audio", truncate(sys, width-14)))
-	body.WriteString("\n")
-	body.WriteString(row("Microphone", truncate(mic, width-14)))
-	body.WriteString("\n\n")
-	body.WriteString(SubTabBar([]string{"Output", "Microphone"}, int(v.AudioSection)))
-	body.WriteString("\n")
-
-	if v.AudioLoading {
-		body.WriteString(subtleStyle.Render("  Loading devices…"))
-		return Box("Audio", body.String(), width)
+	viz := WaveformViz{
+		SystemBands:    v.SystemBands,
+		MicBands:       v.MicBands,
+		LevelFrame:     v.LevelFrame,
+		SystemLabel:    sys,
+		MicLabel:       mic,
+		Recording:      v.Recording,
+		LevelEnabled:   v.LevelEnabled,
+		LevelAvailable: v.LevelAvailable,
+		MonitorWarn:    v.MonitorWarn,
+		Width:          width,
 	}
-	if v.AudioErr != "" {
-		body.WriteString(errStyle.Render("  ✗ " + v.AudioErr))
-		body.WriteString("\n")
-	}
-	if v.MonitorWarn != "" && v.AudioSection == AudioSectionOutput {
-		body.WriteString(warnStyle.Render("  ⚠ " + v.MonitorWarn))
-		body.WriteString("\n")
-	}
-
-	panel := AudioPanel{
-		Catalog:       v.AudioCatalog,
-		Section:       v.AudioSection,
-		Cursor:        v.AudioCursor,
-		SystemMonitor: v.SystemMonitor,
-		Microphone:    v.Microphone,
-	}
-	body.WriteString(panel.renderDeviceList())
-
-	if v.AudioSaved != "" {
-		body.WriteString("\n")
-		body.WriteString(okStyle.Render("  ✓ " + v.AudioSaved))
-	}
-
-	return Box("Audio", body.String(), width)
+	return Box("Audio", viz.Render(), width)
 }
 
 func (v HomeView) activityBox(width int) string {
@@ -142,8 +114,8 @@ func (v HomeView) activityBox(width int) string {
 	var badge string
 	switch {
 	case v.Recording:
-		msg = "Recording meeting audio…"
-		badge = Badge("REC", "rec")
+		msg = IconRecording + " Recording meeting audio…"
+		badge = Badge(IconRecording+" REC", "rec")
 	case v.AwaitingConfirm:
 		msg = "Meeting detected — confirm recording"
 		badge = Badge("CONFIRM", "warn")

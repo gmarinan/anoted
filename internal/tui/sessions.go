@@ -118,10 +118,15 @@ func (m Model) handleSessionsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, m.openSessionPath(true)
 	case "t":
 		rec, ok := m.selectedSession()
-		if m.transcribing || !ok {
+		if m.transcribeActive || !ok {
 			return m, nil
 		}
 		return m.startTranscribe(rec.Dir)
+	case "s":
+		if m.transcribeActive {
+			return m.stopTranscribe()
+		}
+		return m, nil
 	case "d", "delete":
 		rec, ok := m.selectedSession()
 		if !ok {

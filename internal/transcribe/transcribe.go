@@ -37,6 +37,11 @@ func New(cfg config.Config) *Service {
 
 // TranscribeSession writes transcript.* files into sessionDir.
 func (s *Service) TranscribeSession(ctx context.Context, sessionDir string) (Result, error) {
+	return s.TranscribeSessionWithProgress(ctx, sessionDir, nil)
+}
+
+// TranscribeSessionWithProgress writes transcript.* files and reports progress via onProgress.
+func (s *Service) TranscribeSessionWithProgress(ctx context.Context, sessionDir string, onProgress ProgressFunc) (Result, error) {
 	audioPath := filepath.Join(sessionDir, recorder.SessionAudioFile)
 	if _, err := os.Stat(audioPath); err != nil {
 		return Result{}, fmt.Errorf("audio file missing: %w", err)
@@ -49,9 +54,9 @@ func (s *Service) TranscribeSession(ctx context.Context, sessionDir string) (Res
 
 	switch backend {
 	case BackendWhisperCpp:
-		return transcribeWhisperCpp(ctx, s.cfg.Transcription, bin, audioPath, sessionDir)
+		return transcribeWhisperCpp(ctx, s.cfg.Transcription, bin, audioPath, sessionDir, onProgress)
 	default:
-		return transcribeOpenAI(ctx, s.cfg.Transcription, bin, audioPath, sessionDir)
+		return transcribeOpenAI(ctx, s.cfg.Transcription, bin, audioPath, sessionDir, onProgress)
 	}
 }
 

@@ -49,6 +49,23 @@ var (
 				Foreground(lipgloss.Color("244")).
 				Padding(0, 1)
 	keyStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("86"))
+	// TX status colors
+	txDoneStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("42"))
+	txPendingStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	txActiveStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("214"))
+	txActiveAltStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("220"))
+	txErrorStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("203"))
+	footerBarStyle = lipgloss.NewStyle().
+			Border(lipgloss.NormalBorder(), false, false, true, false).
+			BorderForeground(lipgloss.Color("238")).
+			Padding(0, 0)
+)
+
+// Nerd Font icons (requires a Nerd Font in the terminal).
+const (
+	IconRecording   = "\U000F0376C" // 󰍬
+	IconAudioSaved  = "\U000F09BA8" // 󰦨
+	IconTranscribed = "\U000F0BB78" // 󰮸
 )
 
 // TabID identifies the active main screen (switch with 1–4, not Tab).
@@ -145,6 +162,14 @@ func JoinFooter(hints ...string) string {
 	return subtleStyle.Render(strings.Join(hints, "  ·  "))
 }
 
+// FooterBar renders a single-line footer bar (htop/lazygit style).
+func FooterBar(hints string, width int) string {
+	if width > 0 {
+		return footerBarStyle.Width(width).Render(hints)
+	}
+	return footerBarStyle.Render(hints)
+}
+
 // FooterWithTrailingStatus places status text flush-right on the footer line.
 func FooterWithTrailingStatus(hints, status string, width int) string {
 	if status == "" {
@@ -177,14 +202,24 @@ func FloatCenter(background, overlay string, width, height int) string {
 		}
 	}
 
+	bgW, bgH := 0, len(bgLines)
+	for _, line := range bgLines {
+		if w := lipgloss.Width(line); w > bgW {
+			bgW = w
+		}
+	}
+
 	if width <= 0 {
 		width = modalW
 	}
-	if height <= 0 {
-		height = len(bgLines)
+	if bgW > width {
+		width = bgW
 	}
-	if height < len(bgLines) {
-		height = len(bgLines)
+	if height <= 0 {
+		height = bgH
+	}
+	if bgH > height {
+		height = bgH
 	}
 
 	startY := (height - modalH) / 2
@@ -195,22 +230,26 @@ func FloatCenter(background, overlay string, width, height int) string {
 	if startX < 0 {
 		startX = 0
 	}
+	if startY+modalH > height {
+		height = startY + modalH
+	}
+	if startX+modalW > width {
+		width = startX + modalW
+	}
 
 	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("238"))
-	out := make([]string, height)
+	dimmedLines := make([]string, height)
 	for y := 0; y < height; y++ {
-		mi := y - startY
-		if mi >= 0 && mi < modalH {
-			out[y] = strings.Repeat(" ", startX) + olLines[mi]
-			continue
-		}
 		if y < len(bgLines) {
-			out[y] = dimStyle.Render(bgLines[y])
+			dimmedLines[y] = dimStyle.Render(bgLines[y])
 		} else {
-			out[y] = ""
+			dimmedLines[y] = ""
 		}
 	}
-	return strings.Join(out, "\n")
+
+	bgLayer := lipgloss.NewLayer(strings.Join(dimmedLines, "\n"))
+	olLayer := lipgloss.NewLayer(overlay).X(startX).Y(startY)
+	return lipgloss.NewCompositor(bgLayer, olLayer).Render()
 }
 
 // PickerModal renders a compact floating picker dialog.

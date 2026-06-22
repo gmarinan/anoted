@@ -6,8 +6,17 @@ import (
 )
 
 func (m Model) switchScreen(screen Screen) (tea.Model, tea.Cmd) {
-	m.screen = screen
+	leavingMain := m.screen == ScreenMain && screen != ScreenMain
+	enteringMain := m.screen != ScreenMain && screen == ScreenMain
+
 	var cmds []tea.Cmd
+	if leavingMain {
+		var leaveCmds []tea.Cmd
+		m, leaveCmds = m.leaveHomeLevels()
+		cmds = append(cmds, leaveCmds...)
+	}
+
+	m.screen = screen
 
 	switch screen {
 	case ScreenDoctor:
@@ -33,11 +42,12 @@ func (m Model) switchScreen(screen Screen) (tea.Model, tea.Cmd) {
 		m.sessionsDeleteConfirm = false
 	case ScreenMain:
 		m.audioMonitorWarn = m.deps.Audio.MonitorWarning(m.deps.Config.Audio.SystemMonitor)
-		if len(m.audioCatalog.Outputs) == 0 && !m.audioLoading {
-			m.audioLoading = true
-			cmds = append(cmds, loadAudioCatalogCmd(m))
-		}
 		cmds = append(cmds, resolveDeviceLabelsCmd(m))
+		if enteringMain {
+			var enterCmds []tea.Cmd
+			m, enterCmds = m.enterHomeLevels()
+			cmds = append(cmds, enterCmds...)
+		}
 	case ScreenConfig:
 		m = m.initConfigMenu()
 	}
@@ -55,14 +65,28 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch key {
 	case "q", "ctrl+c":
 		m.quitting = true
+		m.levelGen++
+		m = m.cancelTranscribeOnQuit()
+		var cmds []tea.Cmd
+		if m.deps.LevelMonitor != nil {
+			cmds = append(cmds, func() tea.Msg {
+				_ = m.deps.LevelMonitor.Close()
+				return levelStopMsg{}
+			})
+		}
 		if m.recording {
-			return m, tea.Sequence(stopRecordingCmd(m, false), tea.Quit)
+			cmds = append(cmds, stopRecordingCmd(m, false), tea.Quit)
+			return m, tea.Sequence(cmds...)
+		}
+		if len(cmds) > 0 {
+			cmds = append(cmds, tea.Quit)
+			return m, tea.Sequence(cmds...)
 		}
 		return m, tea.Quit
 	}
 
 	if m.screen == ScreenConfig {
-		if m.isTabSwitchKey(key) {
+		if !m.configAbsorbsKeys() && m.isTabSwitchKey(key) {
 			model, cmd, _ := m.handleTabSwitch(key)
 			return model, cmd
 		}
@@ -75,17 +99,6 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.sessionsDeleteConfirm = false
 		}
 		return model, cmd
-	}
-
-	if m.screen == ScreenMain {
-		switch key {
-		case "tab", "up", "down", "k", "j", " ":
-			return m.handleAudioKey(msg)
-		case "enter":
-			if !m.awaitingRecordConfirm || m.recording {
-				return m.handleAudioKey(msg)
-			}
-		}
 	}
 
 	switch m.screen {
@@ -163,9 +176,7 @@ func (m Model) handleRefresh() (tea.Model, tea.Cmd) {
 	case ScreenSessions:
 		return m.switchScreen(ScreenSessions)
 	case ScreenMain:
-		m.audioLoading = true
-		m.audioErr = ""
-		return m, tea.Batch(loadAudioCatalogCmd(m), resolveDeviceLabelsCmd(m))
+		return m, tea.Batch(resolveDeviceLabelsCmd(m), m.startSystemLevelCmd())
 	case ScreenConfig:
 		return m.reloadConfigFromDisk(), resolveDeviceLabelsCmd(m)
 	default:
