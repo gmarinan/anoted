@@ -27,23 +27,16 @@ type DoctorView struct {
 }
 
 func (v DoctorView) View() string {
+	layout := NewPanelLayout(v.Width)
+	colW := layout.ColumnWidth()
 	var b strings.Builder
 
-	colW := v.columnWidth()
 	summary := v.summaryBox(colW)
 	env := v.environmentBox(colW)
-	b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, summary, " ", env))
+	b.WriteString(layout.JoinColumns(summary, env))
 	b.WriteString("\n\n")
-	b.WriteString(v.warningsBox(v.Width))
+	b.WriteString(v.warningsBox(layout.FullWidth()))
 	return b.String()
-}
-
-func (v DoctorView) columnWidth() int {
-	w := v.Width
-	if w < 60 {
-		return 36
-	}
-	return (w - 3) / 2
 }
 
 func (v DoctorView) summaryBox(width int) string {
@@ -163,35 +156,50 @@ func (v SessionsView) overlayHeight() int {
 }
 
 func (v SessionsView) renderMainContent() string {
+	layout := NewPanelLayout(v.Width)
 	var b strings.Builder
 
-	tableW := v.Width
-	if tableW < 40 {
-		tableW = 80
-	}
-	b.WriteString(v.tableBox(tableW))
+	b.WriteString(v.tableBox(layout.FullWidth()))
 	if v.DesktopNote != "" {
 		b.WriteString("\n")
 		b.WriteString(okStyle.Render("✓ " + v.DesktopNote))
 	}
 	b.WriteString("\n\n")
 
-	detailsW := v.detailsWidth()
-	previewW := v.Width - detailsW - 1
-	if previewW < 20 {
-		previewW = 20
+	details := v.detailsBox(layout.ColumnWidth())
+	preview := v.previewBox(v.previewWidth(layout))
+	if layout.TwoColumn() {
+		b.WriteString(layout.JoinColumns(details, preview))
+	} else {
+		b.WriteString(JoinBlocksVertical(details, preview))
 	}
-	b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, v.detailsBox(detailsW), " ", v.previewBox(previewW)))
 	return b.String()
 }
 
-func (v SessionsView) detailsWidth() int {
-	w := int(float64(v.Width) * 0.42)
-	if w < 28 {
-		w = 28
+func (v SessionsView) previewWidth(layout PanelLayout) int {
+	if !layout.TwoColumn() {
+		return layout.FullWidth()
 	}
-	if w > v.Width-24 {
-		w = v.Width - 24
+	detailsW := v.detailsWidth()
+	previewW := v.Width - detailsW - panelColumnGap
+	if previewW < MinPanelWidth {
+		previewW = MinPanelWidth
+	}
+	return previewW
+}
+
+func (v SessionsView) detailsWidth() int {
+	layout := NewPanelLayout(v.Width)
+	if !layout.TwoColumn() {
+		return layout.FullWidth()
+	}
+	w := int(float64(v.Width) * 0.42)
+	if w < MinPanelWidth {
+		w = MinPanelWidth
+	}
+	max := v.Width - MinPanelWidth - panelColumnGap
+	if w > max {
+		w = max
 	}
 	return w
 }
@@ -301,8 +309,7 @@ func (v SessionsView) tableBox(width int) string {
 	}
 
 	title := fmt.Sprintf("Sessions (%d/%d · %d total)", v.Page, v.PageCount, v.TotalCount)
-	header := fmt.Sprintf("%-4s  %-16s  %-12s  %-8s  %-28s  %s",
-		"ID", "DATE", "MEET", "DUR", "TX", "PATH")
+	header := v.tableHeader()
 	lines := []string{subtleStyle.Render(header)}
 	for i, r := range v.PageRecords {
 		line := v.formatRow(r, width)
@@ -317,6 +324,18 @@ func (v SessionsView) tableBox(width int) string {
 	return Box(title, strings.Join(lines, "\n"), width)
 }
 
+func (v SessionsView) compactTable() bool {
+	return v.Width < 96
+}
+
+func (v SessionsView) tableHeader() string {
+	if v.compactTable() {
+		return fmt.Sprintf("%-4s  %-16s  %-12s  %-8s  %s", "ID", "DATE", "MEET", "DUR", "TX")
+	}
+	return fmt.Sprintf("%-4s  %-16s  %-12s  %-8s  %-28s  %s",
+		"ID", "DATE", "MEET", "DUR", "TX", "PATH")
+}
+
 func (v SessionsView) formatRow(r session.Record, tableWidth int) string {
 	dur := r.Metadata.Duration
 	if dur == "" && !r.EndedAt.IsZero() {
@@ -327,6 +346,15 @@ func (v SessionsView) formatRow(r session.Record, tableWidth int) string {
 	}
 	meet := truncate(formatProvider(string(r.Provider)), 12)
 	tx := v.formatTXColumn(r, tableWidth)
+	if v.compactTable() {
+		return fmt.Sprintf("#%-3d  %-16s  %-12s  %-8s  %s",
+			r.ID,
+			session.FormatLocalTime(r.StartedAt, "2006-01-02 15:04"),
+			meet,
+			truncate(dur, 8),
+			tx,
+		)
+	}
 	path := filepath.Join(r.Dir, sessionAudioName)
 	return fmt.Sprintf("#%-3d  %-16s  %-12s  %-8s  %-28s  %s",
 		r.ID,

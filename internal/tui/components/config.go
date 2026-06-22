@@ -86,46 +86,25 @@ func (v ConfigMenuView) overlayHeight() int {
 	return h
 }
 
-func (v ConfigMenuView) sectionWidth() int {
-	if v.Width >= 100 {
-		return (v.Width - 3) / 2
-	}
-	if v.Width < 12 {
-		return 40
-	}
-	return v.Width
-}
-
 func (v ConfigMenuView) renderAllSections() string {
 	if len(v.Sections) == 0 {
 		return subtleStyle.Render("(no sections)")
 	}
-	w := v.sectionWidth()
-	twoCol := v.Width >= 100
+	layout := NewPanelLayout(v.Width)
+	w := layout.ColumnWidth()
+	twoCol := layout.TwoColumn()
 
 	var rows []string
 	for i := 0; i < len(v.Sections); i += 2 {
 		if twoCol && i+1 < len(v.Sections) {
 			left := v.renderSectionBox(v.Sections[i], w)
 			right := v.renderSectionBox(v.Sections[i+1], w)
-			left, right = equalizeBoxHeights(left, right)
-			rows = append(rows, lipgloss.JoinHorizontal(lipgloss.Top, left, " ", right))
+			rows = append(rows, layout.JoinColumns(left, right))
 		} else {
-			rows = append(rows, v.renderSectionBox(v.Sections[i], w))
+			rows = append(rows, v.renderSectionBox(v.Sections[i], layout.FullWidth()))
 		}
 	}
 	return strings.Join(rows, "\n")
-}
-
-func equalizeBoxHeights(left, right string) (string, string) {
-	hLeft := lipgloss.Height(left)
-	hRight := lipgloss.Height(right)
-	if hLeft < hRight {
-		left = lipgloss.Place(lipgloss.Width(left), hRight, lipgloss.Left, lipgloss.Top, left)
-	} else if hRight < hLeft {
-		right = lipgloss.Place(lipgloss.Width(right), hLeft, lipgloss.Left, lipgloss.Top, right)
-	}
-	return left, right
 }
 
 func (v ConfigMenuView) renderSectionBox(sec ConfigSectionPanel, width int) string {

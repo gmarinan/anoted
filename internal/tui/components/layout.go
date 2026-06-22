@@ -115,6 +115,77 @@ func SubTabBar(labels []string, active int) string {
 	return strings.Join(parts, " ")
 }
 
+const (
+	TwoColumnMinWidth = 80
+	MinPanelWidth     = 28
+	panelColumnGap    = 1
+)
+
+// PanelLayout computes responsive panel widths for the current terminal.
+type PanelLayout struct {
+	Width int
+}
+
+// NewPanelLayout normalizes width and returns layout helpers for panel rendering.
+func NewPanelLayout(width int) PanelLayout {
+	if width < MinPanelWidth {
+		width = MinPanelWidth
+	}
+	return PanelLayout{Width: width}
+}
+
+// TwoColumn reports whether there is enough room for side-by-side panels.
+func (p PanelLayout) TwoColumn() bool {
+	return p.Width >= TwoColumnMinWidth
+}
+
+// ColumnWidth returns the width for one column in the current layout mode.
+func (p PanelLayout) ColumnWidth() int {
+	if !p.TwoColumn() {
+		return p.Width
+	}
+	return (p.Width - panelColumnGap) / 2
+}
+
+// FullWidth returns the usable content width.
+func (p PanelLayout) FullWidth() int {
+	return p.Width
+}
+
+// JoinColumns places panels side-by-side or stacked vertically based on width.
+func (p PanelLayout) JoinColumns(left, right string) string {
+	if !p.TwoColumn() {
+		return JoinBlocksVertical(left, right)
+	}
+	left, right = EqualizeBoxHeights(left, right)
+	gap := strings.Repeat(" ", panelColumnGap)
+	return lipgloss.JoinHorizontal(lipgloss.Top, left, gap, right)
+}
+
+// JoinBlocksVertical stacks rendered panels with blank lines between them.
+func JoinBlocksVertical(blocks ...string) string {
+	var parts []string
+	for _, block := range blocks {
+		block = strings.TrimSpace(block)
+		if block != "" {
+			parts = append(parts, block)
+		}
+	}
+	return strings.Join(parts, "\n\n")
+}
+
+// EqualizeBoxHeights pads shorter boxes so paired columns align cleanly.
+func EqualizeBoxHeights(left, right string) (string, string) {
+	hLeft := lipgloss.Height(left)
+	hRight := lipgloss.Height(right)
+	if hLeft < hRight {
+		left = lipgloss.Place(lipgloss.Width(left), hRight, lipgloss.Left, lipgloss.Top, left)
+	} else if hRight < hLeft {
+		right = lipgloss.Place(lipgloss.Width(right), hLeft, lipgloss.Left, lipgloss.Top, right)
+	}
+	return left, right
+}
+
 // Box renders a titled bordered panel.
 func Box(title, content string, width int) string {
 	return renderBox(title, content, width, boxStyle, boxTitleStyle)
@@ -126,8 +197,8 @@ func DimBox(title, content string, width int) string {
 }
 
 func renderBox(title, content string, width int, style, titleStyle lipgloss.Style) string {
-	if width < 12 {
-		width = 40
+	if width < MinPanelWidth {
+		width = MinPanelWidth
 	}
 	titleLine := titleStyle.Render(strings.ToUpper(title))
 	body := content

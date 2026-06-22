@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"strings"
 	"time"
-
-	"charm.land/lipgloss/v2"
 )
 
 // HomeView renders the Home screen.
@@ -36,23 +34,16 @@ type HomeView struct {
 }
 
 func (v HomeView) View() string {
-	colW := v.columnWidth()
+	layout := NewPanelLayout(v.Width)
+	colW := layout.ColumnWidth()
 	var b strings.Builder
 
 	status := v.statusBox(colW)
 	audio := v.audioBox(colW)
-	b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, status, " ", audio))
+	b.WriteString(layout.JoinColumns(status, audio))
 	b.WriteString("\n\n")
-	b.WriteString(v.activityBox(v.Width))
+	b.WriteString(v.activityBox(layout.FullWidth()))
 	return b.String()
-}
-
-func (v HomeView) columnWidth() int {
-	w := v.Width
-	if w < 60 {
-		return 36
-	}
-	return (w - 3) / 2
 }
 
 func (v HomeView) statusBox(width int) string {
