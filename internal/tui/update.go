@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"log/slog"
 	"os"
 	"time"
 
@@ -95,6 +96,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case levelStopMsg:
 		return m, nil
+	case autoRecordRetryMsg:
+		return m.handleAutoRecordRetry()
 	case detectionResultMsg:
 		return m.handleDetection(msg)
 	case recordToggleResultMsg:
@@ -128,6 +131,16 @@ func (m Model) handleDetection(msg detectionResultMsg) (tea.Model, tea.Cmd) {
 		now = time.Now()
 	}
 
+	if m.recordOpInFlight && !m.recordOpAt.IsZero() && now.Sub(m.recordOpAt) > 30*time.Second {
+		slog.Warn("record op watchdog fired", "op_age_ms", now.Sub(m.recordOpAt).Milliseconds())
+		m.recordOpInFlight = false
+		m.recordOpAt = time.Time{}
+		if m.autoRecord && m.detection.InMeeting && !m.recording {
+			m.wantAutoRecordResume = true
+			m.autoRecordRetryAfter = time.Time{}
+		}
+	}
+
 	if msg.err != nil {
 		if m.recording {
 			m.appState = StateRecording
@@ -139,7 +152,36 @@ func (m Model) handleDetection(msg detectionResultMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	wasInMeeting := m.detection.InMeeting
+	newSession := detectNewMeetingSession(wasInMeeting, m.lastMeetingSessionKey, msg.snap.State)
+	if msg.snap.State.InMeeting {
+		slog.Debug("detection poll",
+			"in_meeting", msg.snap.State.InMeeting,
+			"provider", msg.snap.State.Provider,
+			"title", msg.snap.State.Title,
+			"was_in_meeting", wasInMeeting,
+			"new_session", newSession,
+			"recording", m.recording,
+			"want_resume", m.wantAutoRecordResume,
+		)
+	}
+	if newSession {
+		m.lastAutoStopAt = time.Time{}
+		m.recordConfirmDismissed = false
+		m.awaitingRecordConfirm = false
+		m.autoRecordFailures = 0
+	}
+
 	m.detection = msg.snap.State
+	if msg.snap.State.InMeeting {
+		m.lastMeetingSessionKey = meetingSessionKey(msg.snap.State)
+	} else {
+		m.lastMeetingSessionKey = ""
+		m.lastAutoStopAt = time.Time{}
+		m.recordOpInFlight = false
+		m.recordOpAt = time.Time{}
+	}
+
 	if m.recording {
 		if m.stopWhenMeetingEnds {
 			stop, absentSince := shouldStopForMeetingEnd(
@@ -152,6 +194,7 @@ func (m Model) handleDetection(msg detectionResultMsg) (tea.Model, tea.Cmd) {
 			if stop && !m.recordOpInFlight {
 				m.meetingAbsentSince = time.Time{}
 				m.recordOpInFlight = true
+				m.recordOpAt = now
 				return m, stopRecordingCmd(m, true)
 			}
 		}
@@ -163,21 +206,26 @@ func (m Model) handleDetection(msg detectionResultMsg) (tea.Model, tea.Cmd) {
 		m.meetingAbsentSince = time.Time{}
 		m.provider = msg.snap.State.Provider
 		if m.autoRecord {
-			if !m.deps.Config.AutoRecordRequiresConfirmation {
-				if shouldBlockAutoStart(m.recordOpInFlight, m.lastAutoStopAt, now) {
-					m.appState = StateInMeeting
-					return m, nil
+			switch m.autoRecordAction(now, newSession) {
+			case autoRecordStart:
+				if newSession {
+					m.statusNote = ""
 				}
-				m.recordOpInFlight = true
-				return m, startRecordingCmd(m)
-			}
-			if m.recordConfirmDismissed {
+				m.recordConfirmDismissed = false
+				m.awaitingRecordConfirm = false
+				return m.dispatchAutoRecordStart(now)
+			case autoRecordConfirm:
+				if newSession {
+					m.statusNote = ""
+					m.recordConfirmDismissed = false
+				}
+				m.awaitingRecordConfirm = true
+				m.appState = StateAwaitingRecordConfirm
+				return m, nil
+			case autoRecordWait, autoRecordNoop:
 				m.appState = StateInMeeting
 				return m, nil
 			}
-			m.awaitingRecordConfirm = true
-			m.appState = StateAwaitingRecordConfirm
-			return m, nil
 		}
 		m.appState = StateInMeeting
 	} else {
@@ -185,16 +233,51 @@ func (m Model) handleDetection(msg detectionResultMsg) (tea.Model, tea.Cmd) {
 		m.provider = "none"
 		m.awaitingRecordConfirm = false
 		m.recordConfirmDismissed = false
+		m.autoRecordFailures = 0
+	}
+	return m, nil
+}
+
+func (m Model) handleAutoRecordRetry() (tea.Model, tea.Cmd) {
+	m.autoRecordRetryAfter = time.Time{}
+	if !m.autoRecord || m.recording || m.recordOpInFlight || !m.detection.InMeeting {
+		return m, nil
+	}
+	now := time.Now()
+	switch m.autoRecordAction(now, false) {
+	case autoRecordStart:
+		return m.dispatchAutoRecordStart(now)
+	case autoRecordConfirm:
+		m.awaitingRecordConfirm = true
+		m.appState = StateAwaitingRecordConfirm
 	}
 	return m, nil
 }
 
 func (m Model) handleRecordToggle(msg recordToggleResultMsg) (tea.Model, tea.Cmd) {
 	m.recordOpInFlight = false
+	m.recordOpAt = time.Time{}
 	if msg.err != nil {
-		m.appState = StateError
-		m.errMsg = msg.err.Error()
 		m.recording = false
+		m.errMsg = msg.err.Error()
+		slog.Warn("record toggle failed", "err", msg.err, "in_meeting", m.detection.InMeeting, "auto_record", m.autoRecord)
+		if m.autoRecord && m.detection.InMeeting {
+			m.autoRecordFailures++
+			slog.Warn("auto-record start failed", "failures", m.autoRecordFailures, "err", msg.err)
+			if m.autoRecordFailures >= maxAutoRecordFailures {
+				m.wantAutoRecordResume = false
+				m.errMsg = autoRecordGiveUpMsg
+				m.statusNote = autoRecordGiveUpMsg
+				m.appState = StateInMeeting
+				return m, nil
+			}
+			m.wantAutoRecordResume = true
+			m.autoRecordRetryAfter = time.Now().Add(autoRecordRetryDelay)
+			m.statusNote = "Record start failed — retrying…"
+			m.appState = StateInMeeting
+			return m, m.scheduleAutoRecordRetry()
+		}
+		m.appState = StateError
 		return m, nil
 	}
 
@@ -205,6 +288,9 @@ func (m Model) handleRecordToggle(msg recordToggleResultMsg) (tea.Model, tea.Cmd
 		m.recordStart = st.StartedAt
 		m.sessionDir = st.SessionDir
 		m.awaitingRecordConfirm = false
+		m.wantAutoRecordResume = false
+		m.autoRecordRetryAfter = time.Time{}
+		m.autoRecordFailures = 0
 		m.stopWhenMeetingEnds = m.detection.InMeeting
 		m.statusNote = ""
 		m.appState = StateRecording
@@ -218,6 +304,11 @@ func (m Model) handleRecordToggle(msg recordToggleResultMsg) (tea.Model, tea.Cmd
 	m.meetingAbsentSince = time.Time{}
 	if msg.meetingEnded {
 		m.lastAutoStopAt = time.Now()
+		m.recordConfirmDismissed = false
+		m.awaitingRecordConfirm = false
+		m.wantAutoRecordResume = m.autoRecord
+	} else {
+		m.wantAutoRecordResume = false
 	}
 	m.systemBands = nil
 	m.micBands = nil
@@ -235,15 +326,25 @@ func (m Model) handleRecordToggle(msg recordToggleResultMsg) (tea.Model, tea.Cmd
 		m.appState = StateIdle
 	}
 
+	var cmds []tea.Cmd
 	savedDir := msg.savedDir
 	if savedDir == "" {
 		savedDir = st.SessionDir
 	}
 	if savedDir != "" && m.deps.Config.Transcription.AutoAfterRecording {
-		m, cmd := m.startTranscribe(savedDir)
-		return m, tea.Batch(cmd, m.restartHomeLevelsAfterRecord())
+		var transcribeCmd tea.Cmd
+		m, transcribeCmd = m.startTranscribe(savedDir)
+		cmds = append(cmds, transcribeCmd)
 	}
-	return m, m.restartHomeLevelsAfterRecord()
+	cmds = append(cmds, m.restartHomeLevelsAfterRecord())
+	if m.wantAutoRecordResume && m.autoRecord && m.detection.InMeeting && !m.recording {
+		m.recordConfirmDismissed = false
+		m.awaitingRecordConfirm = false
+		model, startCmd := m.dispatchAutoRecordStart(time.Now())
+		m = model
+		cmds = append(cmds, startCmd)
+	}
+	return m, tea.Batch(cmds...)
 }
 
 func (m Model) schedulePoll() tea.Cmd {
@@ -310,7 +411,23 @@ func startRecordingCmd(m Model) tea.Cmd {
 			sessCfg.OnSystemPCM = feeder.FeedSystemPCM
 			sessCfg.OnMicPCM = feeder.FeedMicPCM
 		}
-		err = rec.Start(context.Background(), sessCfg)
+		for attempt := 0; attempt < 3; attempt++ {
+			if attempt > 0 {
+				time.Sleep(time.Duration(attempt) * 300 * time.Millisecond)
+			}
+			attemptStart := time.Now()
+			err = startRecorderWithTimeout(rec, context.Background(), sessCfg)
+			slog.Info("record start attempt",
+				"attempt", attempt+1,
+				"duration_ms", time.Since(attemptStart).Milliseconds(),
+				"err", err,
+				"provider", provider,
+				"in_meeting", inMeeting,
+			)
+			if err == nil {
+				break
+			}
+		}
 		if err != nil {
 			if mon != nil && config.LevelMeterEnabled(cfg) {
 				_ = mon.StartSystem(cfg.Audio.SystemMonitor)
@@ -354,9 +471,16 @@ func stopRecordingCmd(m Model, becauseMeetingEnded bool) tea.Cmd {
 	rec := m.deps.Recorder
 	store := m.deps.Store
 	return func() tea.Msg {
+		stopBegin := time.Now()
 		st := rec.Status()
 		sessionDir := st.SessionDir
 		err := rec.Stop(context.Background())
+		slog.Info("record stop finished",
+			"duration_ms", time.Since(stopBegin).Milliseconds(),
+			"meeting_ended", becauseMeetingEnded,
+			"session_dir", sessionDir,
+			"err", err,
+		)
 		if err != nil {
 			return recordToggleResultMsg{err: err}
 		}

@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"time"
+
 	tea "charm.land/bubbletea/v2"
 	"anoted/internal/tui/components"
 )
@@ -119,14 +121,20 @@ func (m Model) handleHomeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "r":
 		if m.recording {
 			m.recordOpInFlight = true
+			m.recordOpAt = time.Now()
 			return m, stopRecordingCmd(m, false)
 		}
+		m.autoRecordFailures = 0
 		m.recordOpInFlight = true
+		m.recordOpAt = time.Now()
 		return m, startRecordingCmd(m)
 	case "a":
 		m.autoRecord = !m.autoRecord
 		if !m.autoRecord {
 			m.awaitingRecordConfirm = false
+			m.wantAutoRecordResume = false
+			m.autoRecordRetryAfter = time.Time{}
+			m.autoRecordFailures = 0
 			return m, nil
 		}
 		if m.detection.InMeeting && !m.recording {
@@ -138,6 +146,7 @@ func (m Model) handleHomeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			m.recordOpInFlight = true
+			m.recordOpAt = time.Now()
 			return m, startRecordingCmd(m)
 		}
 		return m, nil
@@ -145,6 +154,7 @@ func (m Model) handleHomeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.awaitingRecordConfirm && !m.recording {
 			m.awaitingRecordConfirm = false
 			m.recordOpInFlight = true
+			m.recordOpAt = time.Now()
 			return m, startRecordingCmd(m)
 		}
 		return m, nil

@@ -33,8 +33,16 @@ func shouldBlockAutoStart(recordOpInFlight bool, lastAutoStop, now time.Time) bo
 	if recordOpInFlight {
 		return true
 	}
-	if !lastAutoStop.IsZero() && now.Sub(lastAutoStop) < autoRestartCooldown {
-		return true
+	if lastAutoStop.IsZero() {
+		return false
 	}
-	return false
+	ref := now
+	if ref.IsZero() {
+		ref = time.Now()
+	}
+	elapsed := ref.Sub(lastAutoStop)
+	if elapsed < 0 {
+		return false
+	}
+	return elapsed < autoRestartCooldown
 }

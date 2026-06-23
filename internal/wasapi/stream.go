@@ -4,7 +4,9 @@ package wasapi
 
 import (
 	"fmt"
+	"log/slog"
 	"sync"
+	"time"
 	"unsafe"
 
 	"github.com/gen2brain/malgo"
@@ -43,10 +45,6 @@ type CaptureStreamConfig struct {
 // StartLoopback opens a loopback capture stream.
 func StartLoopback(cfg LoopbackStreamConfig) (*Stream, error) {
 	cfg.SampleRate, cfg.Channels = CanonicalFormat(int(cfg.SampleRate), int(cfg.Channels))
-	ctx, err := Context()
-	if err != nil {
-		return nil, err
-	}
 	s := &Stream{
 		ch:                 make(chan []byte, 16),
 		wake:               make(chan struct{}, 1),
@@ -69,28 +67,42 @@ func StartLoopback(cfg LoopbackStreamConfig) (*Stream, error) {
 		s.push(input)
 	}
 
-	dev, err := malgo.InitDevice(ctx.Context, deviceCfg, malgo.DeviceCallbacks{Data: onData})
+	var dev *malgo.Device
+	err := runOnThread(func() error {
+		begin := time.Now()
+		slog.Info("wasapi device init begin", "kind", "loopback")
+		ctx, err := contextOnWorker()
+		if err != nil {
+			slog.Error("wasapi device init failed", "kind", "loopback", "phase", "context", "duration_ms", time.Since(begin).Milliseconds(), "err", err)
+			return err
+		}
+		dev, err = malgo.InitDevice(ctx.Context, deviceCfg, malgo.DeviceCallbacks{Data: onData})
+		if err != nil {
+			slog.Error("wasapi device init failed", "kind", "loopback", "phase", "init", "duration_ms", time.Since(begin).Milliseconds(), "err", err)
+			return fmt.Errorf("init loopback device: %w", err)
+		}
+		if err := dev.Start(); err != nil {
+			dev.Uninit()
+			dev = nil
+			slog.Error("wasapi device init failed", "kind", "loopback", "phase", "start", "duration_ms", time.Since(begin).Milliseconds(), "err", err)
+			return fmt.Errorf("start loopback device: %w", err)
+		}
+		slog.Info("wasapi device init finished", "kind", "loopback", "duration_ms", time.Since(begin).Milliseconds())
+		return nil
+	})
 	if err != nil {
-		return nil, fmt.Errorf("init loopback device: %w", err)
+		return nil, err
 	}
+
 	s.device = dev
 	s.wg.Add(1)
 	go s.forward()
-	if err := dev.Start(); err != nil {
-		s.stopForward()
-		dev.Uninit()
-		return nil, fmt.Errorf("start loopback device: %w", err)
-	}
 	return s, nil
 }
 
 // StartCapture opens a microphone capture stream.
 func StartCapture(cfg CaptureStreamConfig) (*Stream, error) {
 	cfg.SampleRate, cfg.Channels = CanonicalFormat(int(cfg.SampleRate), int(cfg.Channels))
-	ctx, err := Context()
-	if err != nil {
-		return nil, err
-	}
 	s := &Stream{
 		ch:                 make(chan []byte, 16),
 		wake:               make(chan struct{}, 1),
@@ -113,18 +125,36 @@ func StartCapture(cfg CaptureStreamConfig) (*Stream, error) {
 		s.push(input)
 	}
 
-	dev, err := malgo.InitDevice(ctx.Context, deviceCfg, malgo.DeviceCallbacks{Data: onData})
+	var dev *malgo.Device
+	err := runOnThread(func() error {
+		begin := time.Now()
+		slog.Info("wasapi device init begin", "kind", "capture")
+		ctx, err := contextOnWorker()
+		if err != nil {
+			slog.Error("wasapi device init failed", "kind", "capture", "phase", "context", "duration_ms", time.Since(begin).Milliseconds(), "err", err)
+			return err
+		}
+		dev, err = malgo.InitDevice(ctx.Context, deviceCfg, malgo.DeviceCallbacks{Data: onData})
+		if err != nil {
+			slog.Error("wasapi device init failed", "kind", "capture", "phase", "init", "duration_ms", time.Since(begin).Milliseconds(), "err", err)
+			return fmt.Errorf("init capture device: %w", err)
+		}
+		if err := dev.Start(); err != nil {
+			dev.Uninit()
+			dev = nil
+			slog.Error("wasapi device init failed", "kind", "capture", "phase", "start", "duration_ms", time.Since(begin).Milliseconds(), "err", err)
+			return fmt.Errorf("start capture device: %w", err)
+		}
+		slog.Info("wasapi device init finished", "kind", "capture", "duration_ms", time.Since(begin).Milliseconds())
+		return nil
+	})
 	if err != nil {
-		return nil, fmt.Errorf("init capture device: %w", err)
+		return nil, err
 	}
+
 	s.device = dev
 	s.wg.Add(1)
 	go s.forward()
-	if err := dev.Start(); err != nil {
-		s.stopForward()
-		dev.Uninit()
-		return nil, fmt.Errorf("start capture device: %w", err)
-	}
 	return s, nil
 }
 
@@ -196,8 +226,14 @@ func (s *Stream) Stop() error {
 	s.mu.Unlock()
 
 	if dev != nil {
-		_ = dev.Stop()
-		dev.Uninit()
+		runOnThread(func() error {
+			begin := time.Now()
+			slog.Info("wasapi device uninit begin", "kind", "stream")
+			_ = dev.Stop()
+			dev.Uninit()
+			slog.Info("wasapi device uninit finished", "kind", "stream", "duration_ms", time.Since(begin).Milliseconds())
+			return nil
+		})
 	}
 	s.stopForward()
 	s.wg.Wait()

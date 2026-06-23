@@ -20,6 +20,7 @@ type WindowsWASAPIRecorder struct {
 	cfg    config.Config
 	status RecorderStatus
 	mu     sync.Mutex
+	opMu   sync.Mutex
 
 	dual   *wasapi.DualRecorder
 	writer *WAVWriter
@@ -38,6 +39,18 @@ func NewWindowsWASAPIRecorder(cfg config.Config) (*WindowsWASAPIRecorder, bool) 
 func (r *WindowsWASAPIRecorder) Name() string { return "wasapi" }
 
 func (r *WindowsWASAPIRecorder) Start(_ context.Context, sess SessionConfig) error {
+	r.opMu.Lock()
+	defer r.opMu.Unlock()
+
+	started := time.Now()
+	defer func() {
+		slog.Info("recorder start finished",
+			"backend", r.Name(),
+			"duration_ms", time.Since(started).Milliseconds(),
+			"session_dir", r.status.SessionDir,
+		)
+	}()
+
 	r.mu.Lock()
 	if r.status.Status == StatusRecording {
 		r.mu.Unlock()
@@ -90,6 +103,7 @@ func (r *WindowsWASAPIRecorder) Start(_ context.Context, sess SessionConfig) err
 		OnMicPCM:  sess.OnMicPCM,
 	})
 	if err != nil {
+		slog.Error("wasapi capture start failed", "err", err)
 		return fmt.Errorf("start wasapi capture: %w", err)
 	}
 
@@ -108,9 +122,9 @@ func (r *WindowsWASAPIRecorder) Start(_ context.Context, sess SessionConfig) err
 	r.writer = NewWAVWriter(rate, channels)
 	r.dual = dual
 
-	started := time.Now()
+	recordStarted := time.Now()
 	if err := session.WriteMetadataFile(dir, session.Metadata{
-		StartedAt:          started,
+		StartedAt:          recordStarted,
 		Provider:           sess.Provider,
 		Platform:           sess.Platform,
 		Backend:            r.Name(),
@@ -133,48 +147,79 @@ func (r *WindowsWASAPIRecorder) Start(_ context.Context, sess SessionConfig) err
 		Status:     StatusRecording,
 		Backend:    r.Name(),
 		SessionDir: dir,
-		StartedAt:  started,
+		StartedAt:  recordStarted,
 	}
 	return nil
 }
 
 func (r *WindowsWASAPIRecorder) Stop(_ context.Context) error {
+	r.opMu.Lock()
+	defer r.opMu.Unlock()
+
+	stopBegin := time.Now()
+
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	if r.status.Status != StatusRecording {
+		r.mu.Unlock()
 		return nil
 	}
+	dual := r.dual
+	writer := r.writer
+	sessionDir := r.status.SessionDir
+	startedAt := r.status.StartedAt
+	r.dual = nil
+	r.writer = nil
+	r.status.Status = StatusStopping
+	r.mu.Unlock()
 
-	if r.dual != nil {
-		r.dual.Stop()
-		r.dual = nil
+	if dual != nil {
+		dual.Stop()
 	}
 
-	if r.writer != nil && r.status.SessionDir != "" {
-		path := dirFile(r.status.SessionDir, SessionAudioFile)
-		if err := os.WriteFile(path, r.writer.Bytes(), 0o644); err != nil {
-			r.status.Status = StatusError
-			r.status.Error = err.Error()
-			return fmt.Errorf("write %s: %w", SessionAudioFile, err)
+	var writeErr error
+	if writer != nil && sessionDir != "" {
+		path := dirFile(sessionDir, SessionAudioFile)
+		if err := os.WriteFile(path, writer.Bytes(), 0o644); err != nil {
+			writeErr = fmt.Errorf("write %s: %w", SessionAudioFile, err)
 		}
-		r.writer = nil
 	}
 
 	ended := time.Now()
-	meta := session.Metadata{
-		StartedAt: r.status.StartedAt,
-		EndedAt:   ended,
-		Duration:  ended.Sub(r.status.StartedAt).Round(time.Second).String(),
-		Backend:   r.Name(),
+	var metaErr error
+	if writeErr == nil && sessionDir != "" {
+		meta := session.Metadata{
+			StartedAt: startedAt,
+			EndedAt:   ended,
+			Duration:  ended.Sub(startedAt).Round(time.Second).String(),
+			Backend:   r.Name(),
+		}
+		metaErr = session.WriteMetadataFile(sessionDir, meta)
 	}
-	if err := session.WriteMetadataFile(r.status.SessionDir, meta); err != nil {
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if writeErr != nil {
 		r.status.Status = StatusError
-		r.status.Error = err.Error()
-		return err
+		r.status.Error = writeErr.Error()
+		slog.Error("recorder stop failed", "phase", "write_wav", "err", writeErr,
+			"duration_ms", time.Since(stopBegin).Milliseconds())
+		return writeErr
+	}
+	if metaErr != nil {
+		r.status.Status = StatusError
+		r.status.Error = metaErr.Error()
+		slog.Error("recorder stop failed", "phase", "write_metadata", "err", metaErr,
+			"duration_ms", time.Since(stopBegin).Milliseconds())
+		return metaErr
 	}
 
 	r.status.Status = StatusIdle
 	r.status.StartedAt = time.Time{}
+	slog.Info("recorder stop finished",
+		"backend", r.Name(),
+		"session_dir", sessionDir,
+		"duration_ms", time.Since(stopBegin).Milliseconds(),
+	)
 	return nil
 }
 

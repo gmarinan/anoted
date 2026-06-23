@@ -106,7 +106,7 @@ func watchCmd() *cobra.Command {
 }
 
 func runTUI(cmd *cobra.Command, args []string) error {
-	logger, err := logging.Setup(slog.LevelInfo)
+	logger, err := logging.SetupFile(slog.LevelInfo)
 	if err != nil {
 		return err
 	}

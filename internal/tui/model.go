@@ -66,7 +66,12 @@ type Model struct {
 	stopWhenMeetingEnds     bool
 	meetingAbsentSince    time.Time
 	recordOpInFlight      bool
+	recordOpAt            time.Time
 	lastAutoStopAt        time.Time
+	lastMeetingSessionKey string
+	wantAutoRecordResume  bool
+	autoRecordRetryAfter  time.Time
+	autoRecordFailures    int
 	statusNote              string
 	recordStart  time.Time
 	sessionDir   string
