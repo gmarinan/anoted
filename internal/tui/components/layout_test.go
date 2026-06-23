@@ -32,6 +32,20 @@ func TestPanelLayoutJoinColumnsStacksWhenNarrow(t *testing.T) {
 	}
 }
 
+func TestPadViewFillsTerminal(t *testing.T) {
+	got := PadView("hello", 10, 4)
+	lines := strings.Split(got, "\n")
+	if len(lines) != 4 {
+		t.Fatalf("height: got %d lines want 4", len(lines))
+	}
+	if lipgloss.Width(lines[0]) != 10 {
+		t.Fatalf("width: got %d want 10", lipgloss.Width(lines[0]))
+	}
+	if lines[1] != strings.Repeat(" ", 10) {
+		t.Fatalf("blank line not padded: %q", lines[1])
+	}
+}
+
 func TestFloatCenterPreservesBackgroundBesideModal(t *testing.T) {
 	background := "left text here          right text here\nsecond line left        second right"
 	overlay := lipgloss.NewStyle().

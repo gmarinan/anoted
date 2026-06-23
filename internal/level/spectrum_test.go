@@ -19,7 +19,7 @@ func TestBandsFromPCMNotFlatOnTone(t *testing.T) {
 	// ~440 Hz sine at 16 kHz, one chunk
 	buf := make([]byte, chunkBytes)
 	for i := 0; i < chunkSamples; i++ {
-		v := int16(20000 * math.Sin(2*math.Pi*440*float64(i)/sampleRate))
+		v := int16(20000 * math.Sin(2*math.Pi*440*float64(i)/levelMeterSampleRate))
 		buf[i*2] = byte(v)
 		buf[i*2+1] = byte(v >> 8)
 	}

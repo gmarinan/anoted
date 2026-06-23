@@ -37,6 +37,8 @@ type SessionConfig struct {
 	Channels      int
 	SystemMonitor string
 	Microphone    string
+	OnSystemPCM   func([]byte)
+	OnMicPCM      func([]byte)
 }
 
 // Recorder captures system and microphone audio.

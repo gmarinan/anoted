@@ -5,6 +5,7 @@ package recorder
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"sync"
 	"time"
@@ -38,10 +39,11 @@ func (r *WindowsWASAPIRecorder) Name() string { return "wasapi" }
 
 func (r *WindowsWASAPIRecorder) Start(_ context.Context, sess SessionConfig) error {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	if r.status.Status == StatusRecording {
+		r.mu.Unlock()
 		return fmt.Errorf("already recording")
 	}
+	r.mu.Unlock()
 
 	dir := sessionDir(sess)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -64,14 +66,13 @@ func (r *WindowsWASAPIRecorder) Start(_ context.Context, sess SessionConfig) err
 
 	rate := sess.SampleRate
 	if rate <= 0 {
-		rate = 48000
+		rate = wasapi.CanonicalSampleRate
 	}
 	channels := sess.Channels
 	if channels <= 0 {
-		channels = 2
+		channels = wasapi.CanonicalChannels
 	}
 
-	r.writer = NewWAVWriter(rate, channels)
 	dual, err := wasapi.StartDualRecorder(wasapi.DualRecorderConfig{
 		LoopbackID: loopID,
 		CaptureID:  capID,
@@ -79,30 +80,52 @@ func (r *WindowsWASAPIRecorder) Start(_ context.Context, sess SessionConfig) err
 		Channels:   uint32(channels),
 		OnPCM: func(pcm []byte) {
 			r.mu.Lock()
-			defer r.mu.Unlock()
-			if r.writer != nil {
-				r.writer.WritePCM(pcm)
+			w := r.writer
+			r.mu.Unlock()
+			if w != nil {
+				w.WritePCM(pcm)
 			}
 		},
+		OnLoopPCM: sess.OnSystemPCM,
+		OnMicPCM:  sess.OnMicPCM,
 	})
 	if err != nil {
 		return fmt.Errorf("start wasapi capture: %w", err)
 	}
+
+	diag := dual.Diagnostics()
+	slog.Info("wasapi capture started",
+		"configured_rate", diag.ConfiguredRate,
+		"configured_channels", diag.ConfiguredChannels,
+		"loop_internal_rate", diag.LoopInternalRate,
+		"loop_internal_channels", diag.LoopInternalChannels,
+		"mic_internal_rate", diag.MicInternalRate,
+		"mic_internal_channels", diag.MicInternalChannels,
+	)
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.writer = NewWAVWriter(rate, channels)
 	r.dual = dual
 
 	started := time.Now()
 	if err := session.WriteMetadataFile(dir, session.Metadata{
-		StartedAt:    started,
-		Provider:     sess.Provider,
-		Platform:     sess.Platform,
-		Backend:      r.Name(),
-		SystemDevice: devs.system,
-		MicDevice:    devs.mic,
-		AutoRecord:   sess.AutoRecord,
-		Manual:       sess.Manual,
+		StartedAt:          started,
+		Provider:           sess.Provider,
+		Platform:           sess.Platform,
+		Backend:            r.Name(),
+		SystemDevice:       devs.system,
+		MicDevice:          devs.mic,
+		OutputSampleRate:   rate,
+		Channels:           channels,
+		SystemInternalRate: int(diag.LoopInternalRate),
+		MicInternalRate:    int(diag.MicInternalRate),
+		AutoRecord:         sess.AutoRecord,
+		Manual:             sess.Manual,
 	}); err != nil {
 		r.dual.Stop()
 		r.dual = nil
+		r.writer = nil
 		return err
 	}
 

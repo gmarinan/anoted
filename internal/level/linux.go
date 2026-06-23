@@ -11,11 +11,7 @@ import (
 	"sync"
 )
 
-const (
-	sampleRate   = 16000
-	chunkSamples = 320
-	chunkBytes   = chunkSamples * 2
-)
+const sampleRate = levelMeterSampleRate
 
 type linuxMonitor struct {
 	resolver DeviceResolver

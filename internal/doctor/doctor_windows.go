@@ -25,6 +25,21 @@ func audioDeviceChecks(cfg config.Config) []Check {
 	if cfg.Audio.Microphone != "" {
 		checks = append(checks, Check{Name: "configured_microphone", Status: "ok", Detail: cfg.Audio.Microphone})
 	}
+	checks = append(checks, Check{
+		Name:   "windows_level_meter",
+		Status: "ok",
+		Detail: "System/mic level meters update during recording only (no idle loopback)",
+	})
+	checks = append(checks, Check{
+		Name:   "windows_communications_ducking",
+		Status: "warn",
+		Detail: "Set Sound > Communications to \"Do nothing\" so meeting apps do not duck other audio by 80%",
+	})
+	checks = append(checks, Check{
+		Name:   "windows_output_format",
+		Status: "warn",
+		Detail: "Use a 48000 Hz shared output format for the default playback device (Sound > device Properties > Advanced)",
+	})
 	return checks
 }
 

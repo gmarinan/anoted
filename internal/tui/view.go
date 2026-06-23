@@ -33,7 +33,8 @@ func (m Model) View() tea.View {
 	footer := components.FooterForTab(tab, m.awaitingRecordConfirm, m.sessionsFooter(), m.configFooter(), m.configSavedMsg, m.configErr, m.width)
 	content.WriteString(components.FooterBar(footer, m.width))
 
-	v := tea.NewView(content.String())
+	body := components.PadView(content.String(), m.width, m.height)
+	v := tea.NewView(body)
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
 	v.WindowTitle = "anoted"

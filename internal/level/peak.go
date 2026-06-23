@@ -29,3 +29,12 @@ func smoothPeak(prev, sample float64) float64 {
 	}
 	return math.Max(sample, prev*decayRate)
 }
+
+// peakBands builds a flat spectrum from a peak for lightweight recording feeds.
+func peakBands(prev []float64, peak float64) []float64 {
+	target := make([]float64, BandCount)
+	for i := range target {
+		target[i] = peak
+	}
+	return smoothBands(prev, target)
+}

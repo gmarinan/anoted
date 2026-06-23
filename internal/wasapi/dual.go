@@ -5,17 +5,30 @@ package wasapi
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/gen2brain/malgo"
 )
 
+// CaptureDiagnostics reports configured and native capture parameters.
+type CaptureDiagnostics struct {
+	ConfiguredRate       uint32
+	ConfiguredChannels   uint32
+	LoopInternalRate     uint32
+	LoopInternalChannels uint32
+	MicInternalRate      uint32
+	MicInternalChannels  uint32
+}
+
 // DualRecorder mixes loopback and microphone into a PCM sink.
 type DualRecorder struct {
-	loop   *Stream
-	mic    *Stream
-	cancel context.CancelFunc
-	wg     sync.WaitGroup
-	onPCM  func([]byte)
+	loop       *Stream
+	mic        *Stream
+	cancel     context.CancelFunc
+	wg         sync.WaitGroup
+	mixer      *MasterClockMixer
+	sampleRate uint32
+	channels   uint32
 }
 
 // DualRecorderConfig configures dual capture.
@@ -25,10 +38,13 @@ type DualRecorderConfig struct {
 	SampleRate uint32
 	Channels   uint32
 	OnPCM      func([]byte)
+	OnLoopPCM  func([]byte)
+	OnMicPCM   func([]byte)
 }
 
 // StartDualRecorder begins loopback + mic capture and invokes onPCM with mixed s16le frames.
 func StartDualRecorder(cfg DualRecorderConfig) (*DualRecorder, error) {
+	cfg.SampleRate, cfg.Channels = CanonicalFormat(int(cfg.SampleRate), int(cfg.Channels))
 	if cfg.OnPCM == nil {
 		cfg.OnPCM = func([]byte) {}
 	}
@@ -52,56 +68,85 @@ func StartDualRecorder(cfg DualRecorderConfig) (*DualRecorder, error) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	r := &DualRecorder{
-		loop:   loop,
-		mic:    mic,
-		cancel: cancel,
-		onPCM:  cfg.OnPCM,
+		loop:       loop,
+		mic:        mic,
+		cancel:     cancel,
+		sampleRate: cfg.SampleRate,
+		channels:   cfg.Channels,
+		mixer: NewMasterClockMixer(int(cfg.SampleRate), int(cfg.Channels), func(pcm []byte) {
+			cfg.OnPCM(pcm)
+		}),
 	}
 	r.wg.Add(1)
-	go r.run(ctx)
+	go r.run(ctx, cfg.OnLoopPCM, cfg.OnMicPCM)
 	return r, nil
 }
 
-func (r *DualRecorder) run(ctx context.Context) {
+func (r *DualRecorder) run(ctx context.Context, onLoopPCM, onMicPCM func([]byte)) {
 	defer r.wg.Done()
-	var pendingA, pendingB []byte
-	var mixBuf []byte
+	ticker := time.NewTicker(r.mixer.TickInterval())
+	defer ticker.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-ticker.C:
+			r.mixer.EmitTicks()
 		case chunk, ok := <-r.loop.Ch():
 			if !ok {
 				return
 			}
-			pendingA = append(pendingA, chunk...)
-			mixBuf, pendingA, pendingB = r.drain(pendingA, pendingB, mixBuf)
+			if onLoopPCM != nil {
+				onLoopPCM(chunk)
+			}
+			r.mixer.PushLoop(chunk)
 		case chunk, ok := <-r.mic.Ch():
 			if !ok {
 				return
 			}
-			pendingB = append(pendingB, chunk...)
-			mixBuf, pendingA, pendingB = r.drain(pendingA, pendingB, mixBuf)
+			if onMicPCM != nil {
+				onMicPCM(chunk)
+			}
+			r.mixer.PushMic(chunk)
 		}
 	}
 }
 
-func (r *DualRecorder) drain(a, b, mixBuf []byte) ([]byte, []byte, []byte) {
-	frameBytes := 4 // stereo s16
-	for len(a) >= frameBytes || len(b) >= frameBytes {
-		var fa, fb []byte
-		if len(a) >= frameBytes {
-			fa = a[:frameBytes]
-			a = a[frameBytes:]
-		}
-		if len(b) >= frameBytes {
-			fb = b[:frameBytes]
-			b = b[frameBytes:]
-		}
-		mixBuf = MixS16(mixBuf[:0], fa, fb)
-		r.onPCM(mixBuf)
+// SampleRate returns the configured capture sample rate.
+func (r *DualRecorder) SampleRate() uint32 {
+	if r.sampleRate > 0 {
+		return r.sampleRate
 	}
-	return mixBuf, a, b
+	if r.loop != nil {
+		return r.loop.SampleRate()
+	}
+	return CanonicalSampleRate
+}
+
+// Channels returns the configured capture channel count.
+func (r *DualRecorder) Channels() uint32 {
+	if r.channels > 0 {
+		return r.channels
+	}
+	return CanonicalChannels
+}
+
+// Diagnostics returns configured and native capture parameters.
+func (r *DualRecorder) Diagnostics() CaptureDiagnostics {
+	d := CaptureDiagnostics{
+		ConfiguredRate:     r.SampleRate(),
+		ConfiguredChannels: r.Channels(),
+	}
+	if r.loop != nil {
+		d.LoopInternalRate = r.loop.InternalSampleRate()
+		d.LoopInternalChannels = uint32(r.loop.InternalChannels())
+	}
+	if r.mic != nil {
+		d.MicInternalRate = r.mic.InternalSampleRate()
+		d.MicInternalChannels = uint32(r.mic.InternalChannels())
+	}
+	return d
 }
 
 // Stop ends capture and waits for the mixer goroutine.

@@ -43,24 +43,24 @@ func (d *windowsDetector) pollWindow(ctx context.Context, mode string) (Snapshot
 
 	procs, err := listProcesses(ctx)
 	if err != nil {
-		return Snapshot{State: state, CheckedAt: time.Now()}, err
+		state.Warning = "process list unavailable: " + err.Error()
+	} else {
+		teamsProcs := map[string]bool{
+			"ms-teams": true, "teams": true, "msteams": true,
+		}
+
+		for _, p := range procs {
+			base := strings.ToLower(strings.TrimSuffix(p, ".exe"))
+			if teamsProcs[base] {
+				state.InMeeting = true
+				state.Provider = ProviderTeams
+				state.Browser = base
+				break
+			}
+		}
 	}
 
 	titles := d.windowTitles(ctx)
-
-	teamsProcs := map[string]bool{
-		"ms-teams": true, "teams": true, "msteams": true,
-	}
-
-	for _, p := range procs {
-		base := strings.ToLower(strings.TrimSuffix(p, ".exe"))
-		if teamsProcs[base] {
-			state.InMeeting = true
-			state.Provider = ProviderTeams
-			state.Browser = base
-			break
-		}
-	}
 
 	for _, title := range titles {
 		if provider := MatchProvider(title, d.cfg.Providers); provider != ProviderUnknown {

@@ -139,6 +139,29 @@ func LoopbackName(stored string) (string, error) {
 	return stored, nil
 }
 
+// NativeSampleRate returns the preferred sample rate for a device endpoint.
+func NativeSampleRate(id malgo.DeviceID, kind malgo.DeviceType) (uint32, error) {
+	ctx, err := Context()
+	if err != nil {
+		return 0, err
+	}
+	info, err := ctx.DeviceInfo(kind, id, malgo.Shared)
+	if err != nil {
+		return 0, fmt.Errorf("device info: %w", err)
+	}
+	if info.FormatCount == 0 {
+		return 48000, nil
+	}
+	for _, prefer := range []uint32{48000, 44100, 96000, 88200} {
+		for _, f := range info.Formats {
+			if f.SampleRate == prefer {
+				return prefer, nil
+			}
+		}
+	}
+	return info.Formats[0].SampleRate, nil
+}
+
 func formatSummary(d *malgo.DeviceInfo) string {
 	if d == nil || d.FormatCount == 0 {
 		return ""

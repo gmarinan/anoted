@@ -33,9 +33,13 @@ type Metadata struct {
 	Provider     Provider  `json:"provider"`
 	Platform     string    `json:"platform"`
 	Backend      string    `json:"backend"`
-	SystemDevice string    `json:"system_device,omitempty"`
-	MicDevice    string    `json:"mic_device,omitempty"`
-	AutoRecord   bool      `json:"auto_record"`
+	SystemDevice       string    `json:"system_device,omitempty"`
+	MicDevice          string    `json:"mic_device,omitempty"`
+	OutputSampleRate   int       `json:"output_sample_rate,omitempty"`
+	Channels           int       `json:"channels,omitempty"`
+	SystemInternalRate int       `json:"system_internal_rate,omitempty"`
+	MicInternalRate    int       `json:"mic_internal_rate,omitempty"`
+	AutoRecord         bool      `json:"auto_record"`
 	Manual       bool      `json:"manual"`
 }
 

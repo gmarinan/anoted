@@ -2,15 +2,23 @@ package tui
 
 import (
 	"context"
+	"os"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/term"
+	"anoted/internal/config"
+	"anoted/internal/level"
 	"anoted/internal/recorder"
 	"anoted/internal/session"
 )
 
+const windowSizePollInterval = 200 * time.Millisecond
+
 func (m Model) Init() tea.Cmd {
 	return tea.Batch(
+		readWindowSizeCmd(),
+		m.scheduleWindowSizePoll(),
 		m.schedulePoll(),
 		m.scheduleDurationTick(),
 		resolveDeviceLabelsCmd(m),
@@ -32,15 +40,27 @@ func (m Model) loadSessionsCmd() tea.Cmd {
 	}
 }
 
+type windowSizePollTickMsg struct{}
+
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
 	case sessionScrollTickMsg:
 		return m.handleSessionScrollTick()
+	case windowSizePollTickMsg:
+		return m, tea.Batch(readWindowSizeCmd(), m.scheduleWindowSizePoll())
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
+		resized := m.width != msg.Width || m.height != msg.Height
+		if msg.Width > 0 {
+			m.width = msg.Width
+		}
+		if msg.Height > 0 {
+			m.height = msg.Height
+		}
+		if resized {
+			return m, tea.ClearScreen
+		}
 		return m, nil
 	case pollTickMsg:
 		return m, tea.Batch(m.pollDetection(), m.schedulePoll())
@@ -103,10 +123,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleDetection(msg detectionResultMsg) (tea.Model, tea.Cmd) {
-	m.appState = StateDetecting
 	if msg.err != nil {
-		m.appState = StateError
-		m.errMsg = msg.err.Error()
+		if m.recording {
+			m.appState = StateRecording
+		} else if m.detection.InMeeting {
+			m.appState = StateInMeeting
+		} else {
+			m.appState = StateIdle
+		}
 		return m, nil
 	}
 
@@ -161,12 +185,14 @@ func (m Model) handleRecordToggle(msg recordToggleResultMsg) (tea.Model, tea.Cmd
 		m.stopWhenMeetingEnds = m.detection.InMeeting
 		m.statusNote = ""
 		m.appState = StateRecording
+		m.systemBands = nil
 		m.micBands = nil
-		return m, tea.Batch(m.scheduleDurationTick(), m.startMicLevelCmd())
+		return m, m.scheduleDurationTick()
 	}
 
 	m.recording = false
 	m.stopWhenMeetingEnds = false
+	m.systemBands = nil
 	m.micBands = nil
 	if msg.meetingEnded && msg.savedDir != "" {
 		m.statusNote = "Meeting ended — saved to " + msg.savedDir
@@ -188,13 +214,19 @@ func (m Model) handleRecordToggle(msg recordToggleResultMsg) (tea.Model, tea.Cmd
 	}
 	if savedDir != "" && m.deps.Config.Transcription.AutoAfterRecording {
 		m, cmd := m.startTranscribe(savedDir)
-		return m, tea.Batch(cmd, m.stopMicLevelCmd())
+		return m, tea.Batch(cmd, m.restartHomeLevelsAfterRecord())
 	}
-	return m, m.stopMicLevelCmd()
+	return m, m.restartHomeLevelsAfterRecord()
 }
 
 func (m Model) schedulePoll() tea.Cmd {
 	return tea.Tick(m.pollInterval(), func(time.Time) tea.Msg { return pollTickMsg{} })
+}
+
+func (m Model) scheduleWindowSizePoll() tea.Cmd {
+	return tea.Tick(windowSizePollInterval, func(time.Time) tea.Msg {
+		return windowSizePollTickMsg{}
+	})
 }
 
 func (m Model) scheduleDurationTick() tea.Cmd {
@@ -216,6 +248,7 @@ func startRecordingCmd(m Model) tea.Cmd {
 	rec := m.deps.Recorder
 	store := m.deps.Store
 	cfg := m.deps.Config
+	mon := m.deps.LevelMonitor
 	provider := m.provider
 	autoRecord := m.autoRecord
 	inMeeting := m.detection.InMeeting
@@ -224,6 +257,11 @@ func startRecordingCmd(m Model) tea.Cmd {
 	channels := m.deps.Config.Audio.Channels
 
 	return func() tea.Msg {
+		if mon != nil {
+			_ = mon.StopSystem()
+			_ = mon.StopMic()
+		}
+
 		outRoot, err := cfg.ResolvedOutputDir()
 		if err != nil {
 			return recordToggleResultMsg{err: err}
@@ -240,8 +278,16 @@ func startRecordingCmd(m Model) tea.Cmd {
 			SystemMonitor: cfg.Audio.SystemMonitor,
 			Microphone:    cfg.Audio.Microphone,
 		}
+		if feeder, ok := mon.(level.PCMFeedConfig); ok {
+			feeder.SetFeedChannels(channels)
+			sessCfg.OnSystemPCM = feeder.FeedSystemPCM
+			sessCfg.OnMicPCM = feeder.FeedMicPCM
+		}
 		err = rec.Start(context.Background(), sessCfg)
 		if err != nil {
+			if mon != nil && config.LevelMeterEnabled(cfg) {
+				_ = mon.StartSystem(cfg.Audio.SystemMonitor)
+			}
 			return recordToggleResultMsg{err: err}
 		}
 		st := rec.Status()
@@ -265,6 +311,16 @@ func startRecordingCmd(m Model) tea.Cmd {
 		}
 		return recordToggleResultMsg{recording: true}
 	}
+}
+
+func (m Model) restartHomeLevelsAfterRecord() tea.Cmd {
+	if m.screen != ScreenMain || !m.levelMeterEnabled() {
+		return nil
+	}
+	if m.deps.LevelMonitor == nil || !m.deps.LevelMonitor.Available() {
+		return nil
+	}
+	return m.startSystemLevelCmd()
 }
 
 func stopRecordingCmd(m Model, becauseMeetingEnded bool) tea.Cmd {
@@ -301,4 +357,17 @@ func sessionProvider(name string) session.Provider {
 		return session.ProviderUnknown
 	}
 	return session.Provider(name)
+}
+
+func readWindowSizeCmd() tea.Cmd {
+	return func() tea.Msg {
+		w, h, err := term.GetSize(os.Stdout.Fd())
+		if err != nil || w <= 0 {
+			w = 80
+		}
+		if h <= 0 {
+			h = 24
+		}
+		return tea.WindowSizeMsg{Width: w, Height: h}
+	}
 }

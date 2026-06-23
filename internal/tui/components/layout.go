@@ -154,11 +154,24 @@ func (p PanelLayout) FullWidth() int {
 // JoinColumns places panels side-by-side or stacked vertically based on width.
 func (p PanelLayout) JoinColumns(left, right string) string {
 	if !p.TwoColumn() {
-		return JoinBlocksVertical(left, right)
+		return PadLineBlock(JoinBlocksVertical(left, right), p.Width)
 	}
 	left, right = EqualizeBoxHeights(left, right)
 	gap := strings.Repeat(" ", panelColumnGap)
-	return lipgloss.JoinHorizontal(lipgloss.Top, left, gap, right)
+	joined := lipgloss.JoinHorizontal(lipgloss.Top, left, gap, right)
+	return PadLineBlock(joined, p.Width)
+}
+
+// PadLineBlock pads every line in a block to the target width.
+func PadLineBlock(block string, width int) string {
+	if width <= 0 || strings.TrimSpace(block) == "" {
+		return block
+	}
+	lines := strings.Split(strings.TrimRight(block, "\n"), "\n")
+	for i, line := range lines {
+		lines[i] = padLineWidth(line, width)
+	}
+	return strings.Join(lines, "\n")
 }
 
 // JoinBlocksVertical stacks rendered panels with blank lines between them.
@@ -255,6 +268,35 @@ func FooterWithTrailingStatus(hints, status string, width int) string {
 		return JoinFooter(hints, status)
 	}
 	return hints + strings.Repeat(" ", gap) + status
+}
+
+// PadView expands content to fill the terminal, avoiding uncleared cells
+// after resize (notably on Windows Terminal alt-screen).
+func PadView(content string, width, height int) string {
+	if width <= 0 {
+		return content
+	}
+	lines := strings.Split(strings.TrimRight(content, "\n"), "\n")
+	if len(lines) == 1 && lines[0] == "" {
+		lines = nil
+	}
+	out := make([]string, 0, height)
+	for _, line := range lines {
+		out = append(out, padLineWidth(line, width))
+	}
+	blank := strings.Repeat(" ", width)
+	for height > 0 && len(out) < height {
+		out = append(out, blank)
+	}
+	return strings.Join(out, "\n")
+}
+
+func padLineWidth(line string, width int) string {
+	gap := width - lipgloss.Width(line)
+	if gap <= 0 {
+		return line
+	}
+	return line + strings.Repeat(" ", gap)
 }
 
 // FloatCenter overlays content centered on a dimmed background.

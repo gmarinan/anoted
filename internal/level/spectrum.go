@@ -9,9 +9,12 @@ import (
 const BandCount = 32
 
 const (
-	fftSize    = 256
-	minBandHz  = 80.0
-	maxBandDiv = 2.5 // use up to Nyquist / 2.5
+	fftSize              = 256
+	minBandHz            = 80.0
+	maxBandDiv           = 2.5 // use up to Nyquist / 2.5
+	levelMeterSampleRate = 16000
+	chunkSamples         = 320
+	chunkBytes           = chunkSamples * 2
 )
 
 // bandsFromPCM derives log-spaced frequency band levels from a mono s16le chunk.
@@ -23,7 +26,7 @@ func bandsFromPCM(buf []byte) []float64 {
 		return make([]float64, BandCount)
 	}
 	mags := fftMagnitudes(samples)
-	raw := groupBands(mags, BandCount, sampleRate, fftSize)
+	raw := groupBands(mags, BandCount, levelMeterSampleRate, fftSize)
 	out := make([]float64, BandCount)
 	const bandGain = 18.0
 	for i, b := range raw {
