@@ -186,7 +186,12 @@ func Save(path string, cfg Config) error {
 		return fmt.Errorf("create config dir: %w", err)
 	}
 
-	if err := os.WriteFile(path, data, 0o644); err != nil {
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+		return fmt.Errorf("write config %s: %w", tmp, err)
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		_ = os.Remove(tmp)
 		return fmt.Errorf("write config %s: %w", path, err)
 	}
 	return nil

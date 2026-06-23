@@ -1,11 +1,13 @@
 package transcribe
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 
 	"anoted/internal/config"
 )
@@ -77,6 +79,10 @@ func ManagedWhisperInstalled() bool {
 // InstallManaged creates/updates the anoted venv with CPU PyTorch + openai-whisper.
 // No root required; downloads from PyPI (~400–600 MB).
 func InstallManaged(out io.Writer) error {
+	return installManaged(out, os.Stdout, os.Stderr)
+}
+
+func installManaged(progress, stdout, stderr io.Writer) error {
 	py, err := findPython()
 	if err != nil {
 		return err
@@ -89,32 +95,36 @@ func InstallManaged(out io.Writer) error {
 
 	python := venvPythonPath(venv)
 	if _, err := os.Stat(python); err != nil {
-		fmt.Fprintf(out, "  Creating venv at %s\n", venv)
-		if err := runCmd(py, "-m", "venv", venv); err != nil {
-			return fmt.Errorf("create venv: %w", err)
+		fmt.Fprintf(progress, "  Creating venv at %s\n", venv)
+		if err := runCmd(stdout, stderr, py, "-m", "venv", venv); err != nil {
+			return formatCmdError("create venv", err)
 		}
 	}
 
-	pip := venvPipPath(venv)
 	steps := []struct {
 		desc string
 		args []string
+		soft bool
 	}{
-		{"Upgrading pip", []string{pip, "install", "-U", "pip"}},
-		{"Installing PyTorch (CPU)", []string{pip, "install", "torch", "--index-url", "https://download.pytorch.org/whl/cpu"}},
-		{"Installing openai-whisper", []string{pip, "install", "-U", "openai-whisper"}},
+		{"Upgrading pip", []string{python, "-m", "pip", "install", "-U", "pip"}, true},
+		{"Installing PyTorch (CPU)", []string{python, "-m", "pip", "install", "torch", "--index-url", "https://download.pytorch.org/whl/cpu"}, false},
+		{"Installing openai-whisper", []string{python, "-m", "pip", "install", "-U", "openai-whisper"}, false},
 	}
 	for _, step := range steps {
-		fmt.Fprintf(out, "  %s…\n", step.desc)
-		if err := runCmd(step.args...); err != nil {
-			return fmt.Errorf("%s: %w", step.desc, err)
+		fmt.Fprintf(progress, "  %s…\n", step.desc)
+		if err := runCmd(stdout, stderr, step.args...); err != nil {
+			if step.soft {
+				fmt.Fprintf(progress, "  ! pip upgrade skipped: %v\n", err)
+				continue
+			}
+			return formatCmdError(step.desc, err)
 		}
 	}
 
 	if !ManagedWhisperInstalled() {
 		return fmt.Errorf("whisper binary missing after install")
 	}
-	fmt.Fprintf(out, "  ✓ Installed: %s\n", ManagedWhisperBinary())
+	fmt.Fprintf(progress, "  ✓ Installed: %s\n", ManagedWhisperBinary())
 	return nil
 }
 
@@ -123,7 +133,7 @@ func UpgradeManagedTorchCUDA(out io.Writer) error {
 	if !ManagedWhisperInstalled() {
 		return fmt.Errorf("managed venv not installed — run anoted setup first")
 	}
-	pip := venvPipPath(resolveManagedVenvDir())
+	python := venvPythonPath(resolveManagedVenvDir())
 	indexes := []string{
 		"https://download.pytorch.org/whl/cu126",
 		"https://download.pytorch.org/whl/cu124",
@@ -132,7 +142,7 @@ func UpgradeManagedTorchCUDA(out io.Writer) error {
 	var lastErr error
 	for _, idx := range indexes {
 		fmt.Fprintf(out, "  Installing PyTorch (CUDA) from %s…\n", idx)
-		err := runCmd(pip, "install", "-U", "torch", "--index-url", idx)
+		err := runCmd(os.Stdout, os.Stderr, python, "-m", "pip", "install", "-U", "torch", "--index-url", idx)
 		if err != nil {
 			lastErr = err
 			continue
@@ -155,52 +165,38 @@ func ManagedTorchCUDAAvailable() bool {
 	return cmd.Run() == nil
 }
 
-func runCmd(args ...string) error {
+func runCmd(stdout, stderr io.Writer, args ...string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("empty command")
 	}
 	cmd := exec.Command(args[0], args[1:]...)
 	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
 	return cmd.Run()
 }
 
+func formatCmdError(step string, err error) error {
+	if err == nil {
+		return nil
+	}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && runtime.GOOS == "windows" && exitErr.ExitCode() == 9009 {
+		return fmt.Errorf("%s: command not found (exit 9009) — install Python and ensure it is on PATH, or run: %s", step, PythonInstallHint())
+	}
+	return fmt.Errorf("%s: %w", step, err)
+}
+
 func findPython() (string, error) {
-	if py := firstPython(); py != "" {
+	if py := discoverPython(); py != "" {
 		return py, nil
 	}
-	return "", fmt.Errorf("python3 not found — %s", PythonInstallHint())
+	return "", fmt.Errorf("python not found — %s", PythonInstallHint())
 }
 
 // FindPython returns the resolved Python interpreter path.
 func FindPython() (string, error) {
 	return findPython()
-}
-
-var pythonCandidates = []string{
-	"python3",
-	"python",
-	"/usr/bin/python3",
-	"/usr/bin/python",
-	"/usr/local/bin/python3",
-}
-
-func firstPython() string {
-	for _, name := range pythonCandidates {
-		if path, ok := resolvePython(name); ok {
-			return path
-		}
-	}
-	return ""
-}
-
-func resolvePython(name string) (string, bool) {
-	path, err := exec.LookPath(name)
-	if err != nil {
-		return "", false
-	}
-	return path, true
 }
 
 func hasCmd(name string) bool {

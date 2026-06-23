@@ -12,6 +12,7 @@ import (
 	"anoted/internal/platform"
 	"anoted/internal/recorder"
 	"anoted/internal/session"
+	"anoted/internal/setup"
 	"anoted/internal/transcribe"
 	"anoted/internal/tui/components"
 )
@@ -84,6 +85,9 @@ type Model struct {
 	height       int
 	quitting     bool
 
+	quitConfirmOpen   bool
+	quitConfirmCursor int
+
 	// Resolved device labels for display
 	systemDevice string
 	micDevice    string
@@ -124,6 +128,16 @@ type Model struct {
 	transcribeBlink      bool
 	transcribeCancel     context.CancelFunc
 
+	whisperInstallActive bool
+	whisperInstallLog    []string
+	whisperInstallErr    string
+	whisperInstallCancel context.CancelFunc
+
+	setupOpen     bool
+	setupWizard   setup.WizardState
+	setupSummary  []string
+	setupCancel   context.CancelFunc
+
 	sessionsOpenerPicker bool
 	sessionsOpenerCursor int
 	sessionsDesktopNote  string
@@ -134,14 +148,18 @@ type Model struct {
 
 // NewModel creates the initial TUI model.
 func NewModel(deps Deps) Model {
-	return Model{
+	m := Model{
 		deps:       deps,
 		screen:     ScreenMain,
 		appState:   StateIdle,
 		provider:   "none",
-		autoRecord:   deps.Config.AutoRecord,
-		recStatus:    deps.Recorder.Status(),
+		autoRecord: deps.Config.AutoRecord,
+		recStatus:  deps.Recorder.Status(),
 	}
+	if setup.NeedsSetup(deps.Config, deps.Platform) {
+		m = m.openSetupWizard()
+	}
+	return m
 }
 
 func (m Model) pollInterval() time.Duration {

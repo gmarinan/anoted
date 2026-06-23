@@ -170,5 +170,5 @@ func installWhisper(out io.Writer, autoInstall bool) error {
 			return err
 		}
 	}
-	return transcribe.InstallManaged(out)
+	return transcribe.EnsureWhisper(out, autoInstall)
 }

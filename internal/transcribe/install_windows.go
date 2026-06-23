@@ -26,5 +26,5 @@ func WhisperCppHint() string {
 
 // PythonInstallHint returns how to install Python on Windows.
 func PythonInstallHint() string {
-	return "install: winget install Python.Python.3.12"
+	return "run anoted setup (auto-installs via winget) or: winget install Python.Python.3.12"
 }

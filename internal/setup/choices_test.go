@@ -25,7 +25,21 @@ func TestNeedsSetupCompleted(t *testing.T) {
 	}
 }
 
-func TestChooseDetectionModeDefault(t *testing.T) {
+func TestDetectionChoicesWindowsDefault(t *testing.T) {
+	plat := platform.Info{OS: platform.OSWindows, Session: "windows"}
+	choices := DetectionChoices(plat)
+	if len(choices) < 2 {
+		t.Fatalf("expected choices, got %d", len(choices))
+	}
+	if choices[0].Mode != DetMic || !choices[0].Recommended {
+		t.Fatalf("first choice should be recommended mic, got %+v", choices[0])
+	}
+	if DefaultDetectionMode(plat) != DetMic {
+		t.Fatalf("default mode should be mic")
+	}
+}
+
+func TestChooseDetectionModeDefaultLinux(t *testing.T) {
 	got := chooseDetectionMode(strings.NewReader("\n"), &strings.Builder{}, platform.Info{Session: "x11"})
 	if got != DetMic {
 		t.Fatalf("got %q", got)

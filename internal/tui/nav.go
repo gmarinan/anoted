@@ -50,27 +50,20 @@ func (m Model) switchTab(tab components.TabID) (tea.Model, tea.Cmd) {
 func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 
+	if m.setupOpen {
+		if key == "q" || key == "ctrl+c" {
+			return m.requestQuit()
+		}
+		return m.handleSetupKey(key)
+	}
+
+	if m.quitConfirmOpen {
+		return m.handleQuitConfirmKey(key)
+	}
+
 	switch key {
 	case "q", "ctrl+c":
-		m.quitting = true
-		m.levelGen++
-		m = m.cancelTranscribeOnQuit()
-		var cmds []tea.Cmd
-		if m.deps.LevelMonitor != nil {
-			cmds = append(cmds, func() tea.Msg {
-				_ = m.deps.LevelMonitor.Close()
-				return levelStopMsg{}
-			})
-		}
-		if m.recording {
-			cmds = append(cmds, stopRecordingCmd(m, false), tea.Quit)
-			return m, tea.Sequence(cmds...)
-		}
-		if len(cmds) > 0 {
-			cmds = append(cmds, tea.Quit)
-			return m, tea.Sequence(cmds...)
-		}
-		return m, tea.Quit
+		return m.requestQuit()
 	}
 
 	if m.screen == ScreenConfig {
@@ -97,6 +90,12 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch key {
 	case "R":
 		return m.handleRefresh()
+	case "i":
+		if m.whisperCanInstall() {
+			return m.startWhisperInstall()
+		}
+	case "S":
+		return m.openSetupWizard(), nil
 	}
 	return m, nil
 }

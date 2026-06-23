@@ -48,7 +48,7 @@ func TestInstallHint(t *testing.T) {
 
 func TestFirstPythonAbsolute(t *testing.T) {
 	t.Setenv("PATH", "/bin")
-	py := firstPython()
+	py := discoverPython()
 	if py == "" {
 		t.Skip("no python at standard paths")
 	}

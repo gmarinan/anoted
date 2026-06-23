@@ -18,6 +18,8 @@ func DoctorChecks(cfg config.Config) []Check {
 	tcfg := cfg.Transcription
 	var checks []Check
 
+	checks = append(checks, pythonCheck())
+
 	bin, backend, err := resolveBinary(tcfg)
 	if err != nil {
 		checks = append(checks, Check{
@@ -82,6 +84,13 @@ func gpuCheck(cfg config.TranscriptionConfig) []Check {
 		return []Check{{Name: "transcription_gpu", Status: "ok", Detail: "auto → CUDA"}}
 	}
 	return []Check{{Name: "transcription_gpu", Status: "ok", Detail: "CPU"}}
+}
+
+func pythonCheck() Check {
+	if py := discoverPython(); py != "" {
+		return Check{Name: "python", Status: "ok", Detail: py}
+	}
+	return Check{Name: "python", Status: "warn", Detail: "not found — " + PythonInstallHint()}
 }
 
 // Verify runs a lightweight availability check.

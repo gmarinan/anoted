@@ -119,6 +119,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleTranscribeEnvelope(msg)
 	case transcribeBlinkMsg:
 		return m.handleTranscribeBlink()
+	case whisperInstallEnvelopeMsg:
+		return m.handleWhisperInstallEnvelope(msg)
+	case whisperInstallSavedMsg:
+		return m.handleWhisperInstallSaved(msg)
+	case setupInstallEnvelopeMsg:
+		return m.handleSetupInstallEnvelope(msg)
 	case deviceLabelsMsg:
 		m = m.handleDeviceLabels(msg)
 		return m, nil

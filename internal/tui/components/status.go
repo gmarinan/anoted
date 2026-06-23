@@ -14,8 +14,17 @@ const (
 	SessionsFooterDeleteConfirm
 )
 
+// DoctorFooterMode selects footer shortcuts on the Doctor screen.
+type DoctorFooterMode int
+
+const (
+	DoctorFooterNormal DoctorFooterMode = iota
+	DoctorFooterCanInstall
+	DoctorFooterInstalling
+)
+
 // FooterForTab returns context-sensitive footer shortcuts.
-func FooterForTab(tab TabID, awaitingConfirm bool, sessionsMode SessionsFooterMode, configMode ConfigFooterMode, configSaved, configErr string, width int) string {
+func FooterForTab(tab TabID, awaitingConfirm bool, sessionsMode SessionsFooterMode, doctorMode DoctorFooterMode, configMode ConfigFooterMode, configSaved, configErr string, width int) string {
 	switch tab {
 	case TabHome:
 		if sessionsMode == SessionsFooterDeleteConfirm {
@@ -49,11 +58,12 @@ func FooterForTab(tab TabID, awaitingConfirm bool, sessionsMode SessionsFooterMo
 				FooterHint("o", "open folder"),
 				FooterHint("r", "record"),
 				FooterHint("R", "refresh"),
-				FooterHint("q", "quit"),
+				FooterHint("q", "quit…"),
 			)
 		}
 		return JoinFooter(
 			FooterHint("r", "record"),
+			FooterHint("S", "setup"),
 			FooterHint("a", "auto-record"),
 			FooterHint("↑↓", "navigate"),
 			FooterHint("t", "transcribe"),
@@ -65,7 +75,22 @@ func FooterForTab(tab TabID, awaitingConfirm bool, sessionsMode SessionsFooterMo
 			FooterHint("q", "quit"),
 		)
 	case TabDoctor:
+		if doctorMode == DoctorFooterInstalling {
+			return JoinFooter(
+				FooterHint("installing", "whisper…"),
+				FooterHint("R", "refresh"),
+				FooterHint("q", "quit"),
+			)
+		}
+		if doctorMode == DoctorFooterCanInstall {
+			return JoinFooter(
+				FooterHint("i", "install whisper"),
+				FooterHint("R", "refresh"),
+				FooterHint("q", "quit"),
+			)
+		}
 		return JoinFooter(
+			FooterHint("S", "setup"),
 			FooterHint("R", "refresh"),
 			FooterHint("q", "quit"),
 		)

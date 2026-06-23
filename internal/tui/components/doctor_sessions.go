@@ -15,15 +15,19 @@ import (
 
 // DoctorView renders the Doctor tab.
 type DoctorView struct {
-	Report        doctor.Report
-	AppState      string
-	Platform      string
-	Backend       string
-	Provider      string
-	SystemDevice  string
-	MicDevice     string
-	DetectionWarn string
-	Width         int
+	Report               doctor.Report
+	AppState             string
+	Platform             string
+	Backend              string
+	Provider             string
+	SystemDevice         string
+	MicDevice            string
+	DetectionWarn        string
+	Width                int
+	WhisperInstallActive bool
+	WhisperInstallLog    []string
+	WhisperInstallErr    string
+	WhisperCanInstall    bool
 }
 
 func (v DoctorView) View() string {
@@ -36,7 +40,29 @@ func (v DoctorView) View() string {
 	b.WriteString(layout.JoinColumns(summary, env))
 	b.WriteString("\n\n")
 	b.WriteString(v.warningsBox(layout.FullWidth()))
+	if v.WhisperInstallActive || v.WhisperInstallErr != "" || len(v.WhisperInstallLog) > 0 {
+		b.WriteString("\n\n")
+		b.WriteString(v.whisperInstallBox(layout.FullWidth()))
+	}
 	return b.String()
+}
+
+func (v DoctorView) whisperInstallBox(width int) string {
+	var lines []string
+	if v.WhisperInstallActive {
+		lines = append(lines, warnStyle.Render("Installing Whisper (Python + venv, ~500MB)…"))
+	} else if v.WhisperInstallErr != "" {
+		lines = append(lines, errStyle.Render("Install failed: "+v.WhisperInstallErr))
+	} else if v.WhisperCanInstall {
+		lines = append(lines, subtleStyle.Render("Press i to install Whisper without leaving the app."))
+	}
+	for _, line := range v.WhisperInstallLog {
+		lines = append(lines, subtleStyle.Render("  "+truncate(line, width-4)))
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+	return Box("Whisper setup", strings.Join(lines, "\n"), width)
 }
 
 func (v DoctorView) summaryBox(width int) string {

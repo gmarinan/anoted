@@ -1,38 +1,16 @@
 package setup
 
 import (
-	"bufio"
-	"context"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"strings"
 
 	"anoted/internal/config"
 	"anoted/internal/platform"
 )
 
-const (
-	ToolAuto    = "auto"
-	ToolXdotool = "xdotool"
-	ToolWmctrl  = "wmctrl"
-	ToolNone    = "none"
-
-	DetMic    = "mic"
-	DetWindow = "window"
-	DetBoth   = "both"
-	DetNone   = "none"
-)
-
-// Options configures the guided setup flow.
-type Options struct {
-	Reader  io.Reader
-	Writer  io.Writer
-	Mode    string // mic, window, both, none
-	Tool    string // xdotool, wmctrl, none (window/both on X11)
-	Install bool
-}
+const setupSteps = 4
 
 // Run performs interactive first-time setup.
 func Run(cfg config.Config, cfgPath string, plat platform.Info, opts Options) (config.Config, error) {
@@ -45,11 +23,10 @@ func Run(cfg config.Config, cfgPath string, plat platform.Info, opts Options) (c
 		out = os.Stdout
 	}
 
-	fmt.Fprintln(out, "anoted setup")
-	fmt.Fprintln(out, "─────────────")
-	fmt.Fprintln(out)
+	printBanner(out)
 
-	fmt.Fprintln(out, "[1/4] Configuration")
+	// Step 1 — config
+	printStepHeader(out, 1, setupSteps, "Configuration")
 	path, err := config.EnsureDefault()
 	if err != nil {
 		return cfg, err
@@ -61,57 +38,44 @@ func Run(cfg config.Config, cfgPath string, plat platform.Info, opts Options) (c
 	if err != nil {
 		return cfg, err
 	}
-	fmt.Fprintf(out, "  ✓ Config: %s\n\n", path)
+	printOK(out, "Config: "+path)
+	printStepEnd(out)
 
-	fmt.Fprintln(out, "[2/4] Platform")
-	fmt.Fprintf(out, "  ✓ %s (session: %s)\n\n", plat.Name(), plat.Session)
+	// Step 2 — platform
+	printStepHeader(out, 2, setupSteps, "Platform")
+	printOK(out, fmt.Sprintf("%s (session: %s)", plat.Name(), plat.Session))
+	printStepEnd(out)
 
-	fmt.Fprintln(out, "[3/4] Meeting detection")
+	// Step 3 — detection
+	printStepHeader(out, 3, setupSteps, "Meeting detection")
 	mode := opts.Mode
 	if mode == "" {
-		if plat.OS == platform.OSWindows {
-			mode = chooseWindowsDetectionMode(in, out)
-		} else {
-			mode = chooseDetectionMode(in, out, plat)
-		}
+		mode = chooseDetectionModeInteractive(in, out, plat)
 	}
 	cfg.Detection.Mode = mode
-
-	switch mode {
-	case DetNone:
-		fmt.Fprintln(out, "\n  ○ Meeting detection disabled (manual record with r)")
-	case DetMic:
-		if plat.OS == platform.OSWindows {
-			fmt.Fprintln(out, "\n  Using window/process detection (mic mode maps to window on Windows)")
+	for _, line := range ApplyDetection(&cfg, plat, mode) {
+		if strings.HasPrefix(line, "⚠") {
+			printWarn(out, strings.TrimPrefix(line, "⚠ "))
+		} else if strings.HasPrefix(line, "✓") {
+			printOK(out, strings.TrimPrefix(line, "✓ "))
 		} else {
-			fmt.Fprintln(out, "\n  Using PipeWire mic activity (pactl)")
-			if _, err := exec.LookPath("pactl"); err != nil {
-				fmt.Fprintln(out, "  ⚠ pactl not found — install pipewire-pulse or pulseaudio")
-			} else if err := verifyPactl(context.Background()); err != nil {
-				fmt.Fprintf(out, "  ⚠ pactl check failed: %v\n", err)
-			} else {
-				fmt.Fprintln(out, "  ✓ pactl ready")
-			}
-		}
-	case DetWindow, DetBoth:
-		if plat.Session == "wayland" {
-			fmt.Fprintln(out, "  Wayland limits window titles; mic mode works better.")
-		}
-		tool := opts.Tool
-		if plat.Session == "x11" {
-			tool, err = setupWindowTool(in, out, tool, opts.Install)
-			if err != nil {
-				return cfg, err
-			}
-			if tool != ToolNone {
-				cfg.Detection.WindowTool = tool
-			}
-		} else if mode == DetWindow {
-			fmt.Fprintln(out, "  ⚠ Window detection unavailable; switching to mic mode")
-			cfg.Detection.Mode = DetMic
+			printInfo(out, line)
 		}
 	}
+	if lines, err := ApplyWindowTool(&cfg, plat, mode, opts.Tool, in, out, opts.Install); err != nil {
+		return cfg, err
+	} else {
+		for _, line := range lines {
+			if strings.HasPrefix(line, "✓") {
+				printOK(out, strings.TrimPrefix(line, "✓ "))
+			} else {
+				printInfo(out, line)
+			}
+		}
+	}
+	printStepEnd(out)
 
+	// Step 4 — transcription
 	setupTranscription(in, out, &cfg, opts.Install)
 
 	cfg.SetupCompleted = true
@@ -120,167 +84,50 @@ func Run(cfg config.Config, cfgPath string, plat platform.Info, opts Options) (c
 	}
 
 	fmt.Fprintln(out)
-	fmt.Fprintln(out, "Setup complete!")
+	fmt.Fprintln(out, boxTop())
+	fmt.Fprintln(out, boxLine(centerText("Setup complete", cliWidth)))
+	fmt.Fprintln(out, boxBottom())
 	fmt.Fprintf(out, "  detection.mode: %s\n", cfg.Detection.Mode)
 	if cfg.Transcription.AutoAfterRecording {
 		fmt.Fprintln(out, "  transcription.auto_after_recording: true")
 	}
-	fmt.Fprintln(out, "  anoted watch   — open the TUI")
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, "  anoted watch   — open the TUI (Setup also available with S)")
 	fmt.Fprintln(out, "  anoted doctor  — check dependencies")
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, "  Tip: setup works while the TUI is open — press R in Config to reload.")
 	return cfg, nil
 }
 
-func chooseDetectionMode(in io.Reader, out io.Writer, plat platform.Info) string {
-	fmt.Fprintln(out, "  How should anoted detect meetings?")
-	fmt.Fprintln(out)
-	fmt.Fprintln(out, "    1) PipeWire mic  — when Meet/Teams uses your microphone (recommended)")
-	fmt.Fprintln(out, "    2) Window titles — browser tab titles via xdotool/wmctrl (X11)")
-	fmt.Fprintln(out, "    3) Both          — mic first, then window titles")
-	fmt.Fprintln(out, "    4) Skip          — manual recording only")
-	fmt.Fprintln(out)
-	if plat.Session == "wayland" {
-		fmt.Fprintln(out, "  Tip: on Wayland, option 1 works best.")
-		fmt.Fprintln(out)
-	}
-	choice := askChoice(in, out, "  Choice [1]: ", "1")
-	switch choice {
-	case "2":
-		return DetWindow
-	case "3":
-		return DetBoth
-	case "4":
-		return DetNone
-	default:
-		return DetMic
-	}
-}
-
-func setupWindowTool(in io.Reader, out io.Writer, preset string, autoInstall bool) (string, error) {
-	tool, err := chooseWindowTool(in, out, preset, hasTool(ToolXdotool), hasTool(ToolWmctrl))
-	if err != nil {
-		return "", err
-	}
-	if tool == ToolNone {
-		return tool, nil
-	}
-	if hasTool(tool) {
-		fmt.Fprintf(out, "\n  ✓ %s ready at %s\n", tool, toolPath(tool))
-		if err := verifyTitles(context.Background(), tool); err != nil {
-			fmt.Fprintf(out, "  ⚠ Could not read window titles: %v\n", err)
-		} else {
-			fmt.Fprintln(out, "  ✓ Window titles readable")
+func chooseDetectionModeInteractive(in io.Reader, out io.Writer, plat platform.Info) string {
+	choices := DetectionChoices(plat)
+	fmt.Fprintln(out, "  │  How should anoted detect meetings?")
+	fmt.Fprintln(out, "  │")
+	for i, c := range choices {
+		line := fmt.Sprintf("%d) %s", i+1, c.Label)
+		if c.Recommended {
+			line += " (recommended)"
 		}
-		return tool, nil
+		fmt.Fprintf(out, "  │    %s\n", line)
+		fmt.Fprintf(out, "  │        %s\n", c.Description)
 	}
-	fmt.Fprintf(out, "\n  %s is not installed.\n", tool)
-	if autoInstall || askYes(in, out, "Install it now? (needs sudo) [Y/n]: ") {
-		if err := installTool(out, tool); err != nil {
-			return tool, err
-		}
-	} else {
-		printManualInstall(out, tool)
-	}
-	return tool, nil
-}
-
-func chooseWindowTool(in io.Reader, out io.Writer, preset string, hasXdotool, hasWmctrl bool) (string, error) {
-	if preset != "" {
-		return preset, nil
-	}
-	if hasXdotool {
-		fmt.Fprintf(out, "  ✓ xdotool already installed\n")
-		if askYes(in, out, "  Use xdotool for window titles? [Y/n]: ") {
-			return ToolXdotool, nil
+	fmt.Fprintln(out, "  │")
+	defaultChoice := "1"
+	for i, c := range choices {
+		if c.Recommended {
+			defaultChoice = fmt.Sprintf("%d", i+1)
+			break
 		}
 	}
-	if hasWmctrl {
-		fmt.Fprintf(out, "  ✓ wmctrl already installed\n")
-		return ToolWmctrl, nil
-	}
-	fmt.Fprintln(out, "  Window detection needs xdotool or wmctrl on X11:")
-	fmt.Fprintln(out, "    1) xdotool")
-	fmt.Fprintln(out, "    2) wmctrl")
-	fmt.Fprintln(out, "    3) Skip window tool")
-	fmt.Fprintln(out)
-	choice := askChoice(in, out, "  Choice [1]: ", "1")
-	switch choice {
-	case "2":
-		return ToolWmctrl, nil
-	case "3":
-		return ToolNone, nil
-	default:
-		return ToolXdotool, nil
-	}
-}
-
-func verifyPactl(ctx context.Context) error {
-	_, err := exec.CommandContext(ctx, "pactl", "list", "source-outputs", "short").Output()
-	return err
-}
-
-func askChoice(in io.Reader, out io.Writer, prompt, defaultVal string) string {
-	fmt.Fprint(out, prompt)
-	reader := bufio.NewReader(in)
-	line, _ := reader.ReadString('\n')
-	line = strings.TrimSpace(line)
-	if line == "" {
-		return defaultVal
-	}
-	return line
-}
-
-func askYes(in io.Reader, out io.Writer, prompt string) bool {
-	ans := askChoice(in, out, prompt, "y")
-	return ans == "" || strings.EqualFold(ans, "y") || strings.EqualFold(ans, "yes")
-}
-
-func askNo(in io.Reader, out io.Writer, prompt string) bool {
-	ans := askChoice(in, out, prompt, "n")
-	return strings.EqualFold(ans, "y") || strings.EqualFold(ans, "yes")
-}
-
-func hasTool(name string) bool {
-	_, err := exec.LookPath(name)
-	return err == nil
-}
-
-func toolPath(name string) string {
-	p, err := exec.LookPath(name)
-	if err != nil {
-		return name
-	}
-	return p
-}
-
-func printManualInstall(out io.Writer, tool string) {
-	if cmd, ok := installCommand(tool); ok {
-		fmt.Fprintf(out, "\n  Install manually:\n    %s\n", strings.Join(cmd, " "))
-	} else {
-		fmt.Fprintf(out, "\n  Install %s using your package manager.\n", tool)
-	}
-}
-
-func verifyTitles(ctx context.Context, tool string) error {
-	switch tool {
-	case ToolXdotool:
-		if !hasTool(ToolXdotool) {
-			return fmt.Errorf("xdotool not found")
+	choice := askChoice(in, out, "  Choice ["+defaultChoice+"]: ", defaultChoice)
+	idx := 0
+	if n, err := fmt.Sscanf(choice, "%d", &idx); err == nil && n == 1 {
+		idx--
+		if idx >= 0 && idx < len(choices) {
+			return choices[idx].Mode
 		}
-		out, err := exec.CommandContext(ctx, "xdotool", "getactivewindow").Output()
-		if err != nil {
-			return err
-		}
-		if strings.TrimSpace(string(out)) == "" {
-			return fmt.Errorf("no active window")
-		}
-	case ToolWmctrl:
-		if !hasTool(ToolWmctrl) {
-			return fmt.Errorf("wmctrl not found")
-		}
-		_, err := exec.CommandContext(ctx, "wmctrl", "-l").Output()
-		return err
 	}
-	return nil
+	return DefaultDetectionMode(plat)
 }
 
 // NeedsSetup reports whether the user should run anoted setup.
@@ -289,19 +136,4 @@ func NeedsSetup(cfg config.Config, plat platform.Info) bool {
 		return false
 	}
 	return plat.OS == platform.OSLinux || plat.OS == platform.OSWindows || plat.Session == "x11" || plat.Session == "wayland"
-}
-
-func chooseWindowsDetectionMode(in io.Reader, out io.Writer) string {
-	fmt.Fprintln(out, "  How should anoted detect meetings?")
-	fmt.Fprintln(out)
-	fmt.Fprintln(out, "    1) Window titles — browser tab titles via PowerShell (recommended)")
-	fmt.Fprintln(out, "    2) Skip          — manual recording only")
-	fmt.Fprintln(out)
-	choice := askChoice(in, out, "  Choice [1]: ", "1")
-	switch choice {
-	case "2":
-		return DetNone
-	default:
-		return DetWindow
-	}
 }

@@ -120,7 +120,7 @@ func runTUI(cmd *cobra.Command, args []string) error {
 
 	plat := platform.Detect()
 	if setup.NeedsSetup(cfg, plat) {
-		fmt.Fprintln(os.Stderr, "Tip: run 'anoted setup' to configure meeting detection.")
+		fmt.Fprintln(os.Stderr, "Tip: press S in the TUI to run setup, or: anoted setup")
 	}
 
 	store, err := openStore()

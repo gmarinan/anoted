@@ -16,41 +16,38 @@ func setupTranscription(in io.Reader, out io.Writer, cfg *config.Config, autoIns
 	fmt.Fprintln(out, "  Local speech-to-text → transcript.txt + .srt per session")
 	fmt.Fprintln(out)
 
+	plan := TranscriptionPlan{}
 	if askNo(in, out, "  Auto-transcribe after each recording? [y/N]: ") {
-		cfg.Transcription.AutoAfterRecording = true
+		plan.AutoAfterRecording = true
 	}
 
 	whisperReady := transcribe.IsInstalled(*cfg)
 	if whisperReady {
 		path, _ := transcribe.BinaryPath(*cfg)
 		fmt.Fprintf(out, "  ✓ Whisper: %s\n", path)
-		if transcribe.IsManagedBinary(path) {
-			cfg.Transcription.Binary = path
-			cfg.Transcription.Backend = transcribe.BackendOpenAI
-		}
+		applyManagedWhisperCfg(cfg, path)
 	} else {
-		fmt.Fprintln(out, "  ⚠ Whisper not installed")
-		fmt.Fprintf(out, "    → Recommended: local venv at %s\n", transcribe.ManagedVenvDir())
-		fmt.Fprintf(out, "    → Install Python: %s\n", transcribe.PythonInstallHint())
+		printWhisperInstallHints(out)
 		prompt := "  Install Whisper in local venv (~500MB)? [y/N]: "
 		if autoInstall || askNo(in, out, prompt) {
-			if _, err := transcribe.FindPython(); err != nil {
-				fmt.Fprintf(out, "  ⚠ %v\n", err)
-			} else if err := transcribe.InstallManaged(out); err != nil {
+			plan.InstallWhisper = true
+			if err := ConfigureTranscription(cfg, plan, in, out, autoInstall); err != nil {
 				fmt.Fprintf(out, "  ⚠ Install failed: %v\n", err)
 				fmt.Fprintf(out, "    Retry: %s\n", transcribe.InstallHint())
-			} else {
-				cfg.Transcription.Binary = transcribe.ManagedWhisperBinary()
-				cfg.Transcription.Backend = transcribe.BackendOpenAI
+				fmt.Fprintln(out, "    Or install from the TUI: Doctor tab → i, or open Setup (S)")
+			} else if plan.InstallWhisper {
 				whisperReady = true
 				fmt.Fprintf(out, "  ✓ Whisper ready: %s\n", cfg.Transcription.Binary)
 			}
+		}
+		if !whisperReady && plan.AutoAfterRecording {
+			cfg.Transcription.AutoAfterRecording = true
 		}
 	}
 
 	if !whisperReady {
 		fmt.Fprintln(out)
-		fmt.Fprintln(out, "  ○ Transcription skipped — run anoted setup again later")
+		fmt.Fprintln(out, "  ○ Transcription skipped — run anoted setup again or open Setup in the TUI")
 		fmt.Fprintln(out)
 		return
 	}
@@ -60,4 +57,15 @@ func setupTranscription(in io.Reader, out io.Writer, cfg *config.Config, autoIns
 	fmt.Fprintln(out)
 	fmt.Fprintln(out, "  ○ Using CPU for transcription on Windows")
 	fmt.Fprintln(out)
+}
+
+func printWhisperInstallHints(out io.Writer) {
+	fmt.Fprintln(out, "  ⚠ Whisper not installed")
+	fmt.Fprintf(out, "    → Recommended: local venv at %s\n", transcribe.ManagedVenvDir())
+	if _, err := transcribe.FindPython(); err != nil {
+		fmt.Fprintf(out, "    → %v\n", err)
+		if hasCmd("winget") {
+			fmt.Fprintln(out, "    → Setup can install Python automatically via winget")
+		}
+	}
 }

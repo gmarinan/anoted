@@ -30,10 +30,12 @@ func (m Model) View() tea.View {
 	}
 
 	content.WriteString("\n")
-	footer := components.FooterForTab(tab, m.awaitingRecordConfirm, m.sessionsFooter(), m.configFooter(), m.configSavedMsg, m.configErr, m.width)
+	footer := m.appFooter(tab)
 	content.WriteString(components.FooterBar(footer, m.width))
 
 	body := components.PadView(content.String(), m.width, m.height)
+	body = m.setupWizardOverlay(body)
+	body = m.quitConfirmOverlay(body)
 	v := tea.NewView(body)
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
@@ -42,6 +44,13 @@ func (m Model) View() tea.View {
 		v.WindowTitle = "anoted ● RECORDING"
 	}
 	return v
+}
+
+func (m Model) appFooter(tab components.TabID) string {
+	if m.quitConfirmOpen {
+		return components.QuitConfirmFooter()
+	}
+	return components.FooterForTab(tab, m.awaitingRecordConfirm, m.sessionsFooter(), m.doctorFooter(), m.configFooter(), m.configSavedMsg, m.configErr, m.width)
 }
 
 func (m Model) homeView() components.HomeView {
@@ -125,15 +134,19 @@ func (m Model) doctorView() components.DoctorView {
 		backend = m.recStatus.Backend
 	}
 	return components.DoctorView{
-		Report:        m.doctorReport,
-		AppState:      string(m.appState),
-		Platform:      m.deps.Platform.Name(),
-		Backend:       backend,
-		Provider:      displayProvider(m.provider, m.detection.Title),
-		SystemDevice:  m.systemDevice,
-		MicDevice:     m.micDevice,
-		DetectionWarn: m.detection.Warning,
-		Width:         m.width,
+		Report:             m.doctorReport,
+		AppState:           string(m.appState),
+		Platform:           m.deps.Platform.Name(),
+		Backend:            backend,
+		Provider:           displayProvider(m.provider, m.detection.Title),
+		SystemDevice:       m.systemDevice,
+		MicDevice:          m.micDevice,
+		DetectionWarn:      m.detection.Warning,
+		Width:              m.width,
+		WhisperInstallActive: m.whisperInstallActive,
+		WhisperInstallLog:    append([]string(nil), m.whisperInstallLog...),
+		WhisperInstallErr:    m.whisperInstallErr,
+		WhisperCanInstall:    m.whisperCanInstall(),
 	}
 }
 
@@ -148,6 +161,16 @@ func (m Model) sessionsFooter() components.SessionsFooterMode {
 		return components.SessionsFooterTranscribing
 	}
 	return components.SessionsFooterNormal
+}
+
+func (m Model) doctorFooter() components.DoctorFooterMode {
+	if m.whisperInstallActive {
+		return components.DoctorFooterInstalling
+	}
+	if m.whisperCanInstall() {
+		return components.DoctorFooterCanInstall
+	}
+	return components.DoctorFooterNormal
 }
 
 func (m Model) configView() components.ConfigMenuView {
