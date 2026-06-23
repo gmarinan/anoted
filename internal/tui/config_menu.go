@@ -626,17 +626,16 @@ func (m Model) handleConfigKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	switch key {
 	case "tab":
-		m.configSection = (m.configSection + 1) % configSectionCount
-		m.configCursor = 0
-		m.configListCursor = 0
+		m = m.configNextSection()
 		return m, nil
 	case "shift+tab":
-		m.configSection--
-		if m.configSection < 0 {
-			m.configSection = configSectionCount - 1
-		}
-		m.configCursor = 0
-		m.configListCursor = 0
+		m = m.configPrevSection()
+		return m, nil
+	case "left", "h", "[":
+		m = m.configPrevSection()
+		return m, nil
+	case "right", "l", "]":
+		m = m.configNextSection()
 		return m, nil
 	case "R":
 		return m.reloadConfigFromDisk(), resolveDeviceLabelsCmd(m)
@@ -906,6 +905,23 @@ func (m Model) configNavDown() Model {
 		m.configListCursor = 0
 	}
 	return m
+}
+
+func (m Model) configNextSection() Model {
+	m.configSection = (m.configSection + 1) % configSectionCount
+	m.configCursor = 0
+	m.configListCursor = 0
+	return m.clampConfigCursor()
+}
+
+func (m Model) configPrevSection() Model {
+	m.configSection--
+	if m.configSection < 0 {
+		m.configSection = configSectionCount - 1
+	}
+	m.configCursor = 0
+	m.configListCursor = 0
+	return m.clampConfigCursor()
 }
 
 func (m Model) configAbsorbsKeys() bool {

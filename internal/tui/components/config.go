@@ -8,6 +8,26 @@ import (
 	"anoted/internal/audio"
 )
 
+const (
+	configSidebarMinWidth   = 14
+	configSidebarMaxWidth   = 20
+	configSidebarLayoutMin  = 72
+)
+
+var (
+	configSidebarActiveStyle = lipgloss.NewStyle().
+					Border(lipgloss.RoundedBorder()).
+					BorderForeground(lipgloss.Color("63")).
+					Bold(true).
+					Foreground(lipgloss.Color("229")).
+					Padding(0, 1)
+	configSidebarInactiveStyle = lipgloss.NewStyle().
+					Border(lipgloss.RoundedBorder()).
+					BorderForeground(lipgloss.Color("238")).
+					Foreground(lipgloss.Color("244")).
+					Padding(0, 1)
+)
+
 // ConfigFieldRow is one row in the config menu.
 type ConfigFieldRow struct {
 	Label    string
@@ -90,40 +110,91 @@ func (v ConfigMenuView) renderAllSections() string {
 	if len(v.Sections) == 0 {
 		return subtleStyle.Render("(no sections)")
 	}
-	layout := NewPanelLayout(v.Width)
-	w := layout.ColumnWidth()
-	twoCol := layout.TwoColumn()
+	if v.Width < configSidebarLayoutMin {
+		return v.renderStackedSectionTabs()
+	}
+	sidebarW := configSidebarWidth(v.Width)
+	contentW := v.Width - sidebarW - panelColumnGap
+	if contentW < MinPanelWidth {
+		return v.renderStackedSectionTabs()
+	}
 
-	var rows []string
-	for i := 0; i < len(v.Sections); i += 2 {
-		if twoCol && i+1 < len(v.Sections) {
-			left := v.renderSectionBox(v.Sections[i], w)
-			right := v.renderSectionBox(v.Sections[i+1], w)
-			rows = append(rows, layout.JoinColumns(left, right))
-		} else {
-			rows = append(rows, v.renderSectionBox(v.Sections[i], layout.FullWidth()))
+	sidebar := v.renderSidebar(sidebarW)
+	content := v.renderContentPanel(v.activeSection(), contentW)
+	left, right := EqualizeBoxHeights(sidebar, content)
+	gap := strings.Repeat(" ", panelColumnGap)
+	joined := lipgloss.JoinHorizontal(lipgloss.Top, left, gap, right)
+	return PadLineBlock(joined, v.Width)
+}
+
+func configSidebarWidth(total int) int {
+	switch {
+	case total >= 100:
+		return configSidebarMaxWidth
+	case total >= 86:
+		return 18
+	default:
+		return configSidebarMinWidth
+	}
+}
+
+func (v ConfigMenuView) activeSection() ConfigSectionPanel {
+	for _, sec := range v.Sections {
+		if sec.Focused {
+			return sec
 		}
 	}
-	return strings.Join(rows, "\n")
+	return v.Sections[0]
 }
 
-func (v ConfigMenuView) renderSectionBox(sec ConfigSectionPanel, width int) string {
-	body := v.renderSectionFields(sec)
-	if sec.Focused {
-		return Box(sec.Label, body, width)
+func (v ConfigMenuView) renderStackedSectionTabs() string {
+	layout := NewPanelLayout(v.Width)
+	labels := make([]string, len(v.Sections))
+	active := 0
+	for i, sec := range v.Sections {
+		labels[i] = sec.Label
+		if sec.Focused {
+			active = i
+		}
 	}
-	return DimBox(sec.Label, body, width)
+	var b strings.Builder
+	b.WriteString(SubTabBar(labels, active))
+	b.WriteString("\n\n")
+	b.WriteString(v.renderContentPanel(v.activeSection(), layout.FullWidth()))
+	return b.String()
 }
 
-func (v ConfigMenuView) renderSectionFields(sec ConfigSectionPanel) string {
+func (v ConfigMenuView) renderSidebar(width int) string {
+	items := make([]string, 0, len(v.Sections))
+	for _, sec := range v.Sections {
+		items = append(items, v.renderSidebarItem(sec, width))
+	}
+	return strings.Join(items, "\n")
+}
+
+func (v ConfigMenuView) renderSidebarItem(sec ConfigSectionPanel, width int) string {
+	label := strings.ToUpper(sec.Label)
+	style := configSidebarInactiveStyle
+	if sec.Focused {
+		style = configSidebarActiveStyle
+	}
+	return style.Width(width).Align(lipgloss.Center).Render(label)
+}
+
+func (v ConfigMenuView) renderContentPanel(sec ConfigSectionPanel, width int) string {
+	body := v.renderSectionFields(true, sec)
+	return Box(strings.ToUpper(sec.Label), body, width)
+}
+
+func (v ConfigMenuView) renderSectionFields(focused bool, sec ConfigSectionPanel) string {
 	if len(sec.Fields) == 0 {
 		return subtleStyle.Render("(no fields)")
 	}
 	var lines []string
 	for _, f := range sec.Fields {
-		lines = append(lines, v.renderFieldLine(sec.Focused, f))
+		lines = append(lines, v.renderFieldLine(focused, f))
 		if f.Kind == "list" {
-			lines = append(lines, v.renderListItems(sec.Focused, f)...)
+			lines = append(lines, v.renderListItems(focused, f)...)
 		}
 	}
 	return strings.Join(lines, "\n")
@@ -273,7 +344,7 @@ func FooterForConfig(mode ConfigFooterMode, savedMsg, errMsg string, width int) 
 		)
 	default:
 		hints = JoinFooter(
-			FooterHint("Tab", "focus section"),
+			FooterHint("←→", "section"),
 			FooterHint("↑↓", "navigate"),
 			FooterHint("Enter", "edit"),
 			FooterHint("a/d", "patterns"),
