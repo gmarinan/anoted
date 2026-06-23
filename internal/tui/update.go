@@ -14,18 +14,19 @@ import (
 	"anoted/internal/session"
 )
 
-const windowSizePollInterval = 200 * time.Millisecond
-
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(
+	cmds := []tea.Cmd{
 		readWindowSizeCmd(),
-		m.scheduleWindowSizePoll(),
 		m.schedulePoll(),
 		m.scheduleDurationTick(),
 		resolveDeviceLabelsCmd(m),
 		m.loadSessionsCmd(),
 		func() tea.Msg { return homeEnterLevelsMsg{} },
-	)
+	}
+	if poll := m.scheduleWindowSizePoll(); poll != nil {
+		cmds = append(cmds, poll)
+	}
+	return tea.Batch(cmds...)
 }
 
 type sessionsLoadedMsg struct {
@@ -59,7 +60,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Height > 0 {
 			m.height = msg.Height
 		}
-		if resized {
+		if resized && m.deps.Platform.ClearScreenOnResize() {
 			return m, tea.ClearScreen
 		}
 		return m, nil
@@ -352,7 +353,11 @@ func (m Model) schedulePoll() tea.Cmd {
 }
 
 func (m Model) scheduleWindowSizePoll() tea.Cmd {
-	return tea.Tick(windowSizePollInterval, func(time.Time) tea.Msg {
+	interval := m.deps.Platform.WindowSizePollInterval()
+	if interval <= 0 {
+		return nil
+	}
+	return tea.Tick(interval, func(time.Time) tea.Msg {
 		return windowSizePollTickMsg{}
 	})
 }

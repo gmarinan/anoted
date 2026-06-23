@@ -1,6 +1,9 @@
 package platform
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestInfoSubtitle(t *testing.T) {
 	tests := []struct {
@@ -16,5 +19,23 @@ func TestInfoSubtitle(t *testing.T) {
 		if got := tt.info.Subtitle(); got != tt.want {
 			t.Fatalf("%+v: got %q want %q", tt.info, got, tt.want)
 		}
+	}
+}
+
+func TestInfoWindowSizePollInterval(t *testing.T) {
+	if got := (Info{OS: OSWindows}).WindowSizePollInterval(); got != 200*time.Millisecond {
+		t.Fatalf("windows: got %v want 200ms", got)
+	}
+	if got := (Info{OS: OSLinux}).WindowSizePollInterval(); got != 0 {
+		t.Fatalf("linux: got %v want 0", got)
+	}
+}
+
+func TestInfoClearScreenOnResize(t *testing.T) {
+	if !(Info{OS: OSWindows}).ClearScreenOnResize() {
+		t.Fatal("windows should clear on resize")
+	}
+	if (Info{OS: OSLinux}).ClearScreenOnResize() {
+		t.Fatal("linux should not clear on resize")
 	}
 }

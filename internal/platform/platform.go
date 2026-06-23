@@ -1,5 +1,7 @@
 package platform
 
+import "time"
+
 // OS identifies the host operating system family.
 type OS string
 
@@ -43,4 +45,22 @@ func (i Info) Subtitle() string {
 	default:
 		return "Unknown"
 	}
+}
+
+// WindowSizePollInterval returns how often the TUI should poll terminal size
+// with term.GetSize. Windows lacks reliable SIGWINCH; Linux gets resize events
+// from Bubble Tea and does not need polling.
+func (i Info) WindowSizePollInterval() time.Duration {
+	if i.OS == OSWindows {
+		return 200 * time.Millisecond
+	}
+	return 0
+}
+
+// ClearScreenOnResize reports whether a terminal resize should trigger an
+// explicit screen clear before redraw. PadView already pads to the terminal
+// height; an extra clear on Linux tends to flicker, especially on Home where
+// the level meter redraws frequently.
+func (i Info) ClearScreenOnResize() bool {
+	return i.OS == OSWindows
 }
