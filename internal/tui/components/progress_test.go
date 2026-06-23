@@ -24,8 +24,14 @@ func TestTXStatusLabel(t *testing.T) {
 	if !strings.Contains(yes, "yes") {
 		t.Fatalf("yes label: %q", yes)
 	}
+	if !strings.Contains(yes, LabelTranscribed) {
+		t.Fatalf("yes label missing txt prefix: %q", yes)
+	}
 	no := TXStatusLabel("no")
 	if !strings.Contains(no, "no") {
 		t.Fatalf("no label: %q", no)
+	}
+	if !strings.Contains(no, LabelAudioSaved) {
+		t.Fatalf("no label missing aud prefix: %q", no)
 	}
 }

@@ -24,56 +24,54 @@ func (d *windowsDetector) Name() string { return "windows" }
 func (d *windowsDetector) Poll(ctx context.Context) (Snapshot, error) {
 	mode := d.cfg.Mode
 	if mode == "" {
-		mode = ModeWindow
+		mode = ModeMic
 	}
 
 	switch mode {
 	case ModeNone:
 		return Snapshot{State: MeetingState{}, CheckedAt: time.Now()}, nil
+	case ModeWindow:
+		return d.pollWindow(ctx)
+	case ModeBoth:
+		if snap, found := d.pollMic(ctx); found {
+			return snap, nil
+		}
+		return d.pollWindow(ctx)
 	default:
-		return d.pollWindow(ctx, mode)
+		return d.pollMicOnly(ctx)
 	}
 }
 
-func (d *windowsDetector) pollWindow(ctx context.Context, mode string) (Snapshot, error) {
+func (d *windowsDetector) pollWindow(ctx context.Context) (Snapshot, error) {
 	state := MeetingState{}
-	if mode == ModeMic {
-		state.Warning = "mic detection is not available on Windows; using window/process detection"
-	}
 
 	procs, err := listProcesses(ctx)
 	if err != nil {
-		state.Warning = "process list unavailable: " + err.Error()
-	} else {
-		teamsProcs := map[string]bool{
-			"ms-teams": true, "teams": true, "msteams": true,
-		}
-
-		for _, p := range procs {
-			base := strings.ToLower(strings.TrimSuffix(p, ".exe"))
-			if teamsProcs[base] {
-				state.InMeeting = true
-				state.Provider = ProviderTeams
-				state.Browser = base
-				break
-			}
-		}
+		return Snapshot{State: state, CheckedAt: time.Now()}, err
 	}
 
+	browserProcs := meetingAppBinaries()
 	titles := d.windowTitles(ctx)
 
-	for _, title := range titles {
-		if provider := MatchProvider(title, d.cfg.Providers); provider != ProviderUnknown {
-			state.InMeeting = true
-			state.Provider = provider
-			state.Title = title
-			if state.Browser == "" {
-				state.Browser = "browser"
+	for _, p := range procs {
+		base := strings.ToLower(strings.TrimSuffix(p, ".exe"))
+		if !browserProcs[base] {
+			continue
+		}
+		for _, title := range titles {
+			if provider := MatchProvider(title, d.cfg.Providers); provider != ProviderUnknown {
+				state.InMeeting = true
+				state.Provider = provider
+				state.Title = title
+				state.Browser = base
+				return Snapshot{State: state, CheckedAt: time.Now()}, nil
 			}
-			break
 		}
 	}
 
+	if len(titles) == 0 {
+		state.Warning = "window titles unavailable"
+	}
 	return Snapshot{State: state, CheckedAt: time.Now()}, nil
 }
 

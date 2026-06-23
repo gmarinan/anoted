@@ -1,10 +1,10 @@
-//go:build windows
-
 package doctor
 
 import (
+	"fmt"
 	"os/exec"
 
+	"anoted/internal/audio"
 	"anoted/internal/config"
 	"anoted/internal/platform"
 	"anoted/internal/recorder"
@@ -46,7 +46,7 @@ func audioDeviceChecks(cfg config.Config) []Check {
 func detectionChecks(_ platform.Info, cfg config.Config) []Check {
 	mode := cfg.Detection.Mode
 	if mode == "" {
-		mode = "window"
+		mode = "mic"
 	}
 
 	if mode == "none" {
@@ -65,14 +65,23 @@ func detectionChecks(_ platform.Info, cfg config.Config) []Check {
 	})
 
 	if mode == "mic" || mode == "both" {
-		checks = append(checks, Check{
-			Name:   "meeting_detection_mic",
-			Status: "warn",
-			Detail: "PipeWire mic detection is not available on Windows; using window/process detection",
-		})
+		sessions, err := audio.ListCaptureSessions()
+		if err != nil {
+			checks = append(checks, Check{
+				Name:   "meeting_detection_mic",
+				Status: "fail",
+				Detail: err.Error(),
+			})
+		} else {
+			checks = append(checks, Check{
+				Name:   "meeting_detection_mic",
+				Status: "ok",
+				Detail: fmt.Sprintf("WASAPI capture sessions (%d active)", len(sessions)),
+			})
+		}
 	}
 
-	if mode == "window" || mode == "both" || mode == "mic" {
+	if mode == "window" || mode == "both" {
 		if _, err := exec.LookPath("powershell"); err != nil {
 			checks = append(checks, Check{
 				Name:   "meeting_detection_window",

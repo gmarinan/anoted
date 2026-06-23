@@ -64,6 +64,9 @@ type Model struct {
 	recordConfirmDismissed  bool
 	recording               bool
 	stopWhenMeetingEnds     bool
+	meetingAbsentSince    time.Time
+	recordOpInFlight      bool
+	lastAutoStopAt        time.Time
 	statusNote              string
 	recordStart  time.Time
 	sessionDir   string

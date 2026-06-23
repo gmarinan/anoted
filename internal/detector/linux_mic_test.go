@@ -29,35 +29,6 @@ func TestListMicCapturesParse(t *testing.T) {
 	}
 }
 
-func TestMatchMeetingTextMediaName(t *testing.T) {
-	patterns := map[string][]string{
-		"google_meet": {"meet.google.com", "Google Meet"},
-	}
-	provider, title := matchMeetingText("Meet - Daily Innovación", "Firefox", patterns)
-	if provider != ProviderGoogleMeet {
-		t.Fatalf("got %q title %q", provider, title)
-	}
-}
-
-func TestMatchMeetingTextWithDefaultPatterns(t *testing.T) {
-	patterns := map[string][]string{
-		"google_meet": {"meet.google.com", "Google Meet", "Meet -", "Meet |"},
-	}
-	provider, _ := matchMeetingText("Meet - Daily Innovación", "Firefox", patterns)
-	if provider != ProviderGoogleMeet {
-		t.Fatalf("got %q", provider)
-	}
-}
-
-func TestIsMeetingApp(t *testing.T) {
-	if !isMeetingApp("firefox", "Firefox") {
-		t.Fatal("firefox should match")
-	}
-	if isMeetingApp("obs", "OBS") {
-		t.Fatal("obs should not match")
-	}
-}
-
 func parseMicCapturesOutput(out string) ([]micCapture, error) {
 	var captures []micCapture
 	var cur *micCapture

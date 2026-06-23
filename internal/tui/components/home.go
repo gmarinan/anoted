@@ -82,7 +82,7 @@ func (v HomeView) overlayHeight(base string) int {
 func (v HomeView) statusBox(width int) string {
 	var lines []string
 	if v.Recording {
-		lines = append(lines, recStyle.Render(IconRecording+" RECORDING"))
+		lines = append(lines, recStyle.Render(LabelRecording+" RECORDING"))
 	}
 	lines = append(lines, row("State", displayState(v.AppState)))
 	lines = append(lines, row("Meeting", v.Provider))

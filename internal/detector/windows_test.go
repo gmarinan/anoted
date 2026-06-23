@@ -3,8 +3,8 @@
 package detector
 
 import (
+	"context"
 	"testing"
-	"time"
 )
 
 func TestWindowsDetectorModeNone(t *testing.T) {
@@ -18,16 +18,67 @@ func TestWindowsDetectorModeNone(t *testing.T) {
 	}
 }
 
-func TestWindowsDetectorMicWarning(t *testing.T) {
-	d := &windowsDetector{cfg: Config{Mode: ModeMic, Providers: map[string][]string{
-		"google_meet": {"Meet"},
-	}}}
+func TestWindowsDetectorMicFromSessions(t *testing.T) {
+	orig := listMicCapturesHook
+	defer func() { listMicCapturesHook = orig }()
+
+	listMicCapturesHook = func(context.Context) ([]micCapture, error) {
+		return []micCapture{{
+			Binary:    "firefox",
+			AppName:   "Firefox",
+			MediaName: "Meet - Daily standup",
+		}}, nil
+	}
+
+	d := &windowsDetector{cfg: Config{
+		Mode: ModeMic,
+		Providers: map[string][]string{
+			"google_meet": {"Meet -", "Google Meet"},
+		},
+	}}
 	snap, err := d.Poll(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if snap.State.Warning == "" {
-		t.Fatal("expected warning for mic mode on Windows")
+	if !snap.State.InMeeting || snap.State.Provider != ProviderGoogleMeet {
+		t.Fatalf("unexpected state: %+v", snap.State)
 	}
-	_ = snap.CheckedAt.After(time.Time{})
+}
+
+func TestWindowsDetectorMicIdle(t *testing.T) {
+	orig := listMicCapturesHook
+	defer func() { listMicCapturesHook = orig }()
+
+	listMicCapturesHook = func(context.Context) ([]micCapture, error) {
+		return nil, nil
+	}
+
+	d := &windowsDetector{cfg: Config{Mode: ModeMic}}
+	snap, err := d.Poll(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snap.State.InMeeting {
+		t.Fatal("expected idle when no capture sessions")
+	}
+}
+
+func TestWindowsDetectorWindowNoProcessOnlyTeams(t *testing.T) {
+	orig := listMicCapturesHook
+	defer func() { listMicCapturesHook = orig }()
+	listMicCapturesHook = func(context.Context) ([]micCapture, error) { return nil, nil }
+
+	d := &windowsDetector{cfg: Config{
+		Mode: ModeWindow,
+		Providers: map[string][]string{
+			"teams": {"Meeting with", "In a call"},
+		},
+	}}
+	snap, err := d.Poll(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snap.State.InMeeting {
+		t.Fatalf("process-only Teams should not mark in meeting: %+v", snap.State)
+	}
 }

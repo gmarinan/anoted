@@ -9,13 +9,6 @@ import (
 	"time"
 )
 
-// micCapture is an app actively recording from the microphone via PipeWire/PulseAudio.
-type micCapture struct {
-	Binary    string
-	AppName   string
-	MediaName string
-}
-
 func (d *linuxDetector) Poll(ctx context.Context) (Snapshot, error) {
 	mode := d.cfg.Mode
 	if mode == "" {
@@ -52,25 +45,9 @@ func (d *linuxDetector) pollMic(ctx context.Context) (Snapshot, bool) {
 	}
 
 	for _, c := range captures {
-		if !isMeetingApp(c.Binary, c.AppName) {
-			continue
-		}
-		provider, title := matchMeetingText(c.MediaName, c.AppName, d.cfg.Providers)
-		if provider == ProviderUnknown && isTeamsBinary(c.Binary) {
-			provider = ProviderTeams
-			title = c.MediaName
-		}
-		if provider != ProviderUnknown {
-			return Snapshot{
-				State: MeetingState{
-					InMeeting: true,
-					Provider:  provider,
-					Title:     title,
-					Browser:   c.Binary,
-					Warning:   d.platformWarning(),
-				},
-				CheckedAt: time.Now(),
-			}, true
+		if snap, ok := snapshotFromMicCapture(c, d.cfg.Providers); ok {
+			snap.State.Warning = d.platformWarning()
+			return snap, true
 		}
 	}
 
@@ -120,51 +97,6 @@ func (d *linuxDetector) platformWarning() string {
 		return "Wayland: window titles may be unavailable; consider detection.mode: mic"
 	}
 	return ""
-}
-
-func meetingAppBinaries() map[string]bool {
-	return map[string]bool{
-		"chrome": true, "chromium": true, "firefox": true, "msedge": true, "brave": true,
-		"teams": true, "ms-teams": true, "msteams": true,
-	}
-}
-
-func isMeetingApp(binary, appName string) bool {
-	b := strings.ToLower(strings.TrimSuffix(binary, ".exe"))
-	if meetingAppBinaries()[b] {
-		return true
-	}
-	lower := strings.ToLower(appName)
-	return strings.Contains(lower, "firefox") ||
-		strings.Contains(lower, "chrome") ||
-		strings.Contains(lower, "chromium") ||
-		strings.Contains(lower, "teams") ||
-		strings.Contains(lower, "edge") ||
-		strings.Contains(lower, "brave")
-}
-
-func isTeamsBinary(binary string) bool {
-	b := strings.ToLower(strings.TrimSuffix(binary, ".exe"))
-	return b == "teams" || b == "ms-teams" || b == "msteams"
-}
-
-func matchMeetingText(mediaName, appName string, providers map[string][]string) (provider, title string) {
-	for _, text := range []string{mediaName, appName} {
-		if text == "" {
-			continue
-		}
-		if p := MatchProvider(text, providers); p != ProviderUnknown {
-			return p, text
-		}
-	}
-	// PipeWire media.name from Firefox Meet tabs, e.g. "Meet - Daily standup".
-	if mediaName != "" {
-		lower := strings.ToLower(strings.TrimSpace(mediaName))
-		if strings.HasPrefix(lower, "meet -") || strings.HasPrefix(lower, "meet |") {
-			return ProviderGoogleMeet, mediaName
-		}
-	}
-	return ProviderUnknown, ""
 }
 
 func listMicCaptures(ctx context.Context) ([]micCapture, error) {

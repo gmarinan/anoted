@@ -123,6 +123,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleDetection(msg detectionResultMsg) (tea.Model, tea.Cmd) {
+	now := msg.snap.CheckedAt
+	if now.IsZero() {
+		now = time.Now()
+	}
+
 	if msg.err != nil {
 		if m.recording {
 			m.appState = StateRecording
@@ -136,17 +141,34 @@ func (m Model) handleDetection(msg detectionResultMsg) (tea.Model, tea.Cmd) {
 
 	m.detection = msg.snap.State
 	if m.recording {
-		if m.stopWhenMeetingEnds && !msg.snap.State.InMeeting {
-			return m, stopRecordingCmd(m, true)
+		if m.stopWhenMeetingEnds {
+			stop, absentSince := shouldStopForMeetingEnd(
+				msg.snap.State.InMeeting,
+				m.meetingAbsentSince,
+				now,
+				meetingEndGrace(m.deps.Config),
+			)
+			m.meetingAbsentSince = absentSince
+			if stop && !m.recordOpInFlight {
+				m.meetingAbsentSince = time.Time{}
+				m.recordOpInFlight = true
+				return m, stopRecordingCmd(m, true)
+			}
 		}
 		m.appState = StateRecording
 		return m, nil
 	}
 
 	if msg.snap.State.InMeeting {
+		m.meetingAbsentSince = time.Time{}
 		m.provider = msg.snap.State.Provider
 		if m.autoRecord {
 			if !m.deps.Config.AutoRecordRequiresConfirmation {
+				if shouldBlockAutoStart(m.recordOpInFlight, m.lastAutoStopAt, now) {
+					m.appState = StateInMeeting
+					return m, nil
+				}
+				m.recordOpInFlight = true
 				return m, startRecordingCmd(m)
 			}
 			if m.recordConfirmDismissed {
@@ -168,6 +190,7 @@ func (m Model) handleDetection(msg detectionResultMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleRecordToggle(msg recordToggleResultMsg) (tea.Model, tea.Cmd) {
+	m.recordOpInFlight = false
 	if msg.err != nil {
 		m.appState = StateError
 		m.errMsg = msg.err.Error()
@@ -192,6 +215,10 @@ func (m Model) handleRecordToggle(msg recordToggleResultMsg) (tea.Model, tea.Cmd
 
 	m.recording = false
 	m.stopWhenMeetingEnds = false
+	m.meetingAbsentSince = time.Time{}
+	if msg.meetingEnded {
+		m.lastAutoStopAt = time.Now()
+	}
 	m.systemBands = nil
 	m.micBands = nil
 	if msg.meetingEnded && msg.savedDir != "" {

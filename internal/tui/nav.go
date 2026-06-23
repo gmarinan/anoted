@@ -118,8 +118,10 @@ func (m Model) handleHomeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch key {
 	case "r":
 		if m.recording {
+			m.recordOpInFlight = true
 			return m, stopRecordingCmd(m, false)
 		}
+		m.recordOpInFlight = true
 		return m, startRecordingCmd(m)
 	case "a":
 		m.autoRecord = !m.autoRecord
@@ -135,12 +137,14 @@ func (m Model) handleHomeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			}
+			m.recordOpInFlight = true
 			return m, startRecordingCmd(m)
 		}
 		return m, nil
 	case "y", "enter":
 		if m.awaitingRecordConfirm && !m.recording {
 			m.awaitingRecordConfirm = false
+			m.recordOpInFlight = true
 			return m, startRecordingCmd(m)
 		}
 		return m, nil

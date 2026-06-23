@@ -60,13 +60,6 @@ var (
 			Padding(0, 0)
 )
 
-// Nerd Font icons (requires a Nerd Font in the terminal).
-const (
-	IconRecording   = "\U000F0376C" // 󰍬
-	IconAudioSaved  = "\U000F09BA8" // 󰦨
-	IconTranscribed = "\U000F0BB78" // 󰮸
-)
-
 // TabID identifies the active main screen (switch with 1–4, not Tab).
 type TabID int
 

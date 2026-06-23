@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 
 	"anoted/internal/config"
@@ -38,8 +39,14 @@ func Run(cfg config.Config) Report {
 
 	rep.Checks = append(rep.Checks, optionalToolChecks(cfg)...)
 
-	rep.Checks = append(rep.Checks, audioDeviceChecks(cfg)...)
-	rep.Checks = append(rep.Checks, detectionChecks(plat, cfg)...)
+	if runtime.GOOS == "windows" {
+		// Enumerate capture sessions before WASAPI/malgo init to avoid COM conflicts.
+		rep.Checks = append(rep.Checks, detectionChecks(plat, cfg)...)
+		rep.Checks = append(rep.Checks, audioDeviceChecks(cfg)...)
+	} else {
+		rep.Checks = append(rep.Checks, audioDeviceChecks(cfg)...)
+		rep.Checks = append(rep.Checks, detectionChecks(plat, cfg)...)
+	}
 
 	rec := recorder.New(cfg, plat, false)
 	rep.Checks = append(rep.Checks, Check{

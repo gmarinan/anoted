@@ -38,11 +38,11 @@ func TranscribeProgressBar(percent float64, barWidth int, eta time.Duration, bli
 func TXStatusLabel(state string) string {
 	switch state {
 	case "yes":
-		return txDoneStyle.Render(IconTranscribed + " yes")
+		return txDoneStyle.Render(LabelTranscribed + " yes")
 	case "err":
 		return txErrorStyle.Render("err")
 	case "no":
-		return txPendingStyle.Render(IconAudioSaved + " no")
+		return txPendingStyle.Render(LabelAudioSaved + " no")
 	default:
 		return txPendingStyle.Render(state)
 	}

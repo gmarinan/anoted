@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -64,10 +63,11 @@ type AudioConfig struct {
 }
 
 type DetectConfig struct {
-	PollIntervalMS int                       `yaml:"poll_interval_ms"`
-	Mode           string                    `yaml:"mode"`        // mic, window, both, none
-	WindowTool     string                    `yaml:"window_tool"` // auto, xdotool, wmctrl, none (for window/both modes)
-	Providers      map[string]ProviderConfig `yaml:"providers"`
+	PollIntervalMS      int                       `yaml:"poll_interval_ms"`
+	MeetingEndGraceMS   int                       `yaml:"meeting_end_grace_ms"`
+	Mode                string                    `yaml:"mode"`        // mic, window, both, none
+	WindowTool          string                    `yaml:"window_tool"` // auto, xdotool, wmctrl, none (for window/both modes)
+	Providers           map[string]ProviderConfig `yaml:"providers"`
 }
 
 type ProviderConfig struct {
@@ -96,15 +96,16 @@ func Default() Config {
 			LevelPreset:            LevelPresetResponsive,
 		},
 		Detection: DetectConfig{
-			PollIntervalMS: 2000,
-			Mode:           "mic",
+			PollIntervalMS:    2000,
+			MeetingEndGraceMS: 6000,
+			Mode:              "mic",
 			WindowTool:     "auto",
 			Providers: map[string]ProviderConfig{
 				"google_meet": {
 					Patterns: []string{"meet.google.com", "Google Meet", "Meet -", "Meet |"},
 				},
 				"teams": {
-					Patterns: []string{"teams.microsoft.com", "Microsoft Teams", "Teams"},
+					Patterns: []string{"teams.microsoft.com", "Meeting with", "| Meet", "In a call"},
 				},
 			},
 		},
@@ -225,11 +226,7 @@ func EnsureDefault() (string, error) {
 }
 
 func platformDefault() Config {
-	cfg := Default()
-	if runtime.GOOS == "windows" {
-		cfg.Detection.Mode = "window"
-	}
-	return cfg
+	return Default()
 }
 
 // ExpandPath expands ~ in paths to the user home directory.
@@ -285,6 +282,9 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Detection.PollIntervalMS == 0 {
 		c.Detection.PollIntervalMS = def.Detection.PollIntervalMS
+	}
+	if c.Detection.MeetingEndGraceMS == 0 {
+		c.Detection.MeetingEndGraceMS = def.Detection.MeetingEndGraceMS
 	}
 	if c.Detection.Mode == "" {
 		c.Detection.Mode = def.Detection.Mode
