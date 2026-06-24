@@ -207,7 +207,7 @@ func (v ConfigMenuView) renderFieldLine(focused bool, f ConfigFieldRow) string {
 	}
 	label := labelStyle.Render(f.Label + ":")
 	val := valueStyle.Render(f.Value)
-	if f.Kind == "readonly" || f.Kind == "device" {
+	if f.Kind == "readonly" || f.Kind == "device" || f.Kind == "path" {
 		val = subtleStyle.Render(f.Value)
 	}
 	if focused && f.Selected && v.Editing && f.Kind != "list" {
@@ -323,6 +323,7 @@ const (
 	ConfigFooterModal
 	ConfigFooterDevicePicker
 	ConfigFooterEditing
+	ConfigFooterPathField
 )
 
 // FooterForConfig returns context-sensitive footer for the Config tab.
@@ -334,6 +335,13 @@ func FooterForConfig(mode ConfigFooterMode, savedMsg, errMsg string, width int) 
 			FooterHint("↑↓", "choose"),
 			FooterHint("Enter", "apply"),
 			FooterHint("Esc", "cancel"),
+			FooterHint("q", "quit"),
+		)
+	case ConfigFooterPathField:
+		hints = JoinFooter(
+			FooterHint("Enter", "browse"),
+			FooterHint("e", "edit"),
+			FooterHint("c", "clear"),
 			FooterHint("q", "quit"),
 		)
 	case ConfigFooterEditing:

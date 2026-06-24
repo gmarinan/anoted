@@ -116,6 +116,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleSessionsDeleted(msg)
 	case configMenuSaveMsg:
 		return m.handleConfigMenuSave(msg)
+	case configFolderPickMsg:
+		return m.handleConfigFolderPick(msg)
 	case transcribeEnvelopeMsg:
 		return m.handleTranscribeEnvelope(msg)
 	case transcribeBlinkMsg:

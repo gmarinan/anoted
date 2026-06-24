@@ -282,6 +282,9 @@ func (m Model) configFooter() components.ConfigFooterMode {
 	if m.configEditing {
 		return components.ConfigFooterEditing
 	}
+	if f, ok := m.currentCfgField(); ok && f.kind == fieldPath {
+		return components.ConfigFooterPathField
+	}
 	return components.ConfigFooterNormal
 }
 
@@ -299,6 +302,8 @@ func configFieldKindName(k cfgFieldKind) string {
 		return "list"
 	case fieldDevice:
 		return "device"
+	case fieldPath:
+		return "path"
 	default:
 		return "readonly"
 	}

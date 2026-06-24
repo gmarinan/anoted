@@ -26,6 +26,7 @@ const (
 	fieldList
 	fieldReadonly
 	fieldDevice
+	fieldPath
 )
 
 type cfgField struct {
@@ -64,7 +65,7 @@ func generalCfgFields() []cfgField {
 	return []cfgField{
 		{
 			label: "output_dir",
-			kind:  fieldText,
+			kind:  fieldPath,
 			get:   func(c config.Config) string { return c.OutputDir },
 			set:   func(c *config.Config, v string) error { c.OutputDir = v; return nil },
 		},
@@ -443,7 +444,7 @@ func transcriptionCfgFields() []cfgField {
 		},
 		{
 			label: "output_dir",
-			kind:  fieldText,
+			kind:  fieldPath,
 			get: func(c config.Config) string {
 				if c.Transcription.OutputDir == "" {
 					return "(same as recording)"
@@ -760,6 +761,10 @@ func (m Model) handleConfigKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.startConfigListAdd()
 	case "d", "x":
 		return m.deleteConfigListItem()
+	case "e":
+		return m.startConfigPathEdit()
+	case "c":
+		return m.clearConfigPathField()
 	}
 	return m, nil
 }
@@ -890,6 +895,11 @@ func (m Model) activateConfigField() (tea.Model, tea.Cmd) {
 		return m, nil
 	case fieldDevice:
 		return m.openConfigDevicePicker(f.deviceSection)
+	case fieldPath:
+		if f.editable != nil && !f.editable(m.deps.Config) {
+			return m, nil
+		}
+		return m, m.pickConfigFolderCmd()
 	}
 	return m, nil
 }
