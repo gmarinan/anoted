@@ -64,6 +64,8 @@ func Run(cfg config.Config) Report {
 	}
 
 	rep.Checks = append(rep.Checks, desktopCheck(cfg))
+	rep.Checks = append(rep.Checks, autostartCheck())
+	rep.Checks = append(rep.Checks, trayCheck(cfg))
 
 	return rep
 }

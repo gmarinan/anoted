@@ -80,6 +80,61 @@ anoted detects WSL2 and will use the helper for real Windows audio when the prot
 | `anoted sessions` | List recorded sessions |
 | `anoted config` | Show config file |
 | `anoted doctor` | Check OS, tools, output path |
+| `anoted autostart enable --record` | Start at login and enable auto-record |
+
+## Hands-free recording (Linux)
+
+To start anoted when you log in and record meetings automatically:
+
+```bash
+anoted autostart enable --record
+```
+
+This creates `~/.config/autostart/anoted.desktop` and sets `auto_record: true` in your config. The TUI opens in a terminal at login; a visible recording indicator is shown while capturing.
+
+You can also toggle **launch_at_login** and **auto_record** in Config → General. You are responsible for participant consent and local recording laws.
+
+### System tray icon
+
+When `privacy.tray_indicator` is true (default), anoted shows an icon in the system tray:
+
+- **Watching** — app is running in the background
+- **Recording** — red dot while a meeting is being captured
+
+Right-click the icon for **Open recordings folder** or **Quit**. The tray complements the TUI; recording state is also shown in the terminal title and Home screen.
+
+On GNOME, if the icon does not appear, install `snixembed`. On **i3/i3bar**, `snixembed` is **required** (Flameshot/Sunshine use the older XEmbed tray directly):
+
+```bash
+sudo pacman -S snixembed
+snixembed --fork    # add to i3 config before anoted, or let anoted start it
+anoted watch
+```
+
+Add to your i3 config (`~/.config/i3/config`):
+
+```
+exec --no-startup-id snixembed --fork
+exec --no-startup-id anoted watch
+```
+
+### Workspace rules (Hyprland / Sway)
+
+anoted runs inside your terminal. To pin it to a workspace, set `desktop.autostart_terminal` and `desktop.wm_class` in config, then re-run `anoted autostart enable`:
+
+```yaml
+desktop:
+  wm_class: anoted
+  autostart_terminal: ["alacritty", "--class", "anoted", "-e"]
+```
+
+Hyprland example:
+
+```
+windowrulev2 = workspace 3 silent, class:^(anoted)$
+```
+
+Other terminals: `kitty --class=anoted`, `foot --app-id=anoted`.
 
 ## TUI keys
 

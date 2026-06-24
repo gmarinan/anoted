@@ -16,7 +16,7 @@ func TestWaveformVizDisabled(t *testing.T) {
 	if strings.Contains(out, "█") || strings.Contains(out, "activo al grabar") {
 		t.Fatalf("disabled meter should not render bars: %q", out)
 	}
-	if !strings.Contains(out, "alsa_output.test") {
+	if !strings.Contains(out, "alsa") {
 		t.Fatal("should still show device labels")
 	}
 }

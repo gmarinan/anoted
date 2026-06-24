@@ -9,16 +9,19 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/spf13/cobra"
 	"anoted/internal/audio"
+	"anoted/internal/autostart"
 	"anoted/internal/config"
 	"anoted/internal/detector"
 	"anoted/internal/doctor"
 	"anoted/internal/level"
 	"anoted/internal/logging"
+	"anoted/internal/open"
 	"anoted/internal/platform"
 	"anoted/internal/recorder"
 	"anoted/internal/session"
 	"anoted/internal/setup"
 	"anoted/internal/transcribe"
+	"anoted/internal/tray"
 	"anoted/internal/tui"
 )
 
@@ -67,6 +70,7 @@ func newRootCmd() *cobra.Command {
 		sessionsCmd(),
 		configCmd(),
 		doctorCmd(),
+		autostartCmd(),
 	)
 	return root
 }
@@ -130,6 +134,29 @@ func runTUI(cmd *cobra.Command, args []string) error {
 	defer store.Close()
 
 	audioProvider := audio.NewProvider()
+
+	tr := tray.New(tray.Options{
+		Enabled: cfg.Privacy.TrayIndicator,
+		OnOpenFolder: func() error {
+			dir, err := cfg.ResolvedOutputDir()
+			if err != nil {
+				return err
+			}
+			return open.Open(dir, cfg.Desktop, open.KindFolder)
+		},
+	})
+	if cfg.Privacy.TrayIndicator {
+		if err := tray.EnsureLinuxBridge(); err != nil {
+			logger.Warn("tray bridge unavailable", "err", err)
+		}
+		if err := tr.Start(); err != nil {
+			logger.Warn("system tray unavailable", "err", err)
+			tr = tray.New(tray.Options{Enabled: false})
+		} else {
+			defer tr.Stop()
+		}
+	}
+
 	deps := tui.Deps{
 		Config:       cfg,
 		ConfigPath:   path,
@@ -140,9 +167,11 @@ func runTUI(cmd *cobra.Command, args []string) error {
 		Audio:        audioProvider,
 		LevelMonitor: level.NewMonitor(audioProvider),
 		Transcriber:  transcribe.New(cfg),
+		Tray:         tr,
 	}
 
 	p := tea.NewProgram(tui.NewModel(deps), tea.WithFilter(tui.SessionScrollFilter))
+	tr.OnQuit(func() { p.Quit() })
 	if _, err := p.Run(); err != nil {
 		return fmt.Errorf("tui: %w", err)
 	}
@@ -243,6 +272,86 @@ func doctorCmd() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+func autostartCmd() *cobra.Command {
+	var enableRecord bool
+	cmd := &cobra.Command{
+		Use:   "autostart",
+		Short: "Configure launch at login",
+	}
+	enable := &cobra.Command{
+		Use:   "enable",
+		Short: "Start anoted automatically when you log in",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if !autostart.Available() {
+				return autostart.ErrUnavailable
+			}
+			cfg, cfgPath, err := loadConfig()
+			if err != nil {
+				return err
+			}
+			entry, err := autostart.EntryFromConfig(cfg)
+			if err != nil {
+				return err
+			}
+			if err := autostart.Enable(entry); err != nil {
+				return err
+			}
+			path, _ := autostart.Path()
+			fmt.Println("Launch at login enabled.")
+			if path != "" {
+				fmt.Println("Entry:", path)
+			}
+			if !enableRecord {
+				fmt.Println("Tip: add --record to also enable auto_record for meetings.")
+				return nil
+			}
+			cfg.AutoRecord = true
+			cfg.AutoRecordRequiresConfirmation = false
+			if err := config.Save(cfgPath, cfg); err != nil {
+				return err
+			}
+			fmt.Println("auto_record enabled (confirmation disabled).")
+			fmt.Println("You are responsible for participant consent and local recording laws.")
+			return nil
+		},
+	}
+	enable.Flags().BoolVar(&enableRecord, "record", false, "also enable auto_record without confirmation")
+	disable := &cobra.Command{
+		Use:   "disable",
+		Short: "Remove anoted from login startup",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := autostart.Disable(); err != nil {
+				return err
+			}
+			fmt.Println("Launch at login disabled.")
+			return nil
+		},
+	}
+	status := &cobra.Command{
+		Use:   "status",
+		Short: "Show whether launch at login is enabled",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if !autostart.Available() {
+				return autostart.ErrUnavailable
+			}
+			cfg, _, err := loadConfig()
+			if err != nil {
+				return err
+			}
+			path, _ := autostart.Path()
+			fmt.Printf("Launch at login: %v\n", autostart.Enabled())
+			if path != "" {
+				fmt.Printf("Entry: %s\n", path)
+			}
+			fmt.Printf("auto_record: %v\n", cfg.AutoRecord)
+			fmt.Printf("auto_record_requires_confirmation: %v\n", cfg.AutoRecordRequiresConfirmation)
+			return nil
+		},
+	}
+	cmd.AddCommand(enable, disable, status)
+	return cmd
 }
 
 func loadConfig() (config.Config, string, error) {

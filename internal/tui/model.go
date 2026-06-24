@@ -14,6 +14,7 @@ import (
 	"anoted/internal/session"
 	"anoted/internal/setup"
 	"anoted/internal/transcribe"
+	"anoted/internal/tray"
 	"anoted/internal/tui/components"
 )
 
@@ -49,6 +50,7 @@ type Deps struct {
 	Audio       audio.Provider
 	LevelMonitor level.Monitor
 	Transcriber *transcribe.Service
+	Tray        tray.Indicator
 }
 
 // Model is the Bubble Tea model.

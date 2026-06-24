@@ -61,7 +61,7 @@ func TestWaveformVizRender(t *testing.T) {
 		Recording:      true,
 		LevelEnabled:   true,
 		LevelAvailable: true,
-		Width:          40,
+		Width:          100,
 		LevelFrame:     5,
 	}
 	out := v.Render()
@@ -70,9 +70,29 @@ func TestWaveformVizRender(t *testing.T) {
 	}
 }
 
+func TestWaveformVizRenderCompact(t *testing.T) {
+	v := WaveformViz{
+		SystemBands:  []float64{0.2, 0.3},
+		SystemLabel:  "alsa_output.test",
+		MicLabel:     "Built-in Mic",
+		Recording:    true,
+		LevelEnabled: true,
+		Width:        60,
+		ForceCompact: true,
+		LevelFrame:   1,
+	}
+	out := stripANSI(v.Render())
+	if !strings.Contains(out, "System") {
+		t.Fatal("missing compact system label")
+	}
+	if strings.Contains(out, "System audio") {
+		t.Fatal("compact mode should use short labels")
+	}
+}
+
 func TestWaveformViewChangesEachFrame(t *testing.T) {
 	bands := []float64{0.2, 0.3, 0.25, 0.4}
-	v := WaveformViz{SystemBands: bands, Width: 30, LevelFrame: 1, LevelEnabled: true}
+	v := WaveformViz{SystemBands: bands, Width: 100, LevelFrame: 1, LevelEnabled: true}
 	a := stripANSI(v.Render())
 	v.LevelFrame = 2
 	b := stripANSI(v.Render())
@@ -89,11 +109,27 @@ func TestWaveformVizMicIdle(t *testing.T) {
 		Recording:      false,
 		LevelEnabled:   true,
 		LevelAvailable: true,
-		Width:          30,
+		Width:          100,
 	}
 	out := v.Render()
 	if !strings.Contains(out, "activo al grabar") {
 		t.Fatal("expected idle mic hint")
+	}
+}
+
+func TestWaveformVizMicIdleCompact(t *testing.T) {
+	v := WaveformViz{
+		SystemBands:  []float64{0.1},
+		SystemLabel:  "out",
+		MicLabel:     "mic",
+		Recording:    false,
+		LevelEnabled: true,
+		Width:        55,
+		ForceCompact: true,
+	}
+	out := v.Render()
+	if !strings.Contains(out, "al grabar") {
+		t.Fatal("expected compact idle mic hint")
 	}
 }
 

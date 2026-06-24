@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"anoted/internal/autostart"
 	"anoted/internal/config"
 	"anoted/internal/tui/components"
 )
@@ -81,6 +82,45 @@ func generalCfgFields() []cfgField {
 					return err
 				}
 				c.AutoRecord = b
+				return nil
+			},
+		},
+		{
+			label: "launch_at_login",
+			kind:  fieldBool,
+			editable: func(c config.Config) bool {
+				return autostart.Available()
+			},
+			get: func(c config.Config) string {
+				return fmt.Sprintf("%v", autostart.Enabled())
+			},
+			set: func(c *config.Config, v string) error {
+				b, err := strconv.ParseBool(v)
+				if err != nil {
+					return err
+				}
+				if b {
+					entry, err := autostart.EntryFromConfig(*c)
+					if err != nil {
+						return err
+					}
+					return autostart.Enable(entry)
+				}
+				return autostart.Disable()
+			},
+		},
+		{
+			label: "tray_indicator",
+			kind:  fieldBool,
+			get: func(c config.Config) string {
+				return fmt.Sprintf("%v", c.Privacy.TrayIndicator)
+			},
+			set: func(c *config.Config, v string) error {
+				b, err := strconv.ParseBool(v)
+				if err != nil {
+					return err
+				}
+				c.Privacy.TrayIndicator = b
 				return nil
 			},
 		},
@@ -597,6 +637,38 @@ func desktopCfgFields() []cfgField {
 					v = ""
 				}
 				c.Desktop.FileOpener = v
+				return nil
+			},
+		},
+		{
+			label: "wm_class",
+			kind:  fieldText,
+			get: func(c config.Config) string {
+				if c.Desktop.WMClass == "" {
+					return "anoted"
+				}
+				return c.Desktop.WMClass
+			},
+			set: func(c *config.Config, v string) error {
+				c.Desktop.WMClass = strings.TrimSpace(v)
+				return nil
+			},
+		},
+		{
+			label: "autostart_terminal",
+			kind:  fieldText,
+			get: func(c config.Config) string {
+				if len(c.Desktop.AutostartTerminal) == 0 {
+					return "(default terminal)"
+				}
+				return strings.Join(c.Desktop.AutostartTerminal, " ")
+			},
+			set: func(c *config.Config, v string) error {
+				if v == "(default terminal)" || strings.TrimSpace(v) == "" {
+					c.Desktop.AutostartTerminal = nil
+					return nil
+				}
+				c.Desktop.AutostartTerminal = strings.Fields(v)
 				return nil
 			},
 		},

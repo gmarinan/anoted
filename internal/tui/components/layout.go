@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 var (
@@ -108,9 +109,13 @@ func SubTabBar(labels []string, active int) string {
 }
 
 const (
-	TwoColumnMinWidth = 80
-	MinPanelWidth     = 28
-	panelColumnGap    = 1
+	TwoColumnMinWidth         = 80
+	HomeTopRowMinWidth        = 140 // status | audio side-by-side only when wide enough
+	WaveformCompactWidth      = 72  // equalizer uses short layout below this inner width
+	SessionsCompactWidth      = 140
+	SessionsUltraCompactWidth = 90
+	MinPanelWidth             = 28
+	panelColumnGap            = 1
 )
 
 // PanelLayout computes responsive panel widths for the current terminal.
@@ -290,6 +295,14 @@ func padLineWidth(line string, width int) string {
 		return line
 	}
 	return line + strings.Repeat(" ", gap)
+}
+
+// clampStyledWidth shortens a styled string to fit a panel without wrapping.
+func clampStyledWidth(s string, maxW int) string {
+	if maxW <= 0 || lipgloss.Width(s) <= maxW {
+		return s
+	}
+	return ansi.Truncate(s, maxW, "…")
 }
 
 // FloatCenter overlays content centered on a dimmed background.

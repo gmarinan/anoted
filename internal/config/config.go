@@ -35,6 +35,10 @@ type DesktopConfig struct {
 	OpenCommand []string `yaml:"open_command"`
 	// FileOpener overrides how recording.wav is opened (default: xdg-open).
 	FileOpener string `yaml:"file_opener"`
+	// WMClass is the window class for autostart terminal (Hyprland/Sway rules).
+	WMClass string `yaml:"wm_class"`
+	// AutostartTerminal launches anoted inside this terminal, e.g. ["alacritty", "--class", "anoted", "-e"].
+	AutostartTerminal []string `yaml:"autostart_terminal"`
 }
 
 type TranscriptionConfig struct {
@@ -95,6 +99,7 @@ type ProviderConfig struct {
 
 type PrivacyConfig struct {
 	ShowRecordingIndicator       bool `yaml:"show_recording_indicator"`
+	TrayIndicator                bool `yaml:"tray_indicator"`
 	RequireManualConsentFirstRun bool `yaml:"require_manual_consent_first_run"`
 }
 
@@ -142,10 +147,12 @@ func Default() Config {
 			},
 		},
 		Desktop: DesktopConfig{
-			Opener: "auto",
+			Opener:  "auto",
+			WMClass: "anoted",
 		},
 		Privacy: PrivacyConfig{
 			ShowRecordingIndicator:       true,
+			TrayIndicator:                true,
 			RequireManualConsentFirstRun: true,
 		},
 	}
@@ -351,6 +358,9 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Desktop.Opener == "" {
 		c.Desktop.Opener = def.Desktop.Opener
+	}
+	if c.Desktop.WMClass == "" {
+		c.Desktop.WMClass = def.Desktop.WMClass
 	}
 }
 

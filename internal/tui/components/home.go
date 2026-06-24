@@ -38,23 +38,21 @@ type HomeView struct {
 
 func (v HomeView) View() string {
 	layout := NewPanelLayout(v.Width)
-	colW := layout.ColumnWidth()
+	fullW := layout.FullWidth()
 
 	sess := v.Sessions
 	sess.Height = v.Height
-	sess.Width = v.Width
-	if layout.TwoColumn() {
-		sess.Width = colW
-	}
+	sess.Width = fullW
 	sessionsBlock := sess.renderMainContent()
 
-	var content string
-	if layout.TwoColumn() {
-		leftCol := JoinBlocksVertical(v.statusBox(colW), sessionsBlock)
-		content = layout.JoinColumns(leftCol, v.audioBox(colW))
+	var topRow string
+	if layout.Width >= HomeTopRowMinWidth {
+		colW := layout.ColumnWidth()
+		topRow = layout.JoinColumns(v.statusBox(colW), v.audioBox(colW, true))
 	} else {
-		content = JoinBlocksVertical(v.statusBox(colW), sessionsBlock, v.audioBox(colW))
+		topRow = JoinBlocksVertical(v.statusBox(fullW), v.audioBox(fullW, layout.Width < SessionsCompactWidth))
 	}
+	content := JoinBlocksVertical(topRow, sessionsBlock)
 
 	if sess.DeleteConfirm {
 		h := v.overlayHeight(content)
@@ -106,7 +104,7 @@ func (v HomeView) statusBox(width int) string {
 	return Box("Status", strings.Join(lines, "\n"), width)
 }
 
-func (v HomeView) audioBox(width int) string {
+func (v HomeView) audioBox(width int, forceCompact bool) string {
 	sys := v.SystemDevice
 	if sys == "" {
 		sys = subtleStyle.Render("(loading…)")
@@ -127,6 +125,7 @@ func (v HomeView) audioBox(width int) string {
 		LevelAvailable: v.LevelAvailable,
 		MonitorWarn:    v.MonitorWarn,
 		Width:          width,
+		ForceCompact:   forceCompact,
 	}
 	return Box("Audio", viz.Render(), width)
 }

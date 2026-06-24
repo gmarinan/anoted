@@ -241,9 +241,9 @@ func (v SessionsView) renderMainContent() string {
 	}
 	b.WriteString("\n\n")
 
-	details := v.detailsBox(layout.ColumnWidth())
-	preview := v.previewBox(v.previewWidth(layout))
-	if layout.TwoColumn() {
+	details := v.detailsBox(v.detailsWidth())
+	preview := v.previewBox(v.previewWidth())
+	if v.detailsPreviewTwoColumn() {
 		b.WriteString(layout.JoinColumns(details, preview))
 	} else {
 		b.WriteString(JoinBlocksVertical(details, preview))
@@ -251,9 +251,13 @@ func (v SessionsView) renderMainContent() string {
 	return b.String()
 }
 
-func (v SessionsView) previewWidth(layout PanelLayout) int {
-	if !layout.TwoColumn() {
-		return layout.FullWidth()
+func (v SessionsView) detailsPreviewTwoColumn() bool {
+	return v.Width >= HomeTopRowMinWidth
+}
+
+func (v SessionsView) previewWidth() int {
+	if !v.detailsPreviewTwoColumn() {
+		return NewPanelLayout(v.Width).FullWidth()
 	}
 	detailsW := v.detailsWidth()
 	previewW := v.Width - detailsW - panelColumnGap
@@ -264,9 +268,8 @@ func (v SessionsView) previewWidth(layout PanelLayout) int {
 }
 
 func (v SessionsView) detailsWidth() int {
-	layout := NewPanelLayout(v.Width)
-	if !layout.TwoColumn() {
-		return layout.FullWidth()
+	if !v.detailsPreviewTwoColumn() {
+		return NewPanelLayout(v.Width).FullWidth()
 	}
 	w := int(float64(v.Width) * 0.42)
 	if w < MinPanelWidth {
@@ -388,6 +391,7 @@ func (v SessionsView) tableBox(width int) string {
 	lines := []string{subtleStyle.Render(header)}
 	for i, r := range v.PageRecords {
 		line := v.formatRow(r, width)
+		line = clampStyledWidth(line, width-4)
 		if i == v.Cursor {
 			line = lipgloss.NewStyle().
 				Background(lipgloss.Color("63")).
@@ -400,12 +404,19 @@ func (v SessionsView) tableBox(width int) string {
 }
 
 func (v SessionsView) compactTable() bool {
-	return v.Width < 96
+	return v.Width < SessionsCompactWidth
+}
+
+func (v SessionsView) ultraCompactTable() bool {
+	return v.Width < SessionsUltraCompactWidth
 }
 
 func (v SessionsView) tableHeader() string {
+	if v.ultraCompactTable() {
+		return fmt.Sprintf("%-4s  %-11s  %-8s  %s", "ID", "DATE", "MEET", "TX")
+	}
 	if v.compactTable() {
-		return fmt.Sprintf("%-4s  %-16s  %-12s  %-8s  %s", "ID", "DATE", "MEET", "DUR", "TX")
+		return fmt.Sprintf("%-4s  %-14s  %-9s  %-6s  %s", "ID", "DATE", "MEET", "DUR", "TX")
 	}
 	return fmt.Sprintf("%-4s  %-16s  %-12s  %-8s  %-28s  %s",
 		"ID", "DATE", "MEET", "DUR", "TX", "PATH")
@@ -419,21 +430,36 @@ func (v SessionsView) formatRow(r session.Record, tableWidth int) string {
 	if dur == "" {
 		dur = "—"
 	}
-	meet := truncate(formatProvider(string(r.Provider)), 12)
+	meet := truncate(formatProvider(string(r.Provider)), meetColWidth(v))
 	tx := v.formatTXColumn(r, tableWidth)
-	if v.compactTable() {
-		return fmt.Sprintf("#%-3d  %-16s  %-12s  %-8s  %s",
+	dateFmt := "2006-01-02 15:04"
+	if v.ultraCompactTable() {
+		dateFmt = "01-02 15:04"
+		meet = truncate(meet, 8)
+	} else if v.compactTable() {
+		dateFmt = "06-01-02 15:04"
+	}
+	if v.ultraCompactTable() {
+		return fmt.Sprintf("#%-3d  %-11s  %-8s  %s",
 			r.ID,
-			session.FormatLocalTime(r.StartedAt, "2006-01-02 15:04"),
+			session.FormatLocalTime(r.StartedAt, dateFmt),
 			meet,
-			truncate(dur, 8),
+			tx,
+		)
+	}
+	if v.compactTable() {
+		return fmt.Sprintf("#%-3d  %-14s  %-9s  %-6s  %s",
+			r.ID,
+			session.FormatLocalTime(r.StartedAt, dateFmt),
+			meet,
+			truncate(dur, 6),
 			tx,
 		)
 	}
 	path := filepath.Join(r.Dir, sessionAudioName)
 	return fmt.Sprintf("#%-3d  %-16s  %-12s  %-8s  %-28s  %s",
 		r.ID,
-		session.FormatLocalTime(r.StartedAt, "2006-01-02 15:04"),
+		session.FormatLocalTime(r.StartedAt, dateFmt),
 		meet,
 		truncate(dur, 8),
 		tx,
@@ -441,22 +467,45 @@ func (v SessionsView) formatRow(r session.Record, tableWidth int) string {
 	)
 }
 
+func meetColWidth(v SessionsView) int {
+	switch {
+	case v.ultraCompactTable():
+		return 8
+	case v.compactTable():
+		return 10
+	default:
+		return 12
+	}
+}
+
 func (v SessionsView) formatTXColumn(r session.Record, tableWidth int) string {
 	if v.TranscribeErrDir == r.Dir && v.TranscribeErr != "" {
 		return txErrorStyle.Render("err")
 	}
 	if v.TranscribeActive && r.Dir == v.TranscribeSessionDir {
-		barW := 12
+		if v.compactTable() || tableWidth < 120 {
+			return TranscribeProgressCompact(v.TranscribePercent, v.TranscribeBlink)
+		}
+		barW := 10
 		if tableWidth > 100 {
 			barW = 14
 		}
 		return TranscribeProgressBar(v.TranscribePercent, barW, v.TranscribeETA, v.TranscribeBlink)
 	}
 	if transcribe.HasTranscript(r.Dir, v.Transcription) {
+		if v.compactTable() {
+			return txDoneStyle.Render("✓")
+		}
 		return TXStatusLabel("yes")
 	}
 	if audioExists(r.Dir) {
+		if v.compactTable() {
+			return txPendingStyle.Render("·")
+		}
 		return TXStatusLabel("no")
+	}
+	if v.compactTable() {
+		return txPendingStyle.Render("—")
 	}
 	return TXStatusLabel("no")
 }
@@ -489,7 +538,11 @@ func (v SessionsView) detailsBox(width int) string {
 		lines = append(lines, row("Duration", r.Metadata.Duration))
 	}
 	if v.TranscribeActive && r.Dir == v.TranscribeSessionDir {
-		lines = append(lines, row("TX", warnStyle.Render("transcribing…")))
+		barW := 10
+		if width > 50 {
+			barW = min(14, width-20)
+		}
+		lines = append(lines, row("TX", TranscribeProgressBar(v.TranscribePercent, barW, v.TranscribeETA, v.TranscribeBlink)))
 	}
 	return Box("Details", strings.Join(lines, "\n"), width)
 }

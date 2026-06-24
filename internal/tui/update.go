@@ -15,6 +15,7 @@ import (
 )
 
 func (m Model) Init() tea.Cmd {
+	m.syncTrayState()
 	cmds := []tea.Cmd{
 		readWindowSizeCmd(),
 		m.schedulePoll(),
@@ -313,6 +314,7 @@ func (m Model) handleRecordToggle(msg recordToggleResultMsg) (tea.Model, tea.Cmd
 		m.appState = StateRecording
 		m.systemBands = nil
 		m.micBands = nil
+		m.syncTrayState()
 		return m, m.scheduleDurationTick()
 	}
 
@@ -342,6 +344,7 @@ func (m Model) handleRecordToggle(msg recordToggleResultMsg) (tea.Model, tea.Cmd
 	} else {
 		m.appState = StateIdle
 	}
+	m.syncTrayState()
 
 	var cmds []tea.Cmd
 	savedDir := msg.savedDir

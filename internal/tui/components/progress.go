@@ -34,6 +34,22 @@ func TranscribeProgressBar(percent float64, barWidth int, eta time.Duration, bli
 	return style.Render("TX: " + body)
 }
 
+// TranscribeProgressCompact is a short TX cell for narrow session tables.
+func TranscribeProgressCompact(percent float64, blink bool) string {
+	if percent < 0 {
+		percent = 0
+	}
+	if percent > 100 {
+		percent = 100
+	}
+	body := fmt.Sprintf("%d%%", int(percent))
+	style := txActiveStyle
+	if blink {
+		style = txActiveAltStyle
+	}
+	return style.Render(body)
+}
+
 // TXStatusLabel renders a semantic TX column cell.
 func TXStatusLabel(state string) string {
 	switch state {
