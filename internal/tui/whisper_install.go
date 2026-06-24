@@ -185,6 +185,7 @@ func (m Model) handleWhisperInstallSaved(msg whisperInstallSavedMsg) (tea.Model,
 	m.whisperInstallErr = ""
 	m.appendWhisperInstallLog("✓ whisper installed")
 	m.doctorReport = loadDoctorReport(m.deps.Config)
+	m.doctorWhisperCanInstall = false
 	return m, nil
 }
 

@@ -38,14 +38,33 @@ type DesktopConfig struct {
 }
 
 type TranscriptionConfig struct {
-	AutoAfterRecording bool   `yaml:"auto_after_recording"`
-	Binary             string `yaml:"binary"`      // empty = auto-detect in PATH
-	Backend            string `yaml:"backend"`     // auto, openai-whisper, whisper-cpp
-	Model              string `yaml:"model"`       // tiny, base, small, medium, large, turbo
-	Language           string `yaml:"language"`    // empty = auto-detect
-	Device             string `yaml:"device"`      // cpu, cuda, auto
-	GPULayers          int    `yaml:"gpu_layers"`  // whisper.cpp -ngl (0 = CPU only)
-	ModelPath          string `yaml:"model_path"`  // whisper.cpp ggml model file
+	AutoAfterRecording bool                      `yaml:"auto_after_recording"`
+	Binary             string                    `yaml:"binary"` // empty = auto-detect in PATH
+	Backend            string                    `yaml:"backend"`
+	Model              string                    `yaml:"model"`
+	Language           string                    `yaml:"language"`
+	Device             string                    `yaml:"device"`
+	GPULayers          int                       `yaml:"gpu_layers"`
+	ModelPath          string                    `yaml:"model_path"`
+	OutputFormats      []string                  `yaml:"output_formats"`
+	OutputDir          string                    `yaml:"output_dir"` // empty = same folder as recording
+	Markdown           TranscriptionMarkdownConfig `yaml:"markdown"`
+}
+
+// TranscriptionMarkdownConfig controls Obsidian-style meeting notes.
+type TranscriptionMarkdownConfig struct {
+	Filename     string   `yaml:"filename"`
+	Tags         []string `yaml:"tags"`
+	CSSClasses   []string `yaml:"cssclasses"`
+	WeekdayClass *bool    `yaml:"weekday_class"`
+}
+
+// MarkdownWeekdayClassEnabled reports whether to add weekday cssclass (default true).
+func (m TranscriptionMarkdownConfig) MarkdownWeekdayClassEnabled() bool {
+	if m.WeekdayClass == nil {
+		return true
+	}
+	return *m.WeekdayClass
 }
 
 type AudioConfig struct {
@@ -115,6 +134,12 @@ func Default() Config {
 			Model:              "turbo",
 			Device:             "auto",
 			GPULayers:          0,
+			OutputFormats:      []string{OutputFormatTXT, OutputFormatSRT},
+			Markdown: TranscriptionMarkdownConfig{
+				Filename:   "transcript.md",
+				Tags:       []string{"meeting"},
+				CSSClasses: []string{"meeting"},
+			},
 		},
 		Desktop: DesktopConfig{
 			Opener: "auto",
@@ -310,6 +335,19 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Transcription.Device == "" {
 		c.Transcription.Device = def.Transcription.Device
+	}
+	if len(c.Transcription.OutputFormats) == 0 {
+		c.Transcription.OutputFormats = append([]string(nil), def.Transcription.OutputFormats...)
+	}
+	c.Transcription.OutputFormats = NormalizeOutputFormats(c.Transcription.OutputFormats)
+	if c.Transcription.Markdown.Filename == "" {
+		c.Transcription.Markdown.Filename = def.Transcription.Markdown.Filename
+	}
+	if len(c.Transcription.Markdown.Tags) == 0 {
+		c.Transcription.Markdown.Tags = append([]string(nil), def.Transcription.Markdown.Tags...)
+	}
+	if len(c.Transcription.Markdown.CSSClasses) == 0 {
+		c.Transcription.Markdown.CSSClasses = append([]string(nil), def.Transcription.Markdown.CSSClasses...)
 	}
 	if c.Desktop.Opener == "" {
 		c.Desktop.Opener = def.Desktop.Opener

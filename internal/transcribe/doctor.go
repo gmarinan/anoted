@@ -70,20 +70,38 @@ func DoctorChecks(cfg config.Config) []Check {
 }
 
 func gpuCheck(cfg config.TranscriptionConfig) []Check {
+	gpu := DetectGPU()
 	device := resolveDevice(cfg)
-	if cfg.GPULayers > 0 || cfg.Device == DeviceCUDA {
+	usingCUDA := cfg.GPULayers > 0 || cfg.Device == DeviceCUDA || (device == DeviceCUDA && hasCUDA())
+
+	if usingCUDA {
 		if hasCUDA() {
-			if cfg.GPULayers > 0 {
-				return []Check{{Name: "transcription_gpu", Status: "ok", Detail: fmt.Sprintf("CUDA (%d gpu_layers)", cfg.GPULayers)}}
-			}
-			return []Check{{Name: "transcription_gpu", Status: "ok", Detail: "CUDA available"}}
+			detail := formatGPUActiveDetail(gpu, cfg)
+			return []Check{{Name: "transcription_gpu", Status: "ok", Detail: detail}}
 		}
 		return []Check{{Name: "transcription_gpu", Status: "warn", Detail: "CUDA requested but nvidia-smi not found; will use CPU"}}
 	}
-	if device == DeviceCUDA && hasCUDA() {
-		return []Check{{Name: "transcription_gpu", Status: "ok", Detail: "auto → CUDA"}}
+
+	if gpu.NVIDIA {
+		if ManagedTorchCUDAAvailable() {
+			return []Check{{Name: "transcription_gpu", Status: "ok", Detail: formatGPUActiveDetail(gpu, cfg)}}
+		}
+		return []Check{{Name: "transcription_gpu", Status: "ok", Detail: fmt.Sprintf("CPU (%s detected — press g in Doctor or Setup)", gpu.Name)}}
 	}
 	return []Check{{Name: "transcription_gpu", Status: "ok", Detail: "CPU"}}
+}
+
+func formatGPUActiveDetail(gpu GPUInfo, cfg config.TranscriptionConfig) string {
+	if cfg.GPULayers > 0 {
+		return fmt.Sprintf("CUDA (%d gpu_layers)", cfg.GPULayers)
+	}
+	if gpu.Name == "" {
+		return "CUDA"
+	}
+	if gpu.Driver != "" {
+		return fmt.Sprintf("CUDA — %s, driver %s", gpu.Name, gpu.Driver)
+	}
+	return fmt.Sprintf("CUDA — %s", gpu.Name)
 }
 
 func pythonCheck() Check {

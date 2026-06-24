@@ -22,8 +22,9 @@ const (
 
 // Result holds generated transcript file paths.
 type Result struct {
-	SessionDir string
-	Files      []string
+	SessionDir   string
+	TranscriptDir string
+	Files        []string
 }
 
 // Service transcribes session audio with Whisper.
@@ -47,6 +48,11 @@ func (s *Service) TranscribeSessionWithProgress(ctx context.Context, sessionDir 
 		return Result{}, fmt.Errorf("audio file missing: %w", err)
 	}
 
+	outDir, err := OutputDir(s.cfg.Transcription, sessionDir)
+	if err != nil {
+		return Result{}, err
+	}
+
 	bin, backend, err := resolveBinary(s.cfg.Transcription)
 	if err != nil {
 		return Result{}, err
@@ -54,10 +60,21 @@ func (s *Service) TranscribeSessionWithProgress(ctx context.Context, sessionDir 
 
 	switch backend {
 	case BackendWhisperCpp:
-		return transcribeWhisperCpp(ctx, s.cfg.Transcription, bin, audioPath, sessionDir, onProgress)
+		if _, err := transcribeWhisperCpp(ctx, s.cfg.Transcription, bin, audioPath, outDir, sessionDir, onProgress); err != nil {
+			return Result{}, err
+		}
 	default:
-		return transcribeOpenAI(ctx, s.cfg.Transcription, bin, audioPath, sessionDir, onProgress)
+		if _, err := transcribeOpenAI(ctx, s.cfg.Transcription, bin, audioPath, outDir, sessionDir, onProgress); err != nil {
+			return Result{}, err
+		}
 	}
+	res, err := postProcessTranscription(s.cfg.Transcription, sessionDir, outDir)
+	if err != nil {
+		return Result{}, err
+	}
+	res.SessionDir = sessionDir
+	res.TranscriptDir = outDir
+	return res, nil
 }
 
 // AudioPath returns the expected recording path inside a session directory.
@@ -65,20 +82,35 @@ func AudioPath(sessionDir string) string {
 	return filepath.Join(sessionDir, recorder.SessionAudioFile)
 }
 
-// HasTranscript reports whether transcript.txt exists in the session folder.
-func HasTranscript(sessionDir string) bool {
-	_, err := os.Stat(filepath.Join(sessionDir, TranscriptBaseName+".txt"))
-	return err == nil
+// HasTranscript reports whether transcript output exists for a session.
+func HasTranscript(sessionDir string, tcfg config.TranscriptionConfig) bool {
+	dir, err := OutputDir(tcfg, sessionDir)
+	if err != nil {
+		dir = sessionDir
+	}
+	return hasTranscriptInDir(dir, tcfg, sessionDir)
 }
 
-// ListTranscriptFiles returns existing transcript.* files in the session folder.
-func ListTranscriptFiles(sessionDir string) []string {
-	var out []string
+func hasTranscriptInDir(dir string, tcfg config.TranscriptionConfig, sessionDir string) bool {
+	fileBase := outputFileBase(tcfg, sessionDir)
 	for _, ext := range []string{".txt", ".srt", ".vtt", ".json"} {
-		p := filepath.Join(sessionDir, TranscriptBaseName+ext)
+		p := filepath.Join(dir, fileBase+ext)
 		if _, err := os.Stat(p); err == nil {
-			out = append(out, p)
+			return true
 		}
 	}
-	return out
+	md := filepath.Join(dir, markdownFilename(tcfg, sessionDir))
+	if _, err := os.Stat(md); err == nil {
+		return true
+	}
+	return false
+}
+
+// ListTranscriptFiles returns existing transcript output files for a session.
+func ListTranscriptFiles(sessionDir string, tcfg config.TranscriptionConfig) []string {
+	dir, err := OutputDir(tcfg, sessionDir)
+	if err != nil {
+		dir = sessionDir
+	}
+	return listOutputFiles(dir, tcfg, sessionDir)
 }

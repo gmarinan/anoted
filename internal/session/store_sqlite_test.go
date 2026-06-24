@@ -111,3 +111,36 @@ func TestWriteMetadataFile(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestUpdateMetadataEndedPreservesFields(t *testing.T) {
+	dir := t.TempDir()
+	started := time.Date(2026, 6, 23, 16, 30, 0, 0, time.UTC)
+	meta := Metadata{
+		StartedAt:    started,
+		Provider:     ProviderGoogleMeet,
+		Platform:     "linux",
+		Backend:      "pipewire",
+		SystemDevice: "monitor",
+		Manual:       true,
+	}
+	if err := WriteMetadataFile(dir, meta); err != nil {
+		t.Fatal(err)
+	}
+	ended := started.Add(3 * time.Minute)
+	if err := UpdateMetadataEnded(dir, started, ended); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ReadMetadataFile(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Provider != ProviderGoogleMeet {
+		t.Fatalf("provider %q", got.Provider)
+	}
+	if got.Duration != "3m0s" {
+		t.Fatalf("duration %q", got.Duration)
+	}
+	if got.EndedAt.IsZero() {
+		t.Fatal("expected ended_at")
+	}
+}

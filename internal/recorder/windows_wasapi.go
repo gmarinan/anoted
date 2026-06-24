@@ -187,13 +187,7 @@ func (r *WindowsWASAPIRecorder) Stop(_ context.Context) error {
 	ended := time.Now()
 	var metaErr error
 	if writeErr == nil && sessionDir != "" {
-		meta := session.Metadata{
-			StartedAt: startedAt,
-			EndedAt:   ended,
-			Duration:  ended.Sub(startedAt).Round(time.Second).String(),
-			Backend:   r.Name(),
-		}
-		metaErr = session.WriteMetadataFile(sessionDir, meta)
+		metaErr = session.UpdateMetadataEnded(sessionDir, startedAt, ended)
 	}
 
 	r.mu.Lock()

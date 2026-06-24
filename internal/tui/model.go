@@ -133,6 +133,15 @@ type Model struct {
 	whisperInstallErr    string
 	whisperInstallCancel context.CancelFunc
 
+	gpuInstallActive bool
+	gpuInstallLog    []string
+	gpuInstallErr    string
+	gpuInstallScroll int
+	gpuInstallCancel context.CancelFunc
+
+	doctorWhisperCanInstall bool
+	doctorGPUCanInstall     bool
+
 	setupOpen     bool
 	setupWizard   setup.WizardState
 	setupSummary  []string

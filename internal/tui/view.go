@@ -89,8 +89,8 @@ func (m Model) homeView() components.HomeView {
 func (m Model) sessionsPanel() components.SessionsView {
 	rec, _ := m.selectedSession()
 	preview := ""
-	if rec.Dir != "" && transcribe.HasTranscript(rec.Dir) && !(m.transcribeActive && rec.Dir == m.transcribeSessionDir) {
-		if text, err := transcribe.ReadPreview(rec.Dir, 12); err == nil {
+	if rec.Dir != "" && transcribe.HasTranscript(rec.Dir, m.deps.Config.Transcription) && !(m.transcribeActive && rec.Dir == m.transcribeSessionDir) {
+		if text, err := transcribe.ReadPreview(rec.Dir, m.deps.Config.Transcription, 12); err == nil {
 			preview = text
 		}
 	}
@@ -119,6 +119,7 @@ func (m Model) sessionsPanel() components.SessionsView {
 		TranscribeLog:        append([]string(nil), m.transcribeLog...),
 		TranscribeErr:        m.transcribeErr,
 		TranscribeErrDir:     m.transcribeSessionDir,
+		Transcription:        m.deps.Config.Transcription,
 		PreviewText:          preview,
 	}
 	if m.sessionsDeleteConfirm {
@@ -134,19 +135,24 @@ func (m Model) doctorView() components.DoctorView {
 		backend = m.recStatus.Backend
 	}
 	return components.DoctorView{
-		Report:             m.doctorReport,
-		AppState:           string(m.appState),
-		Platform:           m.deps.Platform.Name(),
-		Backend:            backend,
-		Provider:           displayProvider(m.provider, m.detection.Title),
-		SystemDevice:       m.systemDevice,
-		MicDevice:          m.micDevice,
-		DetectionWarn:      m.detection.Warning,
-		Width:              m.width,
+		Report:               m.doctorReport,
+		AppState:             string(m.appState),
+		Platform:             m.deps.Platform.Name(),
+		Backend:              backend,
+		Provider:             displayProvider(m.provider, m.detection.Title),
+		SystemDevice:         m.systemDevice,
+		MicDevice:            m.micDevice,
+		DetectionWarn:        m.detection.Warning,
+		Width:                m.width,
+		Height:               m.height,
 		WhisperInstallActive: m.whisperInstallActive,
 		WhisperInstallLog:    append([]string(nil), m.whisperInstallLog...),
 		WhisperInstallErr:    m.whisperInstallErr,
-		WhisperCanInstall:    m.whisperCanInstall(),
+		WhisperCanInstall:    m.doctorWhisperOffer(),
+		GPUInstallActive:     m.gpuInstallActive,
+		GPUInstallLog:        m.visibleGPUInstallLog(8),
+		GPUInstallErr:        m.gpuInstallErr,
+		GPUCanInstall:        m.doctorGPUOffer(),
 	}
 }
 
@@ -164,10 +170,21 @@ func (m Model) sessionsFooter() components.SessionsFooterMode {
 }
 
 func (m Model) doctorFooter() components.DoctorFooterMode {
+	if m.gpuInstallActive {
+		return components.DoctorFooterInstallingGPU
+	}
 	if m.whisperInstallActive {
 		return components.DoctorFooterInstalling
 	}
-	if m.whisperCanInstall() {
+	whisper := m.doctorWhisperOffer()
+	gpu := m.doctorGPUOffer()
+	if whisper && gpu {
+		return components.DoctorFooterCanInstallBoth
+	}
+	if gpu {
+		return components.DoctorFooterCanInstallGPU
+	}
+	if whisper {
 		return components.DoctorFooterCanInstall
 	}
 	return components.DoctorFooterNormal

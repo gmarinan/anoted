@@ -6,6 +6,7 @@ import (
 
 	"anoted/internal/config"
 	"anoted/internal/platform"
+	"anoted/internal/transcribe"
 )
 
 const (
@@ -29,7 +30,8 @@ type WizardState struct {
 	DetCursor          int
 	AutoTranscribe     bool
 	InstallWhisper     bool
-	TranscribeCursor   int // 0=auto, 1=install whisper
+	EnableGPU          bool
+	TranscribeCursor   int // 0=auto, 1=install whisper, 2=enable GPU (when available)
 	Log                []string
 	LogScroll          int
 	Err                string
@@ -151,5 +153,17 @@ func SummaryLines(cfg config.Config) []string {
 	if cfg.Transcription.Binary != "" {
 		lines = append(lines, "whisper: "+cfg.Transcription.Binary)
 	}
+	if cfg.Transcription.Device == transcribe.DeviceCUDA {
+		lines = append(lines, "transcription.device: cuda")
+	}
 	return lines
+}
+
+// TranscribeOptionCount returns how many toggles appear on the transcription step.
+func TranscribeOptionCount(cfg config.Config) int {
+	n := 2
+	if GPUOfferAvailable(cfg) || transcribe.DetectGPU().NVIDIA {
+		n = 3
+	}
+	return n
 }

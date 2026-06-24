@@ -13,7 +13,7 @@ import (
 func setupTranscription(in io.Reader, out io.Writer, cfg *config.Config, autoInstall bool) {
 	fmt.Fprintln(out, "[4/4] Transcription (Whisper)")
 	fmt.Fprintln(out, "  ─────────────────────────────────────")
-	fmt.Fprintln(out, "  Local speech-to-text → transcript.txt + .srt per session")
+	fmt.Fprintln(out, "  Local speech-to-text → configurable outputs (txt, srt, md, …) per session")
 	fmt.Fprintln(out)
 
 	plan := TranscriptionPlan{}
@@ -52,11 +52,7 @@ func setupTranscription(in io.Reader, out io.Writer, cfg *config.Config, autoIns
 		return
 	}
 
-	cfg.Transcription.Device = transcribe.DeviceCPU
-	cfg.Transcription.GPULayers = 0
-	fmt.Fprintln(out)
-	fmt.Fprintln(out, "  ○ Using CPU for transcription on Windows")
-	fmt.Fprintln(out)
+	ConfigureGPUAfterWhisper(in, out, cfg, autoInstall)
 }
 
 func printWhisperInstallHints(out io.Writer) {

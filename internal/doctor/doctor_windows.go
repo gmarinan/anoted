@@ -1,3 +1,5 @@
+//go:build windows
+
 package doctor
 
 import (
@@ -8,39 +10,65 @@ import (
 	"anoted/internal/config"
 	"anoted/internal/platform"
 	"anoted/internal/recorder"
+	"anoted/internal/wasapi"
 )
 
 func audioDeviceChecks(cfg config.Config) []Check {
+	catalog, _ := audio.NewProvider().List()
 	monitor, mic, err := recorder.ListAudioDevices(cfg)
 	if err != nil {
 		return []Check{{Name: "audio_devices", Status: "fail", Detail: err.Error()}}
 	}
 	checks := []Check{
-		{Name: "system_monitor", Status: "ok", Detail: monitor},
-		{Name: "microphone", Status: "ok", Detail: mic},
+		{Name: "system_monitor", Status: "ok", Detail: friendlyDeviceName(monitor, catalog, false)},
+		{Name: "microphone", Status: "ok", Detail: friendlyDeviceName(mic, catalog, true)},
 	}
-	if cfg.Audio.SystemMonitor != "" {
-		checks = append(checks, Check{Name: "configured_system_monitor", Status: "ok", Detail: cfg.Audio.SystemMonitor})
+	if cfg.Audio.SystemMonitor != "" && cfg.Audio.SystemMonitor != monitor {
+		checks = append(checks, Check{
+			Name:   "configured_system_monitor",
+			Status: "ok",
+			Detail: friendlyDeviceName(cfg.Audio.SystemMonitor, catalog, false),
+		})
 	}
-	if cfg.Audio.Microphone != "" {
-		checks = append(checks, Check{Name: "configured_microphone", Status: "ok", Detail: cfg.Audio.Microphone})
+	if cfg.Audio.Microphone != "" && cfg.Audio.Microphone != mic {
+		checks = append(checks, Check{
+			Name:   "configured_microphone",
+			Status: "ok",
+			Detail: friendlyDeviceName(cfg.Audio.Microphone, catalog, true),
+		})
 	}
 	checks = append(checks, Check{
 		Name:   "windows_level_meter",
 		Status: "ok",
-		Detail: "System/mic level meters update during recording only (no idle loopback)",
+		Detail: "Level meters update during recording only",
 	})
 	checks = append(checks, Check{
 		Name:   "windows_communications_ducking",
 		Status: "warn",
-		Detail: "Set Sound > Communications to \"Do nothing\" so meeting apps do not duck other audio by 80%",
+		Detail: `Communications ducking: set to "Do nothing"`,
 	})
 	checks = append(checks, Check{
 		Name:   "windows_output_format",
 		Status: "warn",
-		Detail: "Use a 48000 Hz shared output format for the default playback device (Sound > device Properties > Advanced)",
+		Detail: "Output format: prefer 48000 Hz",
 	})
 	return checks
+}
+
+func friendlyDeviceName(id string, catalog audio.Catalog, isMic bool) string {
+	if id == "" {
+		return "(auto)"
+	}
+	devices := catalog.Outputs
+	if isMic {
+		devices = catalog.Microphones
+	}
+	for _, d := range devices {
+		if d.ID == id {
+			return d.Name
+		}
+	}
+	return wasapi.ShortLabel(id)
 }
 
 func detectionChecks(_ platform.Info, cfg config.Config) []Check {

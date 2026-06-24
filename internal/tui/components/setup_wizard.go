@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"anoted/internal/config"
 	"anoted/internal/setup"
 )
 
@@ -11,6 +12,7 @@ import (
 type SetupWizardView struct {
 	State      setup.WizardState
 	Choices    []setup.DetectionChoice
+	Config     config.Config
 	ConfigPath string
 	Platform   string
 	Width      int
@@ -127,8 +129,14 @@ func (v SetupWizardView) renderTranscription() string {
 		{"Auto-transcribe after each recording", v.State.AutoTranscribe},
 		{"Install Whisper in local venv (~500MB)", v.State.InstallWhisper},
 	}
+	if setup.TranscribeOptionCount(v.Config) >= 3 {
+		opts = append(opts, struct {
+			label string
+			on    bool
+		}{"Enable GPU (CUDA) — ~1–2 GB download", v.State.EnableGPU})
+	}
 	var lines []string
-	lines = append(lines, "Local speech-to-text → transcript.txt + .srt per session")
+	lines = append(lines, "Local speech-to-text → txt / srt / md (Obsidian) per session")
 	lines = append(lines, "")
 	for i, o := range opts {
 		marker := "  "

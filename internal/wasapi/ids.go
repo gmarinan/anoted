@@ -51,3 +51,30 @@ func parseDeviceID(stored, prefix string) (malgo.DeviceID, error) {
 	copy(id[:], raw)
 	return id, nil
 }
+
+// ShortLabel returns a compact display label for a WASAPI device ID.
+func ShortLabel(stored string) string {
+	if stored == "" {
+		return "(auto)"
+	}
+	switch {
+	case strings.HasPrefix(stored, prefixLoopback):
+		hexID := strings.TrimPrefix(stored, prefixLoopback)
+		return "loopback …" + tailHex(hexID, 8)
+	case strings.HasPrefix(stored, prefixCapture):
+		hexID := strings.TrimPrefix(stored, prefixCapture)
+		return "mic …" + tailHex(hexID, 8)
+	default:
+		if len(stored) <= 24 {
+			return stored
+		}
+		return stored[:21] + "…"
+	}
+}
+
+func tailHex(hexID string, n int) string {
+	if len(hexID) <= n {
+		return hexID
+	}
+	return hexID[len(hexID)-n:]
+}

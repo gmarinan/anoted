@@ -89,6 +89,9 @@ func (r *LinuxPipeWireRecorder) Stop(_ context.Context) error {
 	stopCaptureCmd(r.cmd)
 	r.cmd = nil
 	if r.status.Status == StatusRecording {
+		if r.status.SessionDir != "" && !r.status.StartedAt.IsZero() {
+			_ = session.UpdateMetadataEnded(r.status.SessionDir, r.status.StartedAt, time.Now())
+		}
 		r.status.Status = StatusIdle
 	}
 	return nil

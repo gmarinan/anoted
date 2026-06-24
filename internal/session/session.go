@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -88,6 +89,35 @@ func FormatLocalTime(t time.Time, layout string) string {
 		return ""
 	}
 	return t.Local().Format(layout)
+}
+
+// ReadMetadataFile reads metadata.json from a session directory.
+func ReadMetadataFile(dir string) (Metadata, error) {
+	data, err := os.ReadFile(filepath.Join(dir, "metadata.json"))
+	if err != nil {
+		return Metadata{}, err
+	}
+	var meta Metadata
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return Metadata{}, fmt.Errorf("parse metadata.json: %w", err)
+	}
+	return meta, nil
+}
+
+// UpdateMetadataEnded sets ended_at and duration on an existing metadata.json.
+func UpdateMetadataEnded(dir string, startedAt, ended time.Time) error {
+	meta, err := ReadMetadataFile(dir)
+	if err != nil {
+		meta = Metadata{}
+	}
+	if !startedAt.IsZero() && meta.StartedAt.IsZero() {
+		meta.StartedAt = startedAt
+	}
+	meta.EndedAt = ended
+	if !meta.StartedAt.IsZero() {
+		meta.Duration = ended.Sub(meta.StartedAt).Round(time.Second).String()
+	}
+	return WriteMetadataFile(dir, meta)
 }
 
 // WriteMetadataFile writes metadata.json into a session directory.

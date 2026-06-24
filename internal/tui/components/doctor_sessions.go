@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"charm.land/lipgloss/v2"
+	"anoted/internal/config"
 	"anoted/internal/doctor"
 	"anoted/internal/session"
 	"anoted/internal/transcribe"
@@ -24,10 +25,15 @@ type DoctorView struct {
 	MicDevice            string
 	DetectionWarn        string
 	Width                int
+	Height               int
 	WhisperInstallActive bool
 	WhisperInstallLog    []string
 	WhisperInstallErr    string
 	WhisperCanInstall    bool
+	GPUInstallActive     bool
+	GPUInstallLog        []string
+	GPUInstallErr        string
+	GPUCanInstall        bool
 }
 
 func (v DoctorView) View() string {
@@ -37,14 +43,29 @@ func (v DoctorView) View() string {
 
 	summary := v.summaryBox(colW)
 	env := v.environmentBox(colW)
-	b.WriteString(layout.JoinColumns(summary, env))
+	if v.useSingleColumn() {
+		b.WriteString(JoinBlocksVertical(summary, env))
+	} else {
+		b.WriteString(layout.JoinColumns(summary, env))
+	}
 	b.WriteString("\n\n")
 	b.WriteString(v.warningsBox(layout.FullWidth()))
 	if v.WhisperInstallActive || v.WhisperInstallErr != "" || len(v.WhisperInstallLog) > 0 {
 		b.WriteString("\n\n")
 		b.WriteString(v.whisperInstallBox(layout.FullWidth()))
 	}
+	if v.GPUInstallActive || v.GPUInstallErr != "" || len(v.GPUInstallLog) > 0 {
+		b.WriteString("\n\n")
+		b.WriteString(v.gpuInstallBox(layout.FullWidth()))
+	}
 	return b.String()
+}
+
+func (v DoctorView) useSingleColumn() bool {
+	if v.Height > 0 && v.Height < 30 {
+		return true
+	}
+	return v.Platform == "windows"
 }
 
 func (v DoctorView) whisperInstallBox(width int) string {
@@ -65,6 +86,24 @@ func (v DoctorView) whisperInstallBox(width int) string {
 	return Box("Whisper setup", strings.Join(lines, "\n"), width)
 }
 
+func (v DoctorView) gpuInstallBox(width int) string {
+	var lines []string
+	if v.GPUInstallActive {
+		lines = append(lines, warnStyle.Render("Enabling GPU (PyTorch CUDA, ~1–2 GB)…"))
+	} else if v.GPUInstallErr != "" {
+		lines = append(lines, errStyle.Render("GPU setup failed: "+v.GPUInstallErr))
+	} else if v.GPUCanInstall {
+		lines = append(lines, subtleStyle.Render("Press g to enable GPU without leaving the app."))
+	}
+	for _, line := range v.GPUInstallLog {
+		lines = append(lines, subtleStyle.Render("  "+truncate(line, width-4)))
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+	return Box("GPU setup", strings.Join(lines, "\n"), width)
+}
+
 func (v DoctorView) summaryBox(width int) string {
 	var lines []string
 	okCount := 0
@@ -81,7 +120,12 @@ func (v DoctorView) summaryBox(width int) string {
 		default:
 			okCount++
 		}
-		lines = append(lines, style.Render(fmt.Sprintf("%s %-22s %s", icon, c.Name, c.Detail)))
+		maxDetail := width - 26
+		if maxDetail < 12 {
+			maxDetail = 12
+		}
+		detail := truncate(c.Detail, maxDetail)
+		lines = append(lines, style.Render(fmt.Sprintf("%s %-22s %s", icon, c.Name, detail)))
 	}
 	header := fmt.Sprintf("%s / %d checks OK", Badge("OK", "ok"), okCount)
 	body := header + "\n" + strings.Join(lines, "\n")
@@ -104,7 +148,11 @@ func (v DoctorView) warningsBox(width int) string {
 	var warns []string
 	for _, c := range v.Report.Checks {
 		if c.Status == "warn" || c.Status == "fail" {
-			warns = append(warns, fmt.Sprintf("• %s: %s", c.Name, c.Detail))
+			maxDetail := width - len(c.Name) - 6
+			if maxDetail < 16 {
+				maxDetail = 16
+			}
+			warns = append(warns, fmt.Sprintf("• %s: %s", c.Name, truncate(c.Detail, maxDetail)))
 		}
 	}
 	if v.DetectionWarn != "" {
@@ -152,6 +200,7 @@ type SessionsView struct {
 	TranscribeLog        []string
 	TranscribeErr        string
 	TranscribeErrDir     string
+	Transcription        config.TranscriptionConfig
 	PreviewText          string
 }
 
@@ -238,7 +287,7 @@ func (v SessionsView) previewMode() PreviewMode {
 		}
 	}
 	rec, ok := v.selectedRecord()
-	if ok && transcribe.HasTranscript(rec.Dir) {
+	if ok && transcribe.HasTranscript(rec.Dir, v.Transcription) {
 		return PreviewTranscript
 	}
 	return PreviewIdle
@@ -403,7 +452,7 @@ func (v SessionsView) formatTXColumn(r session.Record, tableWidth int) string {
 		}
 		return TranscribeProgressBar(v.TranscribePercent, barW, v.TranscribeETA, v.TranscribeBlink)
 	}
-	if transcribe.HasTranscript(r.Dir) {
+	if transcribe.HasTranscript(r.Dir, v.Transcription) {
 		return TXStatusLabel("yes")
 	}
 	if audioExists(r.Dir) {

@@ -441,6 +441,117 @@ func transcriptionCfgFields() []cfgField {
 				return nil
 			},
 		},
+		{
+			label: "output_dir",
+			kind:  fieldText,
+			get: func(c config.Config) string {
+				if c.Transcription.OutputDir == "" {
+					return "(same as recording)"
+				}
+				return c.Transcription.OutputDir
+			},
+			set: func(c *config.Config, v string) error {
+				if v == "(same as recording)" {
+					v = ""
+				}
+				c.Transcription.OutputDir = strings.TrimSpace(v)
+				return nil
+			},
+		},
+		{
+			label: "output_formats",
+			kind:  fieldText,
+			get: func(c config.Config) string {
+				return strings.Join(c.Transcription.OutputFormats, ", ")
+			},
+			set: func(c *config.Config, v string) error {
+				parts := strings.Split(v, ",")
+				var formats []string
+				for _, p := range parts {
+					p = strings.TrimSpace(p)
+					if p != "" {
+						formats = append(formats, p)
+					}
+				}
+				c.Transcription.OutputFormats = config.NormalizeOutputFormats(formats)
+				return nil
+			},
+		},
+		{
+			label: "markdown.filename",
+			kind:  fieldText,
+			get: func(c config.Config) string {
+				if c.Transcription.Markdown.Filename == "" {
+					return "transcript.md"
+				}
+				return c.Transcription.Markdown.Filename
+			},
+			set: func(c *config.Config, v string) error {
+				c.Transcription.Markdown.Filename = strings.TrimSpace(v)
+				return nil
+			},
+		},
+		{
+			label:   "markdown.weekday_class",
+			kind:    fieldBool,
+			get:     func(c config.Config) string { return fmt.Sprintf("%v", c.Transcription.Markdown.MarkdownWeekdayClassEnabled()) },
+			set: func(c *config.Config, v string) error {
+				b, err := strconv.ParseBool(v)
+				if err != nil {
+					return err
+				}
+				c.Transcription.Markdown.WeekdayClass = &b
+				return nil
+			},
+		},
+		markdownTagsField(),
+		markdownCSSClassesField(),
+	}
+}
+
+func markdownTagsField() cfgField {
+	return cfgField{
+		label: "markdown.tags",
+		kind:  fieldList,
+		list: func(c config.Config) []string {
+			return c.Transcription.Markdown.Tags
+		},
+		addItem: func(c *config.Config, v string) {
+			v = strings.TrimSpace(v)
+			if v == "" {
+				return
+			}
+			c.Transcription.Markdown.Tags = append(c.Transcription.Markdown.Tags, v)
+		},
+		delItem: func(c *config.Config, i int) {
+			if i < 0 || i >= len(c.Transcription.Markdown.Tags) {
+				return
+			}
+			c.Transcription.Markdown.Tags = append(c.Transcription.Markdown.Tags[:i], c.Transcription.Markdown.Tags[i+1:]...)
+		},
+	}
+}
+
+func markdownCSSClassesField() cfgField {
+	return cfgField{
+		label: "markdown.cssclasses",
+		kind:  fieldList,
+		list: func(c config.Config) []string {
+			return c.Transcription.Markdown.CSSClasses
+		},
+		addItem: func(c *config.Config, v string) {
+			v = strings.TrimSpace(v)
+			if v == "" {
+				return
+			}
+			c.Transcription.Markdown.CSSClasses = append(c.Transcription.Markdown.CSSClasses, v)
+		},
+		delItem: func(c *config.Config, i int) {
+			if i < 0 || i >= len(c.Transcription.Markdown.CSSClasses) {
+				return
+			}
+			c.Transcription.Markdown.CSSClasses = append(c.Transcription.Markdown.CSSClasses[:i], c.Transcription.Markdown.CSSClasses[i+1:]...)
+		},
 	}
 }
 
@@ -861,6 +972,7 @@ func (m Model) handleConfigMenuSave(msg configMenuSaveMsg) (tea.Model, tea.Cmd) 
 	m = m.clampConfigCursor()
 	var cmds []tea.Cmd
 	cmds = append(cmds, resolveDeviceLabelsCmd(m))
+	cmds = append(cmds, refreshDoctorCapsCmd(m.deps.Config))
 	if m.screen == ScreenMain {
 		m.systemBands = nil
 		m.micBands = nil

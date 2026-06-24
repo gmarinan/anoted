@@ -22,6 +22,7 @@ func (m Model) Init() tea.Cmd {
 		resolveDeviceLabelsCmd(m),
 		m.loadSessionsCmd(),
 		func() tea.Msg { return homeEnterLevelsMsg{} },
+		refreshDoctorCapsCmd(m.deps.Config),
 	}
 	if poll := m.scheduleWindowSizePoll(); poll != nil {
 		cmds = append(cmds, poll)
@@ -123,6 +124,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleWhisperInstallEnvelope(msg)
 	case whisperInstallSavedMsg:
 		return m.handleWhisperInstallSaved(msg)
+	case gpuInstallEnvelopeMsg:
+		return m.handleGPUInstallEnvelope(msg)
+	case gpuInstallSavedMsg:
+		return m.handleGPUInstallSaved(msg)
+	case doctorCapsMsg:
+		m = m.handleDoctorCaps(msg)
+		return m, nil
 	case setupInstallEnvelopeMsg:
 		return m.handleSetupInstallEnvelope(msg)
 	case deviceLabelsMsg:

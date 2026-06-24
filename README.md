@@ -109,8 +109,9 @@ Recordings are saved under `~/Music/anoted/` by default:
 ```
 ~/Music/anoted/YYYY-MM-DD_HH-mm-ss_<provider>/
 ├── recording.wav
-├── transcript.txt    # after Whisper transcription
+├── transcript.txt    # after Whisper (if enabled in output_formats)
 ├── transcript.srt
+├── transcript.md     # optional Obsidian note with meeting frontmatter
 └── metadata.json
 ```
 
@@ -125,7 +126,16 @@ transcription:
   gpu_layers: 0                 # whisper.cpp only (99 = full GPU)
   model_path: ""                # path to ggml model for whisper.cpp
   language: ""                  # empty = auto-detect
+  output_formats: [txt, srt]    # txt, srt, vtt, json, md
+  output_dir: ""                # empty = same folder as recording; or e.g. ~/vault/meetings
+  markdown:
+    filename: transcript.md
+    tags: [meeting]
+    cssclasses: [meeting]
+    weekday_class: true         # add monday, tuesday, … to cssclasses
 ```
+
+`transcript.md` includes YAML frontmatter (start/end time, duration, provider, platform, tags) and the full transcript text below. Enable `md` in `output_formats` to generate it. Set `transcription.output_dir` to write transcripts to a shared folder (e.g. your Obsidian vault); each meeting gets a unique filename derived from the recording session folder name.
 
 Install: run `anoted setup` (installs a local venv at `~/.local/share/anoted/whisper-venv`, no sudo). Optional: `sudo pacman -S python-openai-whisper` or `yay -S whisper.cpp` for GPU.
 

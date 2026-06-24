@@ -36,6 +36,28 @@ func TestIsManagedBinary(t *testing.T) {
 	}
 }
 
+func TestPipInstallArgsIncludeProgress(t *testing.T) {
+	args := pipInstallArgs("/usr/bin/python", "install", "-U", "torch", "--index-url", "https://example.test")
+	if args[0] != "/usr/bin/python" || args[1] != "-m" || args[2] != "pip" || args[3] != "install" {
+		t.Fatalf("unexpected prefix: %v", args[:4])
+	}
+	foundBar, foundVerbose := false, false
+	for i, a := range args {
+		if a == "--progress-bar" && i+1 < len(args) && args[i+1] == "on" {
+			foundBar = true
+		}
+		if a == "-v" {
+			foundVerbose = true
+		}
+	}
+	if !foundBar {
+		t.Fatal("expected --progress-bar on in pip args")
+	}
+	if !foundVerbose {
+		t.Fatal("expected -v in pip args")
+	}
+}
+
 func TestInstallHint(t *testing.T) {
 	hint := InstallHint()
 	if hint == "" {

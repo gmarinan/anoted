@@ -8,9 +8,20 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sync"
+	"time"
 
 	"anoted/internal/config"
 )
+
+const torchCUDACacheTTL = 60 * time.Second
+
+var torchCUDACache struct {
+	sync.Mutex
+	checked   bool
+	available bool
+	at        time.Time
+}
 
 const managedVenvName = "whisper-venv"
 
@@ -106,9 +117,9 @@ func installManaged(progress, stdout, stderr io.Writer) error {
 		args []string
 		soft bool
 	}{
-		{"Upgrading pip", []string{python, "-m", "pip", "install", "-U", "pip"}, true},
-		{"Installing PyTorch (CPU)", []string{python, "-m", "pip", "install", "torch", "--index-url", "https://download.pytorch.org/whl/cpu"}, false},
-		{"Installing openai-whisper", []string{python, "-m", "pip", "install", "-U", "openai-whisper"}, false},
+		{"Upgrading pip", pipInstallArgs(python, "-U", "pip"), true},
+		{"Installing PyTorch (CPU)", pipInstallArgs(python, "install", "torch", "--index-url", "https://download.pytorch.org/whl/cpu"), false},
+		{"Installing openai-whisper", pipInstallArgs(python, "install", "-U", "openai-whisper"), false},
 	}
 	for _, step := range steps {
 		fmt.Fprintf(progress, "  %s…\n", step.desc)
@@ -130,6 +141,15 @@ func installManaged(progress, stdout, stderr io.Writer) error {
 
 // UpgradeManagedTorchCUDA replaces CPU PyTorch with a CUDA build in the managed venv.
 func UpgradeManagedTorchCUDA(out io.Writer) error {
+	return upgradeManagedTorchCUDA(out, os.Stdout, os.Stderr)
+}
+
+// UpgradeManagedTorchCUDACaptured routes pip output to the given writers (for TUI logs).
+func UpgradeManagedTorchCUDACaptured(progress, stdout, stderr io.Writer) error {
+	return upgradeManagedTorchCUDA(progress, stdout, stderr)
+}
+
+func upgradeManagedTorchCUDA(progress, stdout, stderr io.Writer) error {
 	if !ManagedWhisperInstalled() {
 		return fmt.Errorf("managed venv not installed — run anoted setup first")
 	}
@@ -139,15 +159,20 @@ func UpgradeManagedTorchCUDA(out io.Writer) error {
 		"https://download.pytorch.org/whl/cu124",
 		"https://download.pytorch.org/whl/cu121",
 	}
+	fmt.Fprintln(progress, "  Downloading PyTorch CUDA wheels (~1–2 GB, may take several minutes)…")
 	var lastErr error
 	for _, idx := range indexes {
-		fmt.Fprintf(out, "  Installing PyTorch (CUDA) from %s…\n", idx)
-		err := runCmd(os.Stdout, os.Stderr, python, "-m", "pip", "install", "-U", "torch", "--index-url", idx)
+		fmt.Fprintf(progress, "  Installing PyTorch (CUDA) from %s…\n", idx)
+		args := pipInstallArgs(python, "install", "-U", "torch", "--index-url", idx)
+		err := runCmd(stdout, stderr, args...)
 		if err != nil {
 			lastErr = err
+			fmt.Fprintf(progress, "  ! index %s failed: %v\n", idx, err)
 			continue
 		}
+		InvalidateTorchCUDACache()
 		if ManagedTorchCUDAAvailable() {
+			fmt.Fprintln(progress, "  ✓ PyTorch CUDA ready in managed venv")
 			return nil
 		}
 		lastErr = fmt.Errorf("torch installed but CUDA not available")
@@ -158,8 +183,42 @@ func UpgradeManagedTorchCUDA(out io.Writer) error {
 	return lastErr
 }
 
+func pipInstallArgs(python string, pipArgs ...string) []string {
+	args := []string{python, "-m", "pip", "install", "--progress-bar", "on", "-v"}
+	return append(args, pipArgs...)
+}
+
 // ManagedTorchCUDAAvailable reports whether the managed venv can use CUDA.
 func ManagedTorchCUDAAvailable() bool {
+	torchCUDACache.Lock()
+	if torchCUDACache.checked && time.Since(torchCUDACache.at) < torchCUDACacheTTL {
+		available := torchCUDACache.available
+		torchCUDACache.Unlock()
+		return available
+	}
+	torchCUDACache.Unlock()
+
+	available := probeManagedTorchCUDA()
+	setTorchCUDACache(available)
+	return available
+}
+
+// InvalidateTorchCUDACache clears the CUDA availability probe cache.
+func InvalidateTorchCUDACache() {
+	torchCUDACache.Lock()
+	torchCUDACache.checked = false
+	torchCUDACache.Unlock()
+}
+
+func setTorchCUDACache(available bool) {
+	torchCUDACache.Lock()
+	torchCUDACache.checked = true
+	torchCUDACache.available = available
+	torchCUDACache.at = time.Now()
+	torchCUDACache.Unlock()
+}
+
+func probeManagedTorchCUDA() bool {
 	python := venvPythonPath(resolveManagedVenvDir())
 	cmd := exec.Command(python, "-c", "import torch; raise SystemExit(0 if torch.cuda.is_available() else 1)")
 	return cmd.Run() == nil

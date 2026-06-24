@@ -12,29 +12,31 @@ import (
 	"anoted/internal/config"
 )
 
-func transcribeOpenAI(ctx context.Context, cfg config.TranscriptionConfig, bin, audioPath, sessionDir string, onProgress ProgressFunc) (Result, error) {
+func transcribeOpenAI(ctx context.Context, cfg config.TranscriptionConfig, bin, audioPath, outDir, sessionDir string, onProgress ProgressFunc) (Result, error) {
 	device := resolveDevice(cfg)
-	out, err := runOpenAIWhisper(ctx, cfg, bin, audioPath, sessionDir, device, onProgress)
+	out, err := runOpenAIWhisper(ctx, cfg, bin, audioPath, outDir, device, onProgress)
 	if err != nil && device == DeviceCUDA && isCUDAFailure(out) {
 		emitProgress(onProgress, Progress{
 			SegmentText: "GPU out of memory — retrying on CPU…",
 		})
-		out, err = runOpenAIWhisper(ctx, cfg, bin, audioPath, sessionDir, DeviceCPU, onProgress)
+		out, err = runOpenAIWhisper(ctx, cfg, bin, audioPath, outDir, DeviceCPU, onProgress)
 	}
 	if err != nil {
 		return Result{}, formatWhisperError("whisper", out, err)
 	}
-	return finalizeOpenAIResult(sessionDir, audioPath)
+	fileBase := outputFileBase(cfg, sessionDir)
+	return finalizeOpenAIResult(outDir, audioPath, fileBase)
 }
 
-func runOpenAIWhisper(ctx context.Context, cfg config.TranscriptionConfig, bin, audioPath, sessionDir, device string, onProgress ProgressFunc) ([]byte, error) {
+func runOpenAIWhisper(ctx context.Context, cfg config.TranscriptionConfig, bin, audioPath, outDir, device string, onProgress ProgressFunc) ([]byte, error) {
 	audioDur, _ := AudioDuration(audioPath)
 	model := resolvedModel(cfg)
+	formats := config.NormalizeOutputFormats(cfg.OutputFormats)
 	args := []string{
 		audioPath,
 		"--model", model,
-		"--output_dir", sessionDir,
-		"--output_format", "all",
+		"--output_dir", outDir,
+		"--output_format", whisperOutputFormatArg(formats),
 		"--verbose", "True",
 		"--device", device,
 	}
@@ -69,20 +71,21 @@ func runOpenAIWhisper(ctx context.Context, cfg config.TranscriptionConfig, bin, 
 	})
 }
 
-func transcribeWhisperCpp(ctx context.Context, cfg config.TranscriptionConfig, bin, audioPath, sessionDir string, onProgress ProgressFunc) (Result, error) {
+func transcribeWhisperCpp(ctx context.Context, cfg config.TranscriptionConfig, bin, audioPath, outDir, sessionDir string, onProgress ProgressFunc) (Result, error) {
 	audioDur, _ := AudioDuration(audioPath)
 	modelPath, err := resolveCppModelPath(cfg)
 	if err != nil {
 		return Result{}, err
 	}
-	outPrefix := filepath.Join(sessionDir, TranscriptBaseName)
+	fileBase := outputFileBase(cfg, sessionDir)
+	outPrefix := filepath.Join(outDir, fileBase)
 	args := []string{
 		"-m", modelPath,
 		"-f", audioPath,
 		"-of", outPrefix,
-		"-otxt", "-osrt",
 		"-pp",
 	}
+	args = appendCppOutputFlags(args, config.NormalizeOutputFormats(cfg.OutputFormats))
 	if lang := strings.TrimSpace(cfg.Language); lang != "" {
 		args = append(args, "-l", lang)
 	}
@@ -115,25 +118,33 @@ func transcribeWhisperCpp(ctx context.Context, cfg config.TranscriptionConfig, b
 		return Result{}, formatWhisperError("whisper.cpp", out, err)
 	}
 
-	files := ListTranscriptFiles(sessionDir)
+	files := listOutputFiles(outDir, cfg, sessionDir)
+	if len(files) == 0 {
+		for _, ext := range []string{".txt", ".srt", ".vtt", ".json"} {
+			p := filepath.Join(outDir, fileBase+ext)
+			if _, statErr := os.Stat(p); statErr == nil {
+				files = append(files, p)
+			}
+		}
+	}
 	if len(files) == 0 {
 		return Result{}, fmt.Errorf("whisper.cpp produced no output: %s", trimOutput(out))
 	}
-	return Result{SessionDir: sessionDir, Files: files}, nil
+	return Result{SessionDir: outDir, Files: files}, nil
 }
 
-func finalizeOpenAIResult(sessionDir, audioPath string) (Result, error) {
+func finalizeOpenAIResult(outDir, audioPath, fileBase string) (Result, error) {
 	base := strings.TrimSuffix(filepath.Base(audioPath), filepath.Ext(audioPath))
 	renames := map[string]string{
-		base + ".txt":  TranscriptBaseName + ".txt",
-		base + ".srt":  TranscriptBaseName + ".srt",
-		base + ".vtt":  TranscriptBaseName + ".vtt",
-		base + ".json": TranscriptBaseName + ".json",
+		base + ".txt":  fileBase + ".txt",
+		base + ".srt":  fileBase + ".srt",
+		base + ".vtt":  fileBase + ".vtt",
+		base + ".json": fileBase + ".json",
 	}
 	var files []string
 	for src, dst := range renames {
-		oldPath := filepath.Join(sessionDir, src)
-		newPath := filepath.Join(sessionDir, dst)
+		oldPath := filepath.Join(outDir, src)
+		newPath := filepath.Join(outDir, dst)
 		if _, err := os.Stat(oldPath); err != nil {
 			continue
 		}
@@ -148,7 +159,7 @@ func finalizeOpenAIResult(sessionDir, audioPath string) (Result, error) {
 	if len(files) == 0 {
 		return Result{}, fmt.Errorf("whisper produced no output files")
 	}
-	return Result{SessionDir: sessionDir, Files: files}, nil
+	return Result{SessionDir: outDir, Files: files}, nil
 }
 
 func runWithProgress(ctx context.Context, bin string, args []string, onProgress ProgressFunc, handleLine func(stream, line string)) ([]byte, error) {

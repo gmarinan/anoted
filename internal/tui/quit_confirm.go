@@ -6,14 +6,14 @@ import (
 )
 
 func (m Model) quitGuarded() bool {
-	return m.recording || m.transcribeActive || m.whisperInstallActive || m.setupWizard.Busy
+	return m.recording || m.transcribeActive || m.whisperInstallActive || m.gpuInstallActive || m.setupWizard.Busy
 }
 
 func (m Model) quitConfirmReasons() []string {
 	return components.FormatQuitReasons(
 		m.recording,
 		m.transcribeActive,
-		m.whisperInstallActive || m.setupWizard.Busy,
+		m.whisperInstallActive || m.gpuInstallActive || m.setupWizard.Busy,
 	)
 }
 
@@ -68,6 +68,9 @@ func (m Model) performQuit() (tea.Model, tea.Cmd) {
 	m = m.cancelTranscribeOnQuit()
 	if m.setupCancel != nil {
 		m.setupCancel()
+	}
+	if m.gpuInstallCancel != nil {
+		m.gpuInstallCancel()
 	}
 	var cmds []tea.Cmd
 	if m.deps.LevelMonitor != nil {

@@ -93,10 +93,13 @@ func (m Model) handleSetupKey(key string) (tea.Model, tea.Cmd) {
 		return m.setupNavDown(), nil
 	case " ":
 		if m.setupWizard.Step == setup.WizardTranscription {
-			if m.setupWizard.TranscribeCursor == 0 {
+			switch m.setupWizard.TranscribeCursor {
+			case 0:
 				m.setupWizard.AutoTranscribe = !m.setupWizard.AutoTranscribe
-			} else {
+			case 1:
 				m.setupWizard.InstallWhisper = !m.setupWizard.InstallWhisper
+			case 2:
+				m.setupWizard.EnableGPU = !m.setupWizard.EnableGPU
 			}
 		}
 		return m, nil
@@ -132,7 +135,8 @@ func (m Model) setupNavDown() Model {
 			m.setupWizard.DetCursor++
 		}
 	case setup.WizardTranscription:
-		if m.setupWizard.TranscribeCursor < 1 {
+		max := setup.TranscribeOptionCount(m.deps.Config) - 1
+		if m.setupWizard.TranscribeCursor < max {
 			m.setupWizard.TranscribeCursor++
 		}
 	}
@@ -192,6 +196,7 @@ func (m Model) runSetupInstallCmd(ctx context.Context) tea.Cmd {
 		plan := setup.TranscriptionPlan{
 			AutoAfterRecording: w.AutoTranscribe,
 			InstallWhisper:     w.InstallWhisper,
+			EnableGPU:          w.EnableGPU,
 		}
 		installErr := setup.ConfigureTranscription(&cfg, plan, nil, capture, true)
 		capture.flush(send)
@@ -260,12 +265,12 @@ func (m Model) handleSetupInstallResult(msg setupInstallResultMsg) (tea.Model, t
 		m.setupWizard.AppendLog("failed: " + msg.err.Error())
 		m.setupWizard.Step = setup.WizardInstalling
 		m.doctorReport = loadDoctorReport(m.deps.Config)
-		return m, nil
+		return m, refreshDoctorCapsCmd(m.deps.Config)
 	}
 	m.setupWizard.Err = ""
 	m.setupWizard.Step = setup.WizardDone
 	m.doctorReport = loadDoctorReport(m.deps.Config)
-	return m, nil
+	return m, refreshDoctorCapsCmd(m.deps.Config)
 }
 
 func (m Model) setupWizardOverlay(base string) string {
@@ -275,6 +280,7 @@ func (m Model) setupWizardOverlay(base string) string {
 	return components.SetupWizardView{
 		State:      m.setupWizard,
 		Choices:    setup.DetectionChoices(m.deps.Platform),
+		Config:     m.deps.Config,
 		ConfigPath: m.deps.ConfigPath,
 		Platform:   m.deps.Platform.Name(),
 		Width:      m.width,

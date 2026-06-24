@@ -3,10 +3,21 @@
 package wasapi
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/gen2brain/malgo"
 )
+
+func TestShortLabel(t *testing.T) {
+	if got := ShortLabel(""); got != "(auto)" {
+		t.Fatalf("got %q", got)
+	}
+	got := ShortLabel("wasapi:loopback:" + strings.Repeat("ab", 16))
+	if !strings.HasPrefix(got, "loopback …") {
+		t.Fatalf("got %q", got)
+	}
+}
 
 func TestParseLoopbackID(t *testing.T) {
 	var id malgo.DeviceID

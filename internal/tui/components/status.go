@@ -20,7 +20,10 @@ type DoctorFooterMode int
 const (
 	DoctorFooterNormal DoctorFooterMode = iota
 	DoctorFooterCanInstall
+	DoctorFooterCanInstallGPU
+	DoctorFooterCanInstallBoth
 	DoctorFooterInstalling
+	DoctorFooterInstallingGPU
 )
 
 // FooterForTab returns context-sensitive footer shortcuts.
@@ -75,9 +78,32 @@ func FooterForTab(tab TabID, awaitingConfirm bool, sessionsMode SessionsFooterMo
 			FooterHint("q", "quit"),
 		)
 	case TabDoctor:
+		if doctorMode == DoctorFooterInstallingGPU {
+			return JoinFooter(
+				FooterHint("installing", "GPU…"),
+				FooterHint("PgUp/PgDn", "scroll log"),
+				FooterHint("R", "refresh"),
+				FooterHint("q", "quit…"),
+			)
+		}
 		if doctorMode == DoctorFooterInstalling {
 			return JoinFooter(
 				FooterHint("installing", "whisper…"),
+				FooterHint("R", "refresh"),
+				FooterHint("q", "quit…"),
+			)
+		}
+		if doctorMode == DoctorFooterCanInstallBoth {
+			return JoinFooter(
+				FooterHint("i", "install whisper"),
+				FooterHint("g", "install GPU"),
+				FooterHint("R", "refresh"),
+				FooterHint("q", "quit"),
+			)
+		}
+		if doctorMode == DoctorFooterCanInstallGPU {
+			return JoinFooter(
+				FooterHint("g", "install GPU"),
 				FooterHint("R", "refresh"),
 				FooterHint("q", "quit"),
 			)

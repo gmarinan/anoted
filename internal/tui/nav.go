@@ -27,6 +27,7 @@ func (m Model) switchScreen(screen Screen) (tea.Model, tea.Cmd) {
 	switch screen {
 	case ScreenDoctor:
 		m.doctorReport = loadDoctorReport(m.deps.Config)
+		cmds = append(cmds, refreshDoctorCapsCmd(m.deps.Config))
 	case ScreenMain:
 		m = m.refreshSessions()
 		m.audioMonitorWarn = m.deps.Audio.MonitorWarning(m.deps.Config.Audio.SystemMonitor)
@@ -93,6 +94,27 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "i":
 		if m.whisperCanInstall() {
 			return m.startWhisperInstall()
+		}
+	case "g":
+		if m.doctorGPUOffer() {
+			return m.startGPUInstall()
+		}
+	case "pgup":
+		if m.gpuInstallActive || len(m.gpuInstallLog) > 0 {
+			m.gpuInstallScroll -= 3
+			if m.gpuInstallScroll < 0 {
+				m.gpuInstallScroll = 0
+			}
+			return m, nil
+		}
+	case "pgdown":
+		if m.gpuInstallActive || len(m.gpuInstallLog) > 0 {
+			m.gpuInstallScroll += 3
+			max := m.maxGPUInstallScroll(8)
+			if m.gpuInstallScroll > max {
+				m.gpuInstallScroll = max
+			}
+			return m, nil
 		}
 	case "S":
 		return m.openSetupWizard(), nil
@@ -191,7 +213,7 @@ func (m Model) handleRefresh() (tea.Model, tea.Cmd) {
 	switch m.screen {
 	case ScreenDoctor:
 		m.doctorReport = loadDoctorReport(m.deps.Config)
-		return m, nil
+		return m, refreshDoctorCapsCmd(m.deps.Config)
 	case ScreenMain:
 		m = m.refreshSessions()
 		return m, tea.Batch(resolveDeviceLabelsCmd(m), m.startSystemLevelCmd())
