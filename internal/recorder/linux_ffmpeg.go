@@ -16,10 +16,10 @@ import (
 
 // LinuxFFmpegRecorder uses ffmpeg as a fallback backend.
 type LinuxFFmpegRecorder struct {
-	cfg    config.Config
-	status RecorderStatus
-	mu     sync.Mutex
-	cmd    *exec.Cmd
+	cfg     config.Config
+	status  RecorderStatus
+	mu      sync.Mutex
+	capture *captureProc
 }
 
 func NewLinuxFFmpegRecorder(cfg config.Config) (*LinuxFFmpegRecorder, bool) {
@@ -51,11 +51,11 @@ func (r *LinuxFFmpegRecorder) Start(_ context.Context, sess SessionConfig) error
 		return err
 	}
 
-	cmd, err := startDualFFmpeg(devs, sess, dir)
+	capture, err := startDualFFmpeg(devs, sess, dir)
 	if err != nil {
 		return err
 	}
-	r.cmd = cmd
+	r.capture = capture
 
 	started := time.Now()
 	_ = session.WriteMetadataFile(dir, session.Metadata{
@@ -81,13 +81,17 @@ func (r *LinuxFFmpegRecorder) Start(_ context.Context, sess SessionConfig) error
 func (r *LinuxFFmpegRecorder) Stop(_ context.Context) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	stopCaptureCmd(r.cmd)
-	r.cmd = nil
+	stopErr := r.capture.Stop()
+	r.capture = nil
 	if r.status.Status == StatusRecording {
 		if r.status.SessionDir != "" && !r.status.StartedAt.IsZero() {
 			_ = session.UpdateMetadataEnded(r.status.SessionDir, r.status.StartedAt, time.Now())
 		}
 		r.status.Status = StatusIdle
+	}
+	if stopErr != nil {
+		r.status.Error = stopErr.Error()
+		return fmt.Errorf("stop capture: %w", stopErr)
 	}
 	return nil
 }
@@ -95,5 +99,11 @@ func (r *LinuxFFmpegRecorder) Stop(_ context.Context) error {
 func (r *LinuxFFmpegRecorder) Status() RecorderStatus {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.status.Status == StatusRecording {
+		if err := r.capture.Err(); err != nil {
+			r.status.Status = StatusError
+			r.status.Error = err.Error()
+		}
+	}
 	return r.status
 }

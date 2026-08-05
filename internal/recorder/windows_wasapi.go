@@ -86,6 +86,16 @@ func (r *WindowsWASAPIRecorder) Start(_ context.Context, sess SessionConfig) err
 		channels = wasapi.CanonicalChannels
 	}
 
+	// Open the WAV before capture starts: the OnPCM callback fires immediately
+	// and PCM arriving before the writer exists would be dropped.
+	writer, err := NewWAVWriter(dirFile(dir, SessionAudioFile), rate, channels)
+	if err != nil {
+		return err
+	}
+	r.mu.Lock()
+	r.writer = writer
+	r.mu.Unlock()
+
 	dual, err := wasapi.StartDualRecorder(wasapi.DualRecorderConfig{
 		LoopbackID: loopID,
 		CaptureID:  capID,
@@ -104,6 +114,10 @@ func (r *WindowsWASAPIRecorder) Start(_ context.Context, sess SessionConfig) err
 	})
 	if err != nil {
 		slog.Error("wasapi capture start failed", "err", err)
+		r.mu.Lock()
+		r.writer = nil
+		r.mu.Unlock()
+		_ = writer.Close()
 		return fmt.Errorf("start wasapi capture: %w", err)
 	}
 
@@ -119,7 +133,6 @@ func (r *WindowsWASAPIRecorder) Start(_ context.Context, sess SessionConfig) err
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.writer = NewWAVWriter(rate, channels)
 	r.dual = dual
 
 	recordStarted := time.Now()
@@ -140,6 +153,7 @@ func (r *WindowsWASAPIRecorder) Start(_ context.Context, sess SessionConfig) err
 		r.dual.Stop()
 		r.dual = nil
 		r.writer = nil
+		_ = writer.Close()
 		return err
 	}
 
@@ -176,11 +190,12 @@ func (r *WindowsWASAPIRecorder) Stop(_ context.Context) error {
 		dual.Stop()
 	}
 
+	// PCM is already on disk; Close only flushes the tail and patches the
+	// RIFF/data sizes, and reports any write error deferred from the callback.
 	var writeErr error
-	if writer != nil && sessionDir != "" {
-		path := dirFile(sessionDir, SessionAudioFile)
-		if err := os.WriteFile(path, writer.Bytes(), 0o644); err != nil {
-			writeErr = fmt.Errorf("write %s: %w", SessionAudioFile, err)
+	if writer != nil {
+		if err := writer.Close(); err != nil {
+			writeErr = fmt.Errorf("finalize %s: %w", SessionAudioFile, err)
 		}
 	}
 
