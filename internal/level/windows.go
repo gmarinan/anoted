@@ -9,10 +9,10 @@ import (
 )
 
 type windowsMonitor struct {
-	resolver DeviceResolver
-	mu       sync.Mutex
-	system   float64
-	mic      float64
+	resolver    DeviceResolver
+	mu          sync.Mutex
+	system      float64
+	mic         float64
 	systemBands []float64
 	micBands    []float64
 

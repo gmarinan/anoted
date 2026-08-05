@@ -22,9 +22,9 @@ const (
 
 // Result holds generated transcript file paths.
 type Result struct {
-	SessionDir   string
+	SessionDir    string
 	TranscriptDir string
-	Files        []string
+	Files         []string
 }
 
 // Service transcribes session audio with Whisper.

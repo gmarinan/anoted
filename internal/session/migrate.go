@@ -79,16 +79,31 @@ func copyFile(src, dst string) error {
 	}
 	defer in.Close()
 
-	out, err := os.Create(dst)
+	// Write to a temporary file and rename into place. Writing directly onto
+	// sessions.db meant an interrupted copy left a truncated database, after
+	// which every anoted subcommand failed with "database disk image is
+	// malformed" and no indication of which file to remove.
+	tmp := dst + ".tmp"
+	out, err := os.Create(tmp)
 	if err != nil {
 		return fmt.Errorf("create sessions db: %w", err)
 	}
 	defer func() {
 		_ = out.Close()
+		_ = os.Remove(tmp)
 	}()
 
 	if _, err := io.Copy(out, in); err != nil {
 		return fmt.Errorf("copy sessions db: %w", err)
 	}
-	return out.Close()
+	if err := out.Sync(); err != nil {
+		return fmt.Errorf("sync sessions db: %w", err)
+	}
+	if err := out.Close(); err != nil {
+		return fmt.Errorf("close sessions db: %w", err)
+	}
+	if err := os.Rename(tmp, dst); err != nil {
+		return fmt.Errorf("install sessions db: %w", err)
+	}
+	return nil
 }

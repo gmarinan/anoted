@@ -525,7 +525,10 @@ func startRecordingCmd(m Model) tea.Cmd {
 		}
 		st := rec.Status()
 		if store != nil {
-			_, _ = store.Create(session.Record{
+			// A dropped insert here used to be invisible: the audio and
+			// metadata.json existed on disk but the session never appeared in
+			// the Sessions tab and could not be opened or transcribed.
+			if _, err := store.Create(session.Record{
 				Dir:       st.SessionDir,
 				Provider:  p,
 				Platform:  platformName,
@@ -540,7 +543,10 @@ func startRecordingCmd(m Model) tea.Cmd {
 					AutoRecord: sessCfg.AutoRecord,
 					Manual:     sessCfg.Manual,
 				},
-			})
+			}); err != nil {
+				slog.Error("failed to record session in store",
+					"session_dir", st.SessionDir, "err", err)
+			}
 		}
 		return recordToggleResultMsg{recording: true}
 	}
@@ -576,12 +582,21 @@ func stopRecordingCmd(m Model, becauseMeetingEnded bool) tea.Cmd {
 		if store != nil && sessionDir != "" {
 			ended := time.Now()
 			recs, listErr := store.List(1)
-			if listErr == nil && len(recs) > 0 && recs[0].Dir == sessionDir {
+			switch {
+			case listErr != nil:
+				slog.Error("failed to load session for update", "session_dir", sessionDir, "err", listErr)
+			case len(recs) > 0 && recs[0].Dir == sessionDir:
 				recs[0].EndedAt = ended
 				recs[0].Status = session.StatusStopped
 				recs[0].Metadata.EndedAt = ended
 				recs[0].Metadata.Duration = ended.Sub(recs[0].StartedAt).Round(time.Second).String()
-				_ = store.Update(recs[0])
+				if err := store.Update(recs[0]); err != nil {
+					slog.Error("failed to mark session stopped", "session_dir", sessionDir, "err", err)
+				}
+			default:
+				// The row is missing or belongs to a different session, so the
+				// recording stays marked active and never shows its duration.
+				slog.Warn("no matching session row to close", "session_dir", sessionDir)
 			}
 		}
 		return recordToggleResultMsg{

@@ -24,10 +24,10 @@ type fakeProcState struct {
 	code int
 }
 
-func (f *fakeProcState) String() string              { return "exit status 9009" }
-func (f *fakeProcState) ExitCode() int               { return f.code }
-func (f *fakeProcState) Sys() any                    { return syscall.Errno(9009) }
-func (f *fakeProcState) SysUsage() any               { return nil }
-func (f *fakeProcState) Success() bool               { return false }
-func (f *fakeProcState) SystemTime() int64           { return 0 }
-func (f *fakeProcState) UserTime() int64             { return 0 }
+func (f *fakeProcState) String() string    { return "exit status 9009" }
+func (f *fakeProcState) ExitCode() int     { return f.code }
+func (f *fakeProcState) Sys() any          { return syscall.Errno(9009) }
+func (f *fakeProcState) SysUsage() any     { return nil }
+func (f *fakeProcState) Success() bool     { return false }
+func (f *fakeProcState) SystemTime() int64 { return 0 }
+func (f *fakeProcState) UserTime() int64   { return 0 }

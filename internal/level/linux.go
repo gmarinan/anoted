@@ -14,17 +14,17 @@ import (
 const sampleRate = levelMeterSampleRate
 
 type linuxMonitor struct {
-	resolver DeviceResolver
-	mu       sync.Mutex
-	system   float64
-	mic      float64
+	resolver    DeviceResolver
+	mu          sync.Mutex
+	system      float64
+	mic         float64
 	systemBands []float64
 	micBands    []float64
 	systemPrev  []float64
 	micPrev     []float64
 
-	latencyMsec      int
-	processTimeMsec  int
+	latencyMsec     int
+	processTimeMsec int
 
 	systemCancel context.CancelFunc
 	micCancel    context.CancelFunc

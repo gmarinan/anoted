@@ -26,7 +26,13 @@ func (s *SQLiteStore) Open() error {
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
 		return fmt.Errorf("create db dir: %w", err)
 	}
-	db, err := sql.Open("sqlite", s.path)
+	// modernc.org/sqlite installs no busy handler by default, so a write from a
+	// tea.Cmd goroutine racing a read on the Update loop failed immediately with
+	// SQLITE_BUSY — the session row was never inserted and the recording became
+	// invisible in the UI despite existing on disk. WAL plus a busy timeout lets
+	// the two connections database/sql opens wait for each other instead.
+	dsn := s.path + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)"
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return fmt.Errorf("open sqlite %s: %w", s.path, err)
 	}

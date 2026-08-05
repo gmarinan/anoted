@@ -34,8 +34,8 @@ func New(opts Options) Indicator {
 
 type noopIndicator struct{}
 
-func (noopIndicator) Start() error              { return nil }
-func (noopIndicator) SetState(State)          {}
-func (noopIndicator) SetTooltip(string)       {}
-func (noopIndicator) OnQuit(func())           {}
-func (noopIndicator) Stop()                   {}
+func (noopIndicator) Start() error      { return nil }
+func (noopIndicator) SetState(State)    {}
+func (noopIndicator) SetTooltip(string) {}
+func (noopIndicator) OnQuit(func())     {}
+func (noopIndicator) Stop()             {}

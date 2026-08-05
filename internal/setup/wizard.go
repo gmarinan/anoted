@@ -26,17 +26,17 @@ const (
 
 // WizardState is the shared setup state for CLI and TUI.
 type WizardState struct {
-	Step               WizardStep
-	DetCursor          int
-	AutoTranscribe     bool
-	InstallWhisper     bool
-	EnableGPU          bool
-	TranscribeCursor   int // 0=auto, 1=install whisper, 2=enable GPU (when available)
-	Log                []string
-	LogScroll          int
-	Err                string
-	Busy               bool
-	DetectionLines     []string
+	Step             WizardStep
+	DetCursor        int
+	AutoTranscribe   bool
+	InstallWhisper   bool
+	EnableGPU        bool
+	TranscribeCursor int // 0=auto, 1=install whisper, 2=enable GPU (when available)
+	Log              []string
+	LogScroll        int
+	Err              string
+	Busy             bool
+	DetectionLines   []string
 }
 
 // NewWizardState creates initial wizard state for the platform.

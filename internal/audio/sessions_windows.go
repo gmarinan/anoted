@@ -22,7 +22,7 @@ import (
 var sessionEnumScript string
 
 var (
-	iidIMMDeviceEnumeratorMS  = ole.NewGUID("{A95664D2-9614-4FCF-AF66-5586927DFB5E}")
+	iidIMMDeviceEnumeratorMS   = ole.NewGUID("{A95664D2-9614-4FCF-AF66-5586927DFB5E}")
 	iidIAudioSessionManager2MS = ole.NewGUID("{77AA99A0-1391-4DAA-A4B0-CBF6BDD2CA33}")
 )
 

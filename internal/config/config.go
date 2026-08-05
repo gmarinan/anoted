@@ -17,15 +17,15 @@ const (
 
 // Config holds application settings loaded from YAML.
 type Config struct {
-	SetupCompleted                 bool          `yaml:"setup_completed"`
-	AutoRecord                     bool          `yaml:"auto_record"`
-	AutoRecordRequiresConfirmation bool          `yaml:"auto_record_requires_confirmation"`
-	OutputDir                      string                `yaml:"output_dir"`
-	Audio                          AudioConfig           `yaml:"audio"`
-	Detection                      DetectConfig          `yaml:"detection"`
-	Transcription                  TranscriptionConfig   `yaml:"transcription"`
-	Desktop                        DesktopConfig         `yaml:"desktop"`
-	Privacy                        PrivacyConfig         `yaml:"privacy"`
+	SetupCompleted                 bool                `yaml:"setup_completed"`
+	AutoRecord                     bool                `yaml:"auto_record"`
+	AutoRecordRequiresConfirmation bool                `yaml:"auto_record_requires_confirmation"`
+	OutputDir                      string              `yaml:"output_dir"`
+	Audio                          AudioConfig         `yaml:"audio"`
+	Detection                      DetectConfig        `yaml:"detection"`
+	Transcription                  TranscriptionConfig `yaml:"transcription"`
+	Desktop                        DesktopConfig       `yaml:"desktop"`
+	Privacy                        PrivacyConfig       `yaml:"privacy"`
 }
 
 type DesktopConfig struct {
@@ -42,16 +42,16 @@ type DesktopConfig struct {
 }
 
 type TranscriptionConfig struct {
-	AutoAfterRecording bool                      `yaml:"auto_after_recording"`
-	Binary             string                    `yaml:"binary"` // empty = auto-detect in PATH
-	Backend            string                    `yaml:"backend"`
-	Model              string                    `yaml:"model"`
-	Language           string                    `yaml:"language"`
-	Device             string                    `yaml:"device"`
-	GPULayers          int                       `yaml:"gpu_layers"`
-	ModelPath          string                    `yaml:"model_path"`
-	OutputFormats      []string                  `yaml:"output_formats"`
-	OutputDir          string                    `yaml:"output_dir"` // empty = same folder as recording
+	AutoAfterRecording bool                        `yaml:"auto_after_recording"`
+	Binary             string                      `yaml:"binary"` // empty = auto-detect in PATH
+	Backend            string                      `yaml:"backend"`
+	Model              string                      `yaml:"model"`
+	Language           string                      `yaml:"language"`
+	Device             string                      `yaml:"device"`
+	GPULayers          int                         `yaml:"gpu_layers"`
+	ModelPath          string                      `yaml:"model_path"`
+	OutputFormats      []string                    `yaml:"output_formats"`
+	OutputDir          string                      `yaml:"output_dir"` // empty = same folder as recording
 	Markdown           TranscriptionMarkdownConfig `yaml:"markdown"`
 }
 
@@ -86,11 +86,11 @@ type AudioConfig struct {
 }
 
 type DetectConfig struct {
-	PollIntervalMS      int                       `yaml:"poll_interval_ms"`
-	MeetingEndGraceMS   int                       `yaml:"meeting_end_grace_ms"`
-	Mode                string                    `yaml:"mode"`        // mic, window, both, none
-	WindowTool          string                    `yaml:"window_tool"` // auto, xdotool, wmctrl, none (for window/both modes)
-	Providers           map[string]ProviderConfig `yaml:"providers"`
+	PollIntervalMS    int                       `yaml:"poll_interval_ms"`
+	MeetingEndGraceMS int                       `yaml:"meeting_end_grace_ms"`
+	Mode              string                    `yaml:"mode"`        // mic, window, both, none
+	WindowTool        string                    `yaml:"window_tool"` // auto, xdotool, wmctrl, none (for window/both modes)
+	Providers         map[string]ProviderConfig `yaml:"providers"`
 }
 
 type ProviderConfig struct {
@@ -123,7 +123,7 @@ func Default() Config {
 			PollIntervalMS:    2000,
 			MeetingEndGraceMS: 6000,
 			Mode:              "mic",
-			WindowTool:     "auto",
+			WindowTool:        "auto",
 			Providers: map[string]ProviderConfig{
 				"google_meet": {
 					Patterns: []string{"meet.google.com", "Google Meet", "Meet -", "Meet |"},
@@ -329,10 +329,16 @@ func (c *Config) applyDefaults() {
 	if c.Detection.WindowTool == "" {
 		c.Detection.WindowTool = def.Detection.WindowTool
 	}
+	// Config is passed by value but a map header is shared, so mutating the
+	// caller's map here was an unsynchronized write racing View's reads on the
+	// Update loop. Work on a copy instead — Save applies defaults on every save,
+	// so this ran constantly, not only when providers changed.
 	if c.Detection.Providers == nil {
-		c.Detection.Providers = def.Detection.Providers
+		c.Detection.Providers = cloneProviders(def.Detection.Providers)
 	} else {
-		mergeProviderPatterns(c.Detection.Providers, def.Detection.Providers)
+		providers := cloneProviders(c.Detection.Providers)
+		mergeProviderPatterns(providers, def.Detection.Providers)
+		c.Detection.Providers = providers
 	}
 	if c.Transcription.Backend == "" {
 		c.Transcription.Backend = def.Transcription.Backend
@@ -364,22 +370,27 @@ func (c *Config) applyDefaults() {
 	}
 }
 
+// mergeProviderPatterns seeds defaults for providers the user has never
+// configured. It deliberately does not re-add individual patterns to a provider
+// the user already has: doing so ran on both Load and Save, which made deleting
+// a pattern in the Config tab a permanent no-op — and with auto-record on, a
+// false-positive pattern was impossible to remove.
+//
+// An explicitly empty pattern list is a real choice (match nothing), so it is
+// left alone; only a missing provider key is seeded.
+func cloneProviders(src map[string]ProviderConfig) map[string]ProviderConfig {
+	out := make(map[string]ProviderConfig, len(src))
+	for name, p := range src {
+		out[name] = ProviderConfig{Patterns: append([]string(nil), p.Patterns...)}
+	}
+	return out
+}
+
 func mergeProviderPatterns(dst map[string]ProviderConfig, defaults map[string]ProviderConfig) {
 	for name, defP := range defaults {
-		cur, ok := dst[name]
-		if !ok || len(cur.Patterns) == 0 {
-			dst[name] = ProviderConfig{Patterns: append([]string(nil), defP.Patterns...)}
+		if _, ok := dst[name]; ok {
 			continue
 		}
-		seen := make(map[string]bool, len(cur.Patterns))
-		for _, p := range cur.Patterns {
-			seen[p] = true
-		}
-		for _, p := range defP.Patterns {
-			if !seen[p] {
-				cur.Patterns = append(cur.Patterns, p)
-			}
-		}
-		dst[name] = cur
+		dst[name] = ProviderConfig{Patterns: append([]string(nil), defP.Patterns...)}
 	}
 }
