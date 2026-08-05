@@ -57,7 +57,10 @@ func StartLoopback(cfg LoopbackStreamConfig) (*Stream, error) {
 	deviceCfg.SampleRate = cfg.SampleRate
 	deviceCfg.Capture.Format = malgo.FormatS16
 	deviceCfg.Capture.Channels = cfg.Channels
-	deviceCfg.Playback.DeviceID = malgoDevicePtr(cfg.DeviceID)
+	// miniaudio selects the loopback endpoint from capture.pDeviceID; playback.pDeviceID
+	// is only consulted for playback/duplex devices. Setting the latter silently
+	// captured the default render endpoint instead of the configured one.
+	deviceCfg.Capture.DeviceID = malgoDevicePtr(cfg.DeviceID)
 	applyDeviceConfig(&deviceCfg)
 
 	onData := func(_, input []byte, frameCount uint32) {
@@ -291,8 +294,15 @@ func (s *Stream) emitPending() bool {
 	copy(chunk, s.pending[:n])
 	s.pending = s.pending[n:]
 	s.mu.Unlock()
-	s.ch <- chunk
-	return true
+	// Must honour s.done like drainAll does: the consumer can already be gone
+	// (Stop cancels it before the device tears down), and an unguarded send
+	// would wedge this goroutine — and Stop's wg.Wait — forever.
+	select {
+	case s.ch <- chunk:
+		return true
+	case <-s.done:
+		return false
+	}
 }
 
 func (s *Stream) drainAll() {

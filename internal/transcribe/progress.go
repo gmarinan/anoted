@@ -45,7 +45,9 @@ func ParseCppProgressLine(line string) (float64, bool) {
 	return v, true
 }
 
-var segmentTimestampRE = regexp.MustCompile(`\[(\d{2}):(\d{2})\.(\d{3})\s*-->\s*(\d{2}):(\d{2})\.(\d{3})\]`)
+// openai-whisper prints MM:SS.mmm, but switches to HH:MM:SS.mmm once a segment
+// passes the one-hour mark, so the hour field has to be optional.
+var segmentTimestampRE = regexp.MustCompile(`\[(?:(\d+):)?(\d{2}):(\d{2})\.(\d{3})\s*-->\s*(?:(\d+):)?(\d{2}):(\d{2})\.(\d{3})\]`)
 
 // ParseSegmentLine extracts end timestamp and full line from openai-whisper verbose output.
 func ParseSegmentLine(line string, audioDuration time.Duration) (percent float64, segment string, ok bool) {
@@ -57,7 +59,7 @@ func ParseSegmentLine(line string, audioDuration time.Duration) (percent float64
 	if m == nil {
 		return 0, "", false
 	}
-	end := parseTimestamp(m[4], m[5], m[6])
+	end := parseTimestamp(m[5], m[6], m[7], m[8])
 	if end <= 0 {
 		return 0, line, true
 	}
@@ -70,11 +72,14 @@ func ParseSegmentLine(line string, audioDuration time.Duration) (percent float64
 	return percent, line, true
 }
 
-func parseTimestamp(min, sec, ms string) time.Duration {
+// hour may be empty when whisper omits the field for sub-hour timestamps.
+func parseTimestamp(hour, min, sec, ms string) time.Duration {
+	h, _ := strconv.Atoi(hour)
 	mi, _ := strconv.Atoi(min)
 	s, _ := strconv.Atoi(sec)
 	millis, _ := strconv.Atoi(ms)
-	return time.Duration(mi)*time.Minute + time.Duration(s)*time.Second + time.Duration(millis)*time.Millisecond
+	return time.Duration(h)*time.Hour + time.Duration(mi)*time.Minute +
+		time.Duration(s)*time.Second + time.Duration(millis)*time.Millisecond
 }
 
 // ParseTqdmProgressLine extracts percentage from tqdm stderr output.

@@ -37,18 +37,27 @@ func TestIsManagedBinary(t *testing.T) {
 }
 
 func TestPipInstallArgsIncludeProgress(t *testing.T) {
-	args := pipInstallArgs("/usr/bin/python", "install", "-U", "torch", "--index-url", "https://example.test")
+	args := pipInstallArgs("/usr/bin/python", "-U", "torch", "--index-url", "https://example.test")
 	if args[0] != "/usr/bin/python" || args[1] != "-m" || args[2] != "pip" || args[3] != "install" {
 		t.Fatalf("unexpected prefix: %v", args[:4])
 	}
+	// pip parses a second "install" token as a package name, so the subcommand
+	// must appear exactly once no matter what the caller passes.
+	installs := 0
 	foundBar, foundVerbose := false, false
 	for i, a := range args {
+		if a == "install" {
+			installs++
+		}
 		if a == "--progress-bar" && i+1 < len(args) && args[i+1] == "on" {
 			foundBar = true
 		}
 		if a == "-v" {
 			foundVerbose = true
 		}
+	}
+	if installs != 1 {
+		t.Fatalf("expected exactly one \"install\" token, got %d: %v", installs, args)
 	}
 	if !foundBar {
 		t.Fatal("expected --progress-bar on in pip args")
@@ -76,5 +85,16 @@ func TestFirstPythonAbsolute(t *testing.T) {
 	}
 	if !filepath.IsAbs(py) && py != "python3" && py != "python" {
 		t.Fatalf("unexpected python path: %q", py)
+	}
+}
+
+func TestHasCmdDirection(t *testing.T) {
+	// hasCmd once returned the inverse of LookPath, which made the Windows
+	// winget gate abort on exactly the machines where winget exists.
+	if !hasCmd("go") {
+		t.Fatal("hasCmd(go) = false, want true (go must be on PATH to run this test)")
+	}
+	if hasCmd("anoted-definitely-not-a-real-binary") {
+		t.Fatal("hasCmd(nonexistent) = true, want false")
 	}
 }

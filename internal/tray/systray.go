@@ -89,7 +89,6 @@ func (t *systrayIndicator) SetState(state State) {
 
 func (t *systrayIndicator) SetTooltip(tooltip string) {
 	t.mu.Lock()
-	t.state = t.state
 	t.tooltip = tooltip
 	state := t.state
 	t.mu.Unlock()

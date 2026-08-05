@@ -889,8 +889,10 @@ func (m Model) handleConfigInputKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.applyConfigValue(val)
 	case "backspace":
-		if len(m.configInput) > 0 {
-			m.configInput = m.configInput[:len(m.configInput)-1]
+		// Slice by runes: byte-slicing a multibyte character leaves an invalid
+		// UTF-8 fragment that yaml.v3 then writes out as a !!binary node.
+		if r := []rune(m.configInput); len(r) > 0 {
+			m.configInput = string(r[:len(r)-1])
 		}
 		return m, nil
 	}

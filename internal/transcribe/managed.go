@@ -118,8 +118,8 @@ func installManaged(progress, stdout, stderr io.Writer) error {
 		soft bool
 	}{
 		{"Upgrading pip", pipInstallArgs(python, "-U", "pip"), true},
-		{"Installing PyTorch (CPU)", pipInstallArgs(python, "install", "torch", "--index-url", "https://download.pytorch.org/whl/cpu"), false},
-		{"Installing openai-whisper", pipInstallArgs(python, "install", "-U", "openai-whisper"), false},
+		{"Installing PyTorch (CPU)", pipInstallArgs(python, "torch", "--index-url", "https://download.pytorch.org/whl/cpu"), false},
+		{"Installing openai-whisper", pipInstallArgs(python, "-U", "openai-whisper"), false},
 	}
 	for _, step := range steps {
 		fmt.Fprintf(progress, "  %s…\n", step.desc)
@@ -163,7 +163,7 @@ func upgradeManagedTorchCUDA(progress, stdout, stderr io.Writer) error {
 	var lastErr error
 	for _, idx := range indexes {
 		fmt.Fprintf(progress, "  Installing PyTorch (CUDA) from %s…\n", idx)
-		args := pipInstallArgs(python, "install", "-U", "torch", "--index-url", idx)
+		args := pipInstallArgs(python, "-U", "torch", "--index-url", idx)
 		err := runCmd(stdout, stderr, args...)
 		if err != nil {
 			lastErr = err
@@ -260,5 +260,5 @@ func FindPython() (string, error) {
 
 func hasCmd(name string) bool {
 	_, err := exec.LookPath(name)
-	return err != nil
+	return err == nil
 }

@@ -149,9 +149,12 @@ func displayState(state string) string {
 	}
 }
 
+// truncate counts runes, not bytes: slicing a multibyte character in half
+// emits invalid UTF-8 and the terminal renders a replacement glyph.
 func truncate(s string, max int) string {
-	if max <= 3 || len(s) <= max {
+	r := []rune(s)
+	if max <= 3 || len(r) <= max {
 		return s
 	}
-	return s[:max-3] + "…"
+	return string(r[:max-3]) + "…"
 }

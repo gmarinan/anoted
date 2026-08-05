@@ -54,3 +54,21 @@ func TestFormatETA(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+func TestParseSegmentLineHours(t *testing.T) {
+	// whisper switches to HH:MM:SS.mmm past the hour; without the hour field
+	// progress froze for the tail of any meeting longer than 60 minutes.
+	dur := 2 * time.Hour
+	line := "[01:00:00.000 --> 01:30:00.000] second hour"
+	pct, seg, ok := ParseSegmentLine(line, dur)
+	if !ok || seg != line {
+		t.Fatalf("unexpected parse: %v %q %v", pct, seg, ok)
+	}
+	if pct < 74 || pct > 76 {
+		t.Fatalf("percent = %v, want ~75", pct)
+	}
+	// sub-hour form must still work
+	if pct, _, ok := ParseSegmentLine("[00:30.000 --> 01:00.000] first", 2*time.Minute); !ok || pct < 49 || pct > 51 {
+		t.Fatalf("sub-hour form broke: %v %v", pct, ok)
+	}
+}
