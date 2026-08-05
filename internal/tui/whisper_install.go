@@ -104,7 +104,10 @@ func waitWhisperInstallMsg(ch <-chan tea.Msg) tea.Cmd {
 	}
 }
 
-func (m Model) appendWhisperInstallLog(line string) {
+// Pointer receiver: see appendTranscribeLog — a value receiver silently
+// discarded every line, so the install pane looked frozen for the whole
+// multi-minute pip download.
+func (m *Model) appendWhisperInstallLog(line string) {
 	line = strings.TrimSpace(line)
 	if line == "" {
 		return
@@ -184,9 +187,8 @@ func (m Model) handleWhisperInstallSaved(msg whisperInstallSavedMsg) (tea.Model,
 	m.deps.Config = msg.cfg
 	m.whisperInstallErr = ""
 	m.appendWhisperInstallLog("✓ whisper installed")
-	m.doctorReport = loadDoctorReport(m.deps.Config)
 	m.doctorWhisperCanInstall = false
-	return m, nil
+	return m, doctorReportCmd(m.deps.Config)
 }
 
 func (m Model) whisperCanInstall() bool {

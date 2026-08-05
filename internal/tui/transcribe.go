@@ -80,7 +80,10 @@ func (m Model) scheduleTranscribeBlink() tea.Cmd {
 	return tea.Tick(transcribeBlinkInterval, func(time.Time) tea.Msg { return transcribeBlinkMsg{} })
 }
 
-func (m Model) appendTranscribeLog(line string) {
+// Pointer receiver: with a value receiver every appended line was written to a
+// discarded copy of the Model, so the transcription preview showed only its
+// seed line for the whole run.
+func (m *Model) appendTranscribeLog(line string) {
 	line = strings.TrimSpace(line)
 	if line == "" {
 		return
@@ -95,13 +98,13 @@ func (m Model) appendTranscribeLog(line string) {
 	}
 }
 
-func (m Model) clearTranscribeCancel() {
+func (m *Model) clearTranscribeCancel() {
 	if m.transcribeCancel != nil {
 		m.transcribeCancel = nil
 	}
 }
 
-func (m Model) cancelTranscribeJob() {
+func (m *Model) cancelTranscribeJob() {
 	if m.transcribeCancel != nil {
 		m.transcribeCancel()
 		m.transcribeCancel = nil

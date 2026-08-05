@@ -105,6 +105,12 @@ func (v DoctorView) gpuInstallBox(width int) string {
 }
 
 func (v DoctorView) summaryBox(width int) string {
+	// The report now arrives asynchronously, so distinguish "not back yet" from
+	// a finished run — rendering the usual header here would claim "0 checks OK".
+	if len(v.Report.Checks) == 0 {
+		return Box("Diagnostic summary", "Running checks…", width)
+	}
+
 	var lines []string
 	okCount := 0
 	for _, c := range v.Report.Checks {

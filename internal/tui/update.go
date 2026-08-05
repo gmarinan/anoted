@@ -137,6 +137,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleGPUInstallEnvelope(msg)
 	case gpuInstallSavedMsg:
 		return m.handleGPUInstallSaved(msg)
+	case doctorReportMsg:
+		m.doctorReport = msg.report
+		return m, nil
 	case doctorCapsMsg:
 		m = m.handleDoctorCaps(msg)
 		return m, nil

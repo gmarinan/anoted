@@ -336,8 +336,7 @@ func (m Model) handleDesktopOpenerSaved(msg desktopOpenerSavedMsg) (tea.Model, t
 	m.deps.Config = msg.cfg
 	m.sessionsErr = ""
 	m.sessionsDesktopNote = fmt.Sprintf("folder opener: %s", openerLabel(msg.id))
-	m.doctorReport = loadDoctorReport(m.deps.Config)
-	return m, nil
+	return m, doctorReportCmd(m.deps.Config)
 }
 
 func openerLabel(id string) string {
@@ -347,6 +346,16 @@ func openerLabel(id string) string {
 		}
 	}
 	return id
+}
+
+// sessionsOpenerChoicesIfOpen builds the picker list only when the picker is
+// actually visible. Building it unconditionally ran a PATH sweep on every
+// View() call — that is, after every message on the Bubble Tea goroutine.
+func (m Model) sessionsOpenerChoicesIfOpen() []components.FolderOpenerChoice {
+	if !m.sessionsOpenerPicker {
+		return nil
+	}
+	return m.sessionsOpenerChoices()
 }
 
 func (m Model) sessionsOpenerChoices() []components.FolderOpenerChoice {

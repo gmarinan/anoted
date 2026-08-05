@@ -264,13 +264,11 @@ func (m Model) handleSetupInstallResult(msg setupInstallResultMsg) (tea.Model, t
 		m.setupWizard.Err = msg.err.Error()
 		m.setupWizard.AppendLog("failed: " + msg.err.Error())
 		m.setupWizard.Step = setup.WizardInstalling
-		m.doctorReport = loadDoctorReport(m.deps.Config)
-		return m, refreshDoctorCapsCmd(m.deps.Config)
+		return m, tea.Batch(doctorReportCmd(m.deps.Config), refreshDoctorCapsCmd(m.deps.Config))
 	}
 	m.setupWizard.Err = ""
 	m.setupWizard.Step = setup.WizardDone
-	m.doctorReport = loadDoctorReport(m.deps.Config)
-	return m, refreshDoctorCapsCmd(m.deps.Config)
+	return m, tea.Batch(doctorReportCmd(m.deps.Config), refreshDoctorCapsCmd(m.deps.Config))
 }
 
 func (m Model) setupWizardOverlay(base string) string {

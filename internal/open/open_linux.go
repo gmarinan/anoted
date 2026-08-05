@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"anoted/internal/config"
 )
@@ -136,12 +137,26 @@ func expandCustomCommand(parts []string, path string) (string, []string, error) 
 	return parts[0], args, nil
 }
 
+var xdgFolderDesktopOnce struct {
+	sync.Once
+	value string
+}
+
+// xdgFolderDesktop reports the desktop file registered for inode/directory.
+//
+// The result is cached for the process lifetime: this spawns xdg-mime, and it
+// used to be reached from View(), which Bubble Tea calls after every message —
+// roughly 30 times a second while the level meter ticks. The user's default
+// file manager does not change mid-session.
 func xdgFolderDesktop() string {
-	out, err := exec.Command("xdg-mime", "query", "default", "inode/directory").Output()
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(out))
+	xdgFolderDesktopOnce.Do(func() {
+		out, err := exec.Command("xdg-mime", "query", "default", "inode/directory").Output()
+		if err != nil {
+			return
+		}
+		xdgFolderDesktopOnce.value = strings.TrimSpace(string(out))
+	})
+	return xdgFolderDesktopOnce.value
 }
 
 func isDiskUsageHandler(desktop string) bool {

@@ -106,7 +106,7 @@ func (m Model) sessionsPanel() components.SessionsView {
 		Height:               m.height,
 		OpenerPicker:         m.sessionsOpenerPicker,
 		OpenerCursor:         m.sessionsOpenerCursor,
-		OpenerChoices:        m.sessionsOpenerChoices(),
+		OpenerChoices:        m.sessionsOpenerChoicesIfOpen(),
 		CurrentOpener:        open.CurrentOpenerID(m.deps.Config.Desktop),
 		OpenerDetected:       open.Detected(m.deps.Config.Desktop, open.KindFolder),
 		DeleteConfirm:        m.sessionsDeleteConfirm,

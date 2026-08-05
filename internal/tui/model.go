@@ -241,10 +241,6 @@ type configSavedMsg struct {
 	err error
 }
 
-func loadDoctorReport(cfg config.Config) doctor.Report {
-	return doctor.Run(cfg)
-}
-
 const sessionsListLimit = 500
 const sessionsPageSize = 6
 

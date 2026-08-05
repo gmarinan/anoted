@@ -26,8 +26,7 @@ func (m Model) switchScreen(screen Screen) (tea.Model, tea.Cmd) {
 
 	switch screen {
 	case ScreenDoctor:
-		m.doctorReport = loadDoctorReport(m.deps.Config)
-		cmds = append(cmds, refreshDoctorCapsCmd(m.deps.Config))
+		cmds = append(cmds, doctorReportCmd(m.deps.Config), refreshDoctorCapsCmd(m.deps.Config))
 	case ScreenMain:
 		m = m.refreshSessions()
 		m.audioMonitorWarn = m.deps.Audio.MonitorWarning(m.deps.Config.Audio.SystemMonitor)
@@ -213,8 +212,7 @@ func (m Model) handleTabSwitch(key string) (tea.Model, tea.Cmd, bool) {
 func (m Model) handleRefresh() (tea.Model, tea.Cmd) {
 	switch m.screen {
 	case ScreenDoctor:
-		m.doctorReport = loadDoctorReport(m.deps.Config)
-		return m, refreshDoctorCapsCmd(m.deps.Config)
+		return m, tea.Batch(doctorReportCmd(m.deps.Config), refreshDoctorCapsCmd(m.deps.Config))
 	case ScreenMain:
 		m = m.refreshSessions()
 		return m, tea.Batch(resolveDeviceLabelsCmd(m), m.startSystemLevelCmd())

@@ -3,10 +3,16 @@
 package tray
 
 import (
+	"fmt"
 	"sync"
+	"time"
 
 	"fyne.io/systray"
 )
+
+// trayReadyTimeout bounds how long Start waits for the tray to register before
+// giving up, so a failed registration degrades to "no tray" instead of a hang.
+const trayReadyTimeout = 3 * time.Second
 
 func newPlatformIndicator(opts Options) Indicator {
 	return &systrayIndicator{
@@ -38,7 +44,18 @@ func (t *systrayIndicator) Start() error {
 	t.mu.Unlock()
 
 	go systray.Run(t.onReady, t.onExit)
-	<-t.ready
+	// fyne.io/systray's registerSystray can fail (shell-less session, Server
+	// Core, a transient notification-area failure) and only logs it, so onReady
+	// never runs. Waiting unconditionally hung the app before the TUI started,
+	// with no output and no way out but a kill.
+	select {
+	case <-t.ready:
+	case <-time.After(trayReadyTimeout):
+		t.mu.Lock()
+		t.started = false
+		t.mu.Unlock()
+		return fmt.Errorf("tray: indicator did not become ready within %s", trayReadyTimeout)
+	}
 	t.SetState(StateMonitoring)
 	return nil
 }

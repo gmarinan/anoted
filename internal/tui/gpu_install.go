@@ -64,7 +64,8 @@ func waitGPUInstallMsg(ch <-chan tea.Msg) tea.Cmd {
 	}
 }
 
-func (m Model) appendGPUInstallLog(line string) {
+// Pointer receiver: see appendTranscribeLog.
+func (m *Model) appendGPUInstallLog(line string) {
 	line = strings.TrimSpace(line)
 	if line == "" {
 		return
@@ -148,9 +149,8 @@ func (m Model) handleGPUInstallSaved(msg gpuInstallSavedMsg) (tea.Model, tea.Cmd
 	m.gpuInstallErr = ""
 	m.appendGPUInstallLog("✓ GPU enabled (PyTorch CUDA)")
 	transcribe.InvalidateTorchCUDACache()
-	m.doctorReport = loadDoctorReport(m.deps.Config)
 	m.doctorGPUCanInstall = false
-	return m, nil
+	return m, doctorReportCmd(m.deps.Config)
 }
 
 func (m Model) maxGPUInstallScroll(viewHeight int) int {
