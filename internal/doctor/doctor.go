@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"strings"
 
+	"anoted/internal/buildinfo"
 	"anoted/internal/config"
 	"anoted/internal/platform"
 	"anoted/internal/recorder"
@@ -32,6 +33,7 @@ func Run(cfg config.Config) Report {
 	rep := Report{Platform: plat}
 
 	rep.Checks = append(rep.Checks,
+		Check{Name: "anoted_version", Status: "ok", Detail: buildinfo.Version()},
 		Check{Name: "operating_system", Status: "ok", Detail: plat.Name()},
 		wslCheck(plat),
 		outputDirCheck(cfg),

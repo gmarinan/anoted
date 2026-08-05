@@ -9,6 +9,7 @@ import (
 
 	"anoted/internal/audio"
 	"anoted/internal/autostart"
+	"anoted/internal/buildinfo"
 	"anoted/internal/config"
 	"anoted/internal/detector"
 	"anoted/internal/doctor"
@@ -40,9 +41,10 @@ func main() {
 
 func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:   "anoted",
-		Short: "Meeting detection and audio recording TUI",
-		RunE:  runTUI,
+		Use:     "anoted",
+		Short:   "Meeting detection and audio recording TUI",
+		Version: buildinfo.Version(),
+		RunE:    runTUI,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			path, err := config.EnsureDefault()
 			if err != nil {

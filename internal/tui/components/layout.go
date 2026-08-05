@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"anoted/internal/buildinfo"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 )
@@ -72,12 +73,14 @@ const (
 
 var tabLabels = []string{"Home", "Doctor", "Config"}
 
-// Header renders the app title line.
+// Header renders the app title line, including the running build so a user
+// reporting a problem can say which version they are on without digging.
 func Header(subtitle string) string {
-	if subtitle == "" {
-		return headerStyle.Render("anoted")
+	out := headerStyle.Render("anoted") + subtleStyle.Render(" "+buildinfo.Version())
+	if subtitle != "" {
+		out += subtleStyle.Render(" · " + subtitle)
 	}
-	return headerStyle.Render("anoted") + subtleStyle.Render(" · "+subtitle)
+	return out
 }
 
 // TabBar renders the top main navigation tabs (visual only; use 1–4 to switch).
