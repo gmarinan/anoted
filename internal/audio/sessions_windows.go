@@ -3,11 +3,7 @@
 package audio
 
 import (
-	"bufio"
-	_ "embed"
 	"fmt"
-	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -17,9 +13,6 @@ import (
 	"github.com/moutend/go-wca/pkg/wca"
 	"golang.org/x/sys/windows"
 )
-
-//go:embed session_enum.ps1
-var sessionEnumScript string
 
 var (
 	iidIMMDeviceEnumeratorMS   = ole.NewGUID("{A95664D2-9614-4FCF-AF66-5586927DFB5E}")
@@ -32,11 +25,7 @@ func ListCaptureSessions() ([]CaptureSession, error) {
 	if err == nil {
 		return sessions, nil
 	}
-	psSessions, psErr := listCaptureSessionsPowerShell()
-	if psErr == nil {
-		return psSessions, nil
-	}
-	return nil, fmt.Errorf("WASAPI: %w; PowerShell: %v", err, psErr)
+	return nil, fmt.Errorf("enumerate capture sessions: %w", err)
 }
 
 func listCaptureSessionsWCA() ([]CaptureSession, error) {
@@ -158,51 +147,6 @@ func sessionFromControlWCA(asc *wca.IAudioSessionControl) (CaptureSession, bool)
 		ProcessName: processBasename(pid),
 		DisplayName: display,
 	}, true
-}
-
-func listCaptureSessionsPowerShell() ([]CaptureSession, error) {
-	scriptPath := filepath.Join(os.TempDir(), "anoted-session-enum.ps1")
-	if err := os.WriteFile(scriptPath, []byte(sessionEnumScript), 0o600); err != nil {
-		return nil, err
-	}
-	defer os.Remove(scriptPath)
-
-	cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-STA", "-ExecutionPolicy", "Bypass", "-File", scriptPath)
-	out, err := cmd.Output()
-	if err != nil {
-		if ee, ok := err.(*exec.ExitError); ok {
-			return nil, fmt.Errorf("%w: %s", err, strings.TrimSpace(string(ee.Stderr)))
-		}
-		return nil, err
-	}
-
-	var sessions []CaptureSession
-	scanner := bufio.NewScanner(strings.NewReader(string(out)))
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" {
-			continue
-		}
-		parts := strings.Split(line, "\t")
-		if len(parts) < 2 {
-			continue
-		}
-		var pid uint32
-		if _, err := fmt.Sscanf(parts[0], "%d", &pid); err != nil || pid == 0 {
-			continue
-		}
-		name := parts[1]
-		display := ""
-		if len(parts) > 2 {
-			display = parts[2]
-		}
-		sessions = append(sessions, CaptureSession{
-			ProcessID:   pid,
-			ProcessName: name,
-			DisplayName: display,
-		})
-	}
-	return sessions, nil
 }
 
 func initCOM() error {

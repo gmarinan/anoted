@@ -1,4 +1,4 @@
-.PHONY: build test lint run clean build-windows build-windows-helper
+.PHONY: build test lint lint-windows run clean build-windows build-windows-helper
 
 BINARY=anoted
 VERSION?=dev
@@ -18,6 +18,15 @@ test:
 lint:
 	go vet ./...
 	@test -z "$$(gofmt -l .)" || (echo "run gofmt -w ." && exit 1)
+
+# Windows-tagged code is never compiled by `make lint` on Linux, so bugs there
+# reach users uncaught. This checks the packages that do not need cgo; a full
+# check needs MinGW-w64 and is what `make build-windows` does.
+lint-windows:
+	CGO_ENABLED=0 GOOS=windows go build \
+		./internal/autostart/ ./internal/config/ ./internal/session/ \
+		./internal/folderpicker/ ./internal/open/ ./internal/platform/ \
+		./internal/logging/ ./internal/tray/ ./tools/windows-recorder/
 
 run: build
 	./bin/$(BINARY) watch

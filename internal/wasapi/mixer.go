@@ -81,6 +81,11 @@ type MasterClockMixer struct {
 	mixBuf          []byte
 	onPCM           func([]byte)
 	outputFrames    int
+
+	// now is injectable so tests can drive the clock; lastEmit tracks how much
+	// audio time has already been written.
+	now      func() time.Time
+	lastEmit time.Time
 }
 
 // NewMasterClockMixer creates a mixer driven by EmitTicks.
@@ -104,6 +109,7 @@ func NewMasterClockMixer(sampleRate, channels int, onPCM func([]byte)) *MasterCl
 		maxLoopFIFO:     maxFrames * frameBytes,
 		silentLoopFrame: make([]byte, frameBytes),
 		onPCM:           onPCM,
+		now:             time.Now,
 	}
 }
 
@@ -139,9 +145,42 @@ func (m *MasterClockMixer) PushMic(chunk []byte) {
 	m.trimMicFIFO()
 }
 
-// EmitTicks writes mixed frames for one real-time tick.
+// EmitTicks writes as many frames as real time has elapsed for since the last
+// call.
+//
+// Emitting a fixed FramesPerTick() per received tick lost time in one direction
+// only: time.Ticker drops ticks when its receiver is busy, and the sole
+// receiver also runs every OnPCM callback plus the WAV writes. Missed ticks
+// were never made up, so a long recording drifted progressively shorter than
+// the meeting it captured.
 func (m *MasterClockMixer) EmitTicks() {
-	for i := 0; i < m.FramesPerTick(); i++ {
+	now := m.now()
+	if m.lastEmit.IsZero() {
+		m.lastEmit = now
+		m.emitFrames(m.FramesPerTick())
+		return
+	}
+
+	elapsed := now.Sub(m.lastEmit)
+	if elapsed <= 0 {
+		return
+	}
+	frames := int(float64(elapsed) / float64(time.Second) * float64(m.sampleRate))
+	if frames < 1 {
+		return
+	}
+	// Bound a single catch-up burst (after a suspend, say) to one second, and
+	// advance the clock only by what was actually written so the remainder is
+	// made up on subsequent ticks instead of being dropped.
+	if maxCatchUp := m.sampleRate; frames > maxCatchUp {
+		frames = maxCatchUp
+	}
+	m.lastEmit = m.lastEmit.Add(time.Duration(float64(frames) / float64(m.sampleRate) * float64(time.Second)))
+	m.emitFrames(frames)
+}
+
+func (m *MasterClockMixer) emitFrames(n int) {
+	for i := 0; i < n; i++ {
 		m.emitTick()
 	}
 }
