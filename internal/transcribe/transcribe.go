@@ -3,8 +3,10 @@ package transcribe
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"time"
 
 	"anoted/internal/config"
 	"anoted/internal/recorder"
@@ -56,8 +58,38 @@ func (s *Service) TranscribeSessionWithProgress(ctx context.Context, sessionDir 
 
 	bin, backend, err := resolveBinary(s.cfg.Transcription)
 	if err != nil {
+		slog.Error("transcription backend unavailable", "err", err,
+			"configured_backend", s.cfg.Transcription.Backend)
 		return Result{}, err
 	}
+
+	// Transcription is the longest operation anoted performs and it was
+	// completely silent in the log, so a stalled or mis-routed run left nothing
+	// to diagnose — not even which engine actually ran.
+	started := time.Now()
+	slog.Info("transcription started",
+		"backend", backend,
+		"binary", bin,
+		"model", resolvedModel(s.cfg.Transcription),
+		"device", resolveDevice(s.cfg.Transcription),
+		"session_dir", sessionDir,
+		"output_dir", outDir,
+	)
+	defer func() {
+		slog.Info("transcription finished",
+			"backend", backend,
+			"session_dir", sessionDir,
+			"elapsed_ms", time.Since(started).Milliseconds(),
+		)
+	}()
+
+	// Announce the engine in the live preview: which backend actually ran was
+	// not visible anywhere in the UI, so a run could not be told apart from one
+	// using a different engine than the Config tab displayed.
+	emitProgress(onProgress, Progress{
+		SegmentText: fmt.Sprintf("· %s · %s · %s",
+			backend, resolvedModel(s.cfg.Transcription), resolveDevice(s.cfg.Transcription)),
+	})
 
 	switch backend {
 	case BackendFasterWhisper:

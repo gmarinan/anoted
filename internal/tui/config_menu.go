@@ -762,7 +762,7 @@ func (m Model) reloadConfigFromDisk() Model {
 		m.configErr = err.Error()
 		return m
 	}
-	m.deps.Config = cfg
+	m = m.applyConfig(cfg)
 	m.autoRecord = cfg.AutoRecord
 	m.audioMonitorWarn = m.deps.Audio.MonitorWarning(cfg.Audio.SystemMonitor)
 	m.configErr = ""
@@ -1052,7 +1052,7 @@ func (m Model) handleConfigMenuSave(msg configMenuSaveMsg) (tea.Model, tea.Cmd) 
 	}
 	m.configErr = ""
 	m.configSavedMsg = "saved"
-	m.deps.Config = msg.cfg
+	m = m.applyConfig(msg.cfg)
 	m.autoRecord = msg.cfg.AutoRecord
 	m.audioMonitorWarn = m.deps.Audio.MonitorWarning(msg.cfg.Audio.SystemMonitor)
 	m = m.clampConfigCursor()

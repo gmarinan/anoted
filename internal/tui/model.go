@@ -200,6 +200,20 @@ func (m Model) tickDuration() time.Duration {
 	return time.Second
 }
 
+// applyConfig swaps in a new configuration and rebuilds everything derived from
+// it.
+//
+// Assigning deps.Config on its own is not enough: transcribe.Service captures
+// the config it was constructed with, so switching the transcription backend in
+// the Config tab wrote the new value to disk and displayed it correctly while
+// transcription silently kept using the engine from startup until anoted was
+// restarted. Six of the eight config-update paths had that bug.
+func (m Model) applyConfig(cfg config.Config) Model {
+	m.deps.Config = cfg
+	m.deps.Transcriber = transcribe.New(cfg)
+	return m
+}
+
 type pollTickMsg struct{}
 type durationTickMsg struct{}
 

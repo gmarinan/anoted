@@ -144,8 +144,7 @@ func (m Model) handleGPUInstallSaved(msg gpuInstallSavedMsg) (tea.Model, tea.Cmd
 		m.gpuInstallErr = msg.err.Error()
 		return m, nil
 	}
-	m.deps.Config = msg.cfg
-	m.deps.Transcriber = transcribe.New(msg.cfg)
+	m = m.applyConfig(msg.cfg)
 	m.gpuInstallErr = ""
 	m.appendGPUInstallLog("✓ GPU enabled (PyTorch CUDA)")
 	transcribe.InvalidateTorchCUDACache()

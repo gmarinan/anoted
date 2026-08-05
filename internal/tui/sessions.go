@@ -333,7 +333,7 @@ func (m Model) handleDesktopOpenerSaved(msg desktopOpenerSavedMsg) (tea.Model, t
 		m.sessionsErr = msg.err.Error()
 		return m, nil
 	}
-	m.deps.Config = msg.cfg
+	m = m.applyConfig(msg.cfg)
 	m.sessionsErr = ""
 	m.sessionsDesktopNote = fmt.Sprintf("folder opener: %s", openerLabel(msg.id))
 	return m, doctorReportCmd(m.deps.Config)

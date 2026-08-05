@@ -62,7 +62,7 @@ func (m Model) handleConfigSaved(msg configSavedMsg) (tea.Model, tea.Cmd) {
 	if msg.err != nil {
 		return m, nil
 	}
-	m.deps.Config = msg.cfg
+	m = m.applyConfig(msg.cfg)
 	m.audioMonitorWarn = m.deps.Audio.MonitorWarning(msg.cfg.Audio.SystemMonitor)
 	return m, resolveDeviceLabelsCmd(m)
 }

@@ -153,7 +153,7 @@ func (m Model) setupAdvance() (tea.Model, tea.Cmd) {
 		cfg := m.deps.Config
 		cfg.Detection.Mode = mode
 		m.setupWizard.DetectionLines = setup.ApplyDetection(&cfg, m.deps.Platform, mode)
-		m.deps.Config = cfg
+		m = m.applyConfig(cfg)
 		m.setupWizard.Step = setup.WizardTranscription
 		return m, nil
 	case setup.WizardTranscription:
@@ -254,7 +254,7 @@ func (m Model) handleSetupInstallResult(msg setupInstallResultMsg) (tea.Model, t
 	if m.setupCancel != nil {
 		m.setupCancel = nil
 	}
-	m.deps.Config = msg.cfg
+	m = m.applyConfig(msg.cfg)
 	m.deps.Detector = detector.New(msg.cfg, m.deps.Platform, false)
 	m.deps.Transcriber = transcribe.New(msg.cfg)
 	m.autoRecord = msg.cfg.AutoRecord

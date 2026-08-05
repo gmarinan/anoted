@@ -28,6 +28,7 @@ type runnerEvent struct {
 	End      float64 `json:"end"`
 	Text     string  `json:"text"`
 	Message  string  `json:"message"`
+	Stage    string  `json:"stage"`
 }
 
 // FasterWhisperPython returns the interpreter that owns the faster-whisper
@@ -208,6 +209,10 @@ func parseRunnerStream(r io.Reader, onProgress ProgressFunc) (segs []Segment, la
 			continue
 		}
 		switch ev.Type {
+		case "status":
+			// Decoding and VAD run before the first segment — on a one-hour
+			// recording that is a minute of silence from the UI's point of view.
+			emitProgress(onProgress, Progress{SegmentText: "· " + ev.Stage + "…"})
 		case "info":
 			duration = time.Duration(ev.Duration * float64(time.Second))
 			language = ev.Language
