@@ -59,3 +59,57 @@ func putLE32(b []byte, v uint32) {
 	b[2] = byte(v >> 16)
 	b[3] = byte(v >> 24)
 }
+
+// wavWithLeadingChunk builds a WAV whose data chunk is preceded by a LIST
+// chunk, the layout ffmpeg writes for every recording anoted makes on Linux.
+func wavWithLeadingChunk(t *testing.T, sampleRate, channels, seconds int) string {
+	t.Helper()
+	dataSize := sampleRate * channels * 2 * seconds
+	// INFO + ISFT + uint32 length + a NUL-terminated encoder string.
+	listBody := []byte("INFOISFT\x0e\x00\x00\x00Lavf60.16.100\x00")
+
+	var b []byte
+	put32 := func(v int) { b = append(b, byte(v), byte(v>>8), byte(v>>16), byte(v>>24)) }
+	put16 := func(v int) { b = append(b, byte(v), byte(v>>8)) }
+
+	b = append(b, "RIFF"...)
+	put32(4 + 8 + 16 + 8 + len(listBody) + 8 + dataSize)
+	b = append(b, "WAVE"...)
+
+	b = append(b, "fmt "...)
+	put32(16)
+	put16(1)
+	put16(channels)
+	put32(sampleRate)
+	put32(sampleRate * channels * 2)
+	put16(channels * 2)
+	put16(16)
+
+	b = append(b, "LIST"...)
+	put32(len(listBody))
+	b = append(b, listBody...)
+
+	b = append(b, "data"...)
+	put32(dataSize)
+	b = append(b, make([]byte, dataSize)...)
+
+	path := filepath.Join(t.TempDir(), "ffmpeg-style.wav")
+	if err := os.WriteFile(path, b, 0o644); err != nil {
+		t.Fatalf("write wav: %v", err)
+	}
+	return path
+}
+
+func TestAudioDurationSkipsLeadingChunks(t *testing.T) {
+	// Reading at fixed offsets picked up the LIST chunk's size as the sample
+	// count, reporting a 3-second file as ~125µs — which pinned the
+	// transcription progress bar at 100% and wrote duration: 0s to the note.
+	path := wavWithLeadingChunk(t, 48000, 2, 3)
+	got, err := AudioDuration(path)
+	if err != nil {
+		t.Fatalf("AudioDuration: %v", err)
+	}
+	if got < 2900*time.Millisecond || got > 3100*time.Millisecond {
+		t.Fatalf("AudioDuration = %v, want ~3s", got)
+	}
+}

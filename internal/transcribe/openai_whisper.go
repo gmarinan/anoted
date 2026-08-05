@@ -22,7 +22,7 @@ func transcribeOpenAI(ctx context.Context, cfg config.TranscriptionConfig, bin, 
 		out, err = runOpenAIWhisper(ctx, cfg, bin, audioPath, outDir, DeviceCPU, onProgress)
 	}
 	if err != nil {
-		return Result{}, formatWhisperError("whisper", out, err)
+		return Result{}, formatWhisperError(ctx, "whisper", out, err)
 	}
 	fileBase := outputFileBase(cfg, sessionDir)
 	return finalizeOpenAIResult(outDir, audioPath, fileBase)
@@ -115,7 +115,7 @@ func transcribeWhisperCpp(ctx context.Context, cfg config.TranscriptionConfig, b
 		}
 	})
 	if err != nil {
-		return Result{}, formatWhisperError("whisper.cpp", out, err)
+		return Result{}, formatWhisperError(ctx, "whisper.cpp", out, err)
 	}
 
 	files := listOutputFiles(outDir, cfg, sessionDir)
@@ -173,12 +173,17 @@ func runWithProgress(ctx context.Context, bin string, args []string, onProgress 
 		return nil, err
 	}
 
-	var outBuf strings.Builder
+	// Each scanner gets its own buffer: sharing one strings.Builder across the
+	// two goroutines was a data race that dropped lines, and the merged output
+	// is the only input to isCUDAFailure — losing the "CUDA out of memory" line
+	// defeats the automatic retry on CPU.
+	var outBuf, errBuf strings.Builder
+	var scanErr [2]error
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		_ = scanLines(stdout, func(line string) {
+		scanErr[0] = scanLines(stdout, func(line string) {
 			outBuf.WriteString(line)
 			outBuf.WriteByte('\n')
 			if handleLine != nil {
@@ -188,9 +193,9 @@ func runWithProgress(ctx context.Context, bin string, args []string, onProgress 
 	}()
 	go func() {
 		defer wg.Done()
-		_ = scanLines(stderr, func(line string) {
-			outBuf.WriteString(line)
-			outBuf.WriteByte('\n')
+		scanErr[1] = scanLines(stderr, func(line string) {
+			errBuf.WriteString(line)
+			errBuf.WriteByte('\n')
 			if handleLine != nil {
 				handleLine("stderr", line)
 			}
@@ -202,7 +207,19 @@ func runWithProgress(ctx context.Context, bin string, args []string, onProgress 
 	}
 	wg.Wait()
 	err = cmd.Wait()
-	return []byte(outBuf.String()), err
+
+	out := []byte(outBuf.String() + errBuf.String())
+	if err == nil {
+		// A scanner that stops early (e.g. a line past the buffer limit) leaves
+		// the pipe undrained, so report it rather than treating a partial read
+		// as a clean run.
+		for _, se := range scanErr {
+			if se != nil {
+				return out, fmt.Errorf("read whisper output: %w", se)
+			}
+		}
+	}
+	return out, err
 }
 
 func resolveCppModelPath(cfg config.TranscriptionConfig) (string, error) {

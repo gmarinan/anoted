@@ -8,7 +8,15 @@ import (
 )
 
 // formatWhisperError turns subprocess output into a short actionable message.
-func formatWhisperError(backend string, out []byte, err error) error {
+//
+// ctx is consulted first because exec.CommandContext kills the child on
+// cancellation and Wait then reports the signal ("signal: killed") rather than
+// context.Canceled — so a user pressing stop saw a fragment of their own
+// transcript rendered as a red error on the session row.
+func formatWhisperError(ctx context.Context, backend string, out []byte, err error) error {
+	if ctx != nil && ctx.Err() != nil {
+		return ctx.Err()
+	}
 	if err != nil && errors.Is(err, context.Canceled) {
 		return context.Canceled
 	}
@@ -55,5 +63,9 @@ func isCUDAFailure(out []byte) bool {
 		strings.Contains(s, "torch.OutOfMemoryError") ||
 		strings.Contains(s, "CUDA error") ||
 		strings.Contains(s, "no kernel image is available") ||
-		strings.Contains(s, "Found no NVIDIA driver")
+		strings.Contains(s, "Found no NVIDIA driver") ||
+		// A CPU-only torch build against an NVIDIA machine: recoverable by
+		// retrying on CPU, but it does not mention "CUDA error".
+		strings.Contains(s, "Torch not compiled with CUDA enabled") ||
+		strings.Contains(s, "torch.cuda.is_available() is False")
 }

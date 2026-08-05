@@ -88,8 +88,17 @@ func resolveDevice(cfg config.TranscriptionConfig) string {
 	}
 }
 
+// hasCUDA reports whether transcription can actually run on the GPU.
+//
+// An NVIDIA driver alone is not enough: with a CPU-only torch wheel — which is
+// what the managed venv installs by default — whisper raises "Torch not
+// compiled with CUDA enabled" and fails outright. Requiring the torch probe too
+// keeps `device: auto` from selecting a device that cannot work.
 func hasCUDA() bool {
-	return NVIDIAAvailable()
+	if !NVIDIAAvailable() {
+		return false
+	}
+	return ManagedTorchCUDAAvailable()
 }
 
 func resolvedModel(cfg config.TranscriptionConfig) string {
