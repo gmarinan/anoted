@@ -1,13 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
 
-	tea "charm.land/bubbletea/v2"
-	"github.com/spf13/cobra"
 	"anoted/internal/audio"
 	"anoted/internal/autostart"
 	"anoted/internal/config"
@@ -23,6 +22,8 @@ import (
 	"anoted/internal/transcribe"
 	"anoted/internal/tray"
 	"anoted/internal/tui"
+	tea "charm.land/bubbletea/v2"
+	"github.com/spf13/cobra"
 )
 
 var (
@@ -157,12 +158,17 @@ func runTUI(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	rec := recorder.New(cfg, plat, forceDummy)
+	// Defence in depth: whichever path ends the event loop, never return from
+	// runTUI with a capture child still running.
+	defer func() { _ = rec.Stop(context.Background()) }()
+
 	deps := tui.Deps{
 		Config:       cfg,
 		ConfigPath:   path,
 		Platform:     plat,
 		Detector:     detector.New(cfg, plat, useMock),
-		Recorder:     recorder.New(cfg, plat, forceDummy),
+		Recorder:     rec,
 		Store:        store,
 		Audio:        audioProvider,
 		LevelMonitor: level.NewMonitor(audioProvider),
@@ -171,7 +177,10 @@ func runTUI(cmd *cobra.Command, args []string) error {
 	}
 
 	p := tea.NewProgram(tui.NewModel(deps), tea.WithFilter(tui.SessionScrollFilter))
-	tr.OnQuit(func() { p.Quit() })
+	// Send a message rather than calling p.Quit(): Bubble Tea returns from the
+	// event loop on QuitMsg without dispatching it to Update, which skipped
+	// performQuit and left an active recording running after the app exited.
+	tr.OnQuit(func() { p.Send(tui.TrayQuitMsg{}) })
 	if _, err := p.Run(); err != nil {
 		return fmt.Errorf("tui: %w", err)
 	}

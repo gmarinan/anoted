@@ -8,10 +8,10 @@ import (
 
 func TestAppendConfigInputRuneIntField(t *testing.T) {
 	m := Model{
-		configEditing:  true,
-		configSection:  1, // Audio
-		configCursor:   0, // sample_rate (fieldInt)
-		deps:           Deps{Config: config.Default()},
+		configEditing: true,
+		configSection: 1, // Audio
+		configCursor:  0, // sample_rate (fieldInt)
+		deps:          Deps{Config: config.Default()},
 	}
 	m = m.appendConfigInputRune('1')
 	m = m.appendConfigInputRune('0')

@@ -7,7 +7,7 @@ import (
 
 func TestConfigMenuSidebarLayout(t *testing.T) {
 	v := ConfigMenuView{
-		Path: "/home/user/.config/anoted/config.yaml",
+		Path:  "/home/user/.config/anoted/config.yaml",
 		Width: 100,
 		Sections: []ConfigSectionPanel{
 			{Label: "General", Focused: true, Fields: []ConfigFieldRow{

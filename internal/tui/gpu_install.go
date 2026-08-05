@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strings"
 
-	tea "charm.land/bubbletea/v2"
 	"anoted/internal/config"
 	"anoted/internal/setup"
 	"anoted/internal/transcribe"
+	tea "charm.land/bubbletea/v2"
 )
 
 const gpuInstallLogMax = 40

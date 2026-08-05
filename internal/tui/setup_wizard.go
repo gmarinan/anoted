@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	tea "charm.land/bubbletea/v2"
 	"anoted/internal/config"
 	"anoted/internal/detector"
 	"anoted/internal/setup"
 	"anoted/internal/transcribe"
 	"anoted/internal/tui/components"
+	tea "charm.land/bubbletea/v2"
 )
 
 type setupInstallProgressMsg struct {

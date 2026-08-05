@@ -41,58 +41,65 @@ const (
 
 // Deps bundles injected services for the TUI.
 type Deps struct {
-	Config     config.Config
-	ConfigPath string
-	Platform   platform.Info
-	Detector   detector.Detector
-	Recorder   recorder.Recorder
-	Store       session.Store
-	Audio       audio.Provider
+	Config       config.Config
+	ConfigPath   string
+	Platform     platform.Info
+	Detector     detector.Detector
+	Recorder     recorder.Recorder
+	Store        session.Store
+	Audio        audio.Provider
 	LevelMonitor level.Monitor
-	Transcriber *transcribe.Service
-	Tray        tray.Indicator
+	Transcriber  *transcribe.Service
+	Tray         tray.Indicator
 }
 
 // Model is the Bubble Tea model.
 type Model struct {
 	deps Deps
 
-	screen       Screen
-	appState     AppState
-	provider     string
-	detection    detector.MeetingState
-	recStatus    recorder.RecorderStatus
-	autoRecord              bool
-	awaitingRecordConfirm   bool
-	recordConfirmDismissed  bool
-	recording               bool
-	stopWhenMeetingEnds     bool
-	meetingAbsentSince    time.Time
-	recordOpInFlight      bool
-	recordOpAt            time.Time
-	lastAutoStopAt        time.Time
-	lastMeetingSessionKey string
-	wantAutoRecordResume  bool
-	autoRecordRetryAfter  time.Time
-	autoRecordFailures    int
-	statusNote              string
-	recordStart  time.Time
-	sessionDir   string
-	errMsg       string
-	doctorReport doctor.Report
-	sessions     []session.Record
-	sessionCursor int
-	sessionsErr  string
-	width        int
-	height       int
-	quitting     bool
+	screen                 Screen
+	appState               AppState
+	provider               string
+	detection              detector.MeetingState
+	recStatus              recorder.RecorderStatus
+	autoRecord             bool
+	awaitingRecordConfirm  bool
+	recordConfirmDismissed bool
+	recording              bool
+	stopWhenMeetingEnds    bool
+	meetingAbsentSince     time.Time
+	recordOpInFlight       bool
+	recordOpAt             time.Time
+	lastAutoStopAt         time.Time
+	lastMeetingSessionKey  string
+	wantAutoRecordResume   bool
+	// resumeForSessionKey scopes wantAutoRecordResume to the meeting that
+	// granted it. Without it the flag outlived its meeting and let a later,
+	// unrelated meeting skip the auto_record_requires_confirmation prompt.
+	resumeForSessionKey string
+	// recordingSessionKey remembers which meeting the current recording belongs
+	// to, since detection has already moved on by the time an auto-stop lands.
+	recordingSessionKey  string
+	autoRecordRetryAfter time.Time
+	autoRecordFailures   int
+	statusNote           string
+	recordStart          time.Time
+	sessionDir           string
+	errMsg               string
+	doctorReport         doctor.Report
+	sessions             []session.Record
+	sessionCursor        int
+	sessionsErr          string
+	width                int
+	height               int
+	quitting             bool
 
 	quitConfirmOpen   bool
 	quitConfirmCursor int
 
 	// Resolved device labels for display
-	systemDevice string
-	micDevice    string
+	systemDevice     string
+	micDevice        string
 	audioMonitorWarn string
 
 	// Config audio device picker
@@ -144,15 +151,15 @@ type Model struct {
 	doctorWhisperCanInstall bool
 	doctorGPUCanInstall     bool
 
-	setupOpen     bool
-	setupWizard   setup.WizardState
-	setupSummary  []string
-	setupCancel   context.CancelFunc
+	setupOpen    bool
+	setupWizard  setup.WizardState
+	setupSummary []string
+	setupCancel  context.CancelFunc
 
-	sessionsOpenerPicker bool
-	sessionsOpenerCursor int
-	sessionsDesktopNote  string
-	sessionsPage         int
+	sessionsOpenerPicker  bool
+	sessionsOpenerCursor  int
+	sessionsDesktopNote   string
+	sessionsPage          int
 	sessionsDeleteConfirm bool
 	sessionsDeleteCursor  int
 }
@@ -195,6 +202,11 @@ func (m Model) tickDuration() time.Duration {
 
 type pollTickMsg struct{}
 type durationTickMsg struct{}
+
+// trayQuitMsg is sent when the user picks Quit from the system tray. It has to
+// go through Update: calling Program.Quit directly ends the event loop without
+// dispatching, so the stop-recording and flush steps in performQuit are skipped.
+type TrayQuitMsg struct{}
 type levelTickMsg struct {
 	gen int
 }

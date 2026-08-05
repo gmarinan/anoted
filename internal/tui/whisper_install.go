@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	tea "charm.land/bubbletea/v2"
 	"anoted/internal/config"
 	"anoted/internal/transcribe"
+	tea "charm.land/bubbletea/v2"
 )
 
 const whisperInstallLogMax = 40

@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"charm.land/lipgloss/v2"
 	"anoted/internal/config"
 	"anoted/internal/doctor"
 	"anoted/internal/session"
 	"anoted/internal/transcribe"
+	"charm.land/lipgloss/v2"
 )
 
 // DoctorView renders the Doctor tab.

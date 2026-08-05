@@ -6,12 +6,12 @@ import (
 	"os"
 	"time"
 
-	tea "charm.land/bubbletea/v2"
-	"github.com/charmbracelet/x/term"
 	"anoted/internal/config"
 	"anoted/internal/level"
 	"anoted/internal/recorder"
 	"anoted/internal/session"
+	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/term"
 )
 
 func (m Model) Init() tea.Cmd {
@@ -66,7 +66,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.ClearScreen
 		}
 		return m, nil
+	case TrayQuitMsg:
+		// The tray user asked to quit and may not be looking at the TUI, so
+		// take the safe path directly instead of popping a confirm dialog:
+		// performQuit stops an active recording and flushes it before exiting.
+		return m.performQuit()
 	case pollTickMsg:
+		m = m.reconcileRecordingState()
 		return m, tea.Batch(m.pollDetection(), m.schedulePoll())
 	case durationTickMsg:
 		if m.recording {
@@ -155,6 +161,7 @@ func (m Model) handleDetection(msg detectionResultMsg) (tea.Model, tea.Cmd) {
 		m.recordOpAt = time.Time{}
 		if m.autoRecord && m.detection.InMeeting && !m.recording {
 			m.wantAutoRecordResume = true
+			m.resumeForSessionKey = meetingSessionKey(m.detection)
 			m.autoRecordRetryAfter = time.Time{}
 		}
 	}
@@ -284,12 +291,14 @@ func (m Model) handleRecordToggle(msg recordToggleResultMsg) (tea.Model, tea.Cmd
 			slog.Warn("auto-record start failed", "failures", m.autoRecordFailures, "err", msg.err)
 			if m.autoRecordFailures >= maxAutoRecordFailures {
 				m.wantAutoRecordResume = false
+				m.resumeForSessionKey = ""
 				m.errMsg = autoRecordGiveUpMsg
 				m.statusNote = autoRecordGiveUpMsg
 				m.appState = StateInMeeting
 				return m, nil
 			}
 			m.wantAutoRecordResume = true
+			m.resumeForSessionKey = meetingSessionKey(m.detection)
 			m.autoRecordRetryAfter = time.Now().Add(autoRecordRetryDelay)
 			m.statusNote = "Record start failed — retrying…"
 			m.appState = StateInMeeting
@@ -307,6 +316,8 @@ func (m Model) handleRecordToggle(msg recordToggleResultMsg) (tea.Model, tea.Cmd
 		m.sessionDir = st.SessionDir
 		m.awaitingRecordConfirm = false
 		m.wantAutoRecordResume = false
+		m.resumeForSessionKey = ""
+		m.recordingSessionKey = meetingSessionKey(m.detection)
 		m.autoRecordRetryAfter = time.Time{}
 		m.autoRecordFailures = 0
 		m.stopWhenMeetingEnds = m.detection.InMeeting
@@ -325,10 +336,15 @@ func (m Model) handleRecordToggle(msg recordToggleResultMsg) (tea.Model, tea.Cmd
 		m.lastAutoStopAt = time.Now()
 		m.recordConfirmDismissed = false
 		m.awaitingRecordConfirm = false
-		m.wantAutoRecordResume = m.autoRecord
+		// Scope the resume to the meeting that just ended: detection has already
+		// moved on, so the key comes from the recording rather than m.detection.
+		m.wantAutoRecordResume = m.autoRecord && m.recordingSessionKey != ""
+		m.resumeForSessionKey = m.recordingSessionKey
 	} else {
 		m.wantAutoRecordResume = false
+		m.resumeForSessionKey = ""
 	}
+	m.recordingSessionKey = ""
 	m.systemBands = nil
 	m.micBands = nil
 	if msg.meetingEnded && msg.savedDir != "" {
@@ -357,14 +373,63 @@ func (m Model) handleRecordToggle(msg recordToggleResultMsg) (tea.Model, tea.Cmd
 		cmds = append(cmds, transcribeCmd)
 	}
 	cmds = append(cmds, m.restartHomeLevelsAfterRecord())
-	if m.wantAutoRecordResume && m.autoRecord && m.detection.InMeeting && !m.recording {
-		m.recordConfirmDismissed = false
-		m.awaitingRecordConfirm = false
-		model, startCmd := m.dispatchAutoRecordStart(time.Now())
-		m = model
-		cmds = append(cmds, startCmd)
+	// Route the resume through autoRecordAction rather than dispatching
+	// directly, so the confirmation requirement and restart cooldown still
+	// apply — going straight to dispatch skipped both.
+	if m.autoRecord && m.detection.InMeeting && !m.recording {
+		now := time.Now()
+		switch m.autoRecordAction(now, false) {
+		case autoRecordStart:
+			model, startCmd := m.dispatchAutoRecordStart(now)
+			m = model
+			cmds = append(cmds, startCmd)
+		case autoRecordConfirm:
+			m.awaitingRecordConfirm = true
+			m.appState = StateAwaitingRecordConfirm
+		}
 	}
 	return m, tea.Batch(cmds...)
+}
+
+// reconcileRecordingState re-derives m.recording from the recorder itself.
+//
+// m.recording alone drives the recording indicator, the tray icon, the r key
+// and the stop-on-quit guard, so any drift between it and the backend produces
+// a capture the user can neither see nor stop. Rather than patch each way they
+// can diverge, check the authoritative source once per poll.
+func (m Model) reconcileRecordingState() Model {
+	if m.deps.Recorder == nil || m.recordOpInFlight || m.quitting {
+		return m
+	}
+	st := m.deps.Recorder.Status()
+	m.recStatus = st
+	actuallyRecording := st.Status == recorder.StatusRecording
+
+	switch {
+	case actuallyRecording && !m.recording:
+		slog.Warn("recorder is recording but UI was not; reconciling",
+			"session_dir", st.SessionDir, "backend", st.Backend)
+		m.recording = true
+		m.recordStart = st.StartedAt
+		m.sessionDir = st.SessionDir
+		m.appState = StateRecording
+		m.syncTrayState()
+	case !actuallyRecording && m.recording:
+		slog.Warn("UI showed recording but recorder stopped; reconciling",
+			"status", st.Status, "err", st.Error)
+		m.recording = false
+		m.stopWhenMeetingEnds = false
+		if st.Error != "" {
+			m.errMsg = st.Error
+		}
+		if m.detection.InMeeting {
+			m.appState = StateInMeeting
+		} else {
+			m.appState = StateIdle
+		}
+		m.syncTrayState()
+	}
+	return m
 }
 
 func (m Model) schedulePoll() tea.Cmd {

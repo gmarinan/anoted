@@ -3,10 +3,10 @@ package tui
 import (
 	"fmt"
 
-	tea "charm.land/bubbletea/v2"
 	"anoted/internal/audio"
 	"anoted/internal/config"
 	"anoted/internal/tui/components"
+	tea "charm.land/bubbletea/v2"
 )
 
 func (m Model) configDeviceCursorForSelection() int {

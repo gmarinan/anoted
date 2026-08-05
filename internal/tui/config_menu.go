@@ -5,10 +5,10 @@ import (
 	"strconv"
 	"strings"
 
-	tea "charm.land/bubbletea/v2"
 	"anoted/internal/autostart"
 	"anoted/internal/config"
 	"anoted/internal/tui/components"
+	tea "charm.land/bubbletea/v2"
 )
 
 const configSectionCount = 6
@@ -533,9 +533,11 @@ func transcriptionCfgFields() []cfgField {
 			},
 		},
 		{
-			label:   "markdown.weekday_class",
-			kind:    fieldBool,
-			get:     func(c config.Config) string { return fmt.Sprintf("%v", c.Transcription.Markdown.MarkdownWeekdayClassEnabled()) },
+			label: "markdown.weekday_class",
+			kind:  fieldBool,
+			get: func(c config.Config) string {
+				return fmt.Sprintf("%v", c.Transcription.Markdown.MarkdownWeekdayClassEnabled())
+			},
 			set: func(c *config.Config, v string) error {
 				b, err := strconv.ParseBool(v)
 				if err != nil {

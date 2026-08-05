@@ -21,8 +21,19 @@ const (
 	autoRecordStart
 )
 
+// mayResumeWithoutConfirm reports whether the pending resume was granted by the
+// meeting we are currently looking at. Scoping it this way is what keeps a
+// stale flag from silently bypassing auto_record_requires_confirmation for a
+// different meeting later on.
+func (m Model) mayResumeWithoutConfirm() bool {
+	if !m.wantAutoRecordResume || m.resumeForSessionKey == "" {
+		return false
+	}
+	return m.resumeForSessionKey == meetingSessionKey(m.detection)
+}
+
 func (m Model) autoRecordAction(now time.Time, newSession bool) autoRecordStartAction {
-	force := m.wantAutoRecordResume
+	force := m.mayResumeWithoutConfirm()
 	var action autoRecordStartAction
 
 	switch {

@@ -5,9 +5,9 @@ import (
 	"os"
 	"strings"
 
-	tea "charm.land/bubbletea/v2"
 	"anoted/internal/config"
 	"anoted/internal/folderpicker"
+	tea "charm.land/bubbletea/v2"
 )
 
 type configFolderPickMsg struct {

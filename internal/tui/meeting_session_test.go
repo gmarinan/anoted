@@ -104,11 +104,12 @@ func TestHandleDetectionResumesAfterAutoStopSameTitle(t *testing.T) {
 		Title:     "Google Meet",
 	}
 	m := Model{
-		deps:                 Deps{Config: cfg},
-		autoRecord:           true,
-		detection:            meet,
+		deps:                   Deps{Config: cfg},
+		autoRecord:             true,
+		detection:              meet,
 		lastMeetingSessionKey:  meetingSessionKey(meet),
 		wantAutoRecordResume:   true,
+		resumeForSessionKey:    meetingSessionKey(meet),
 		recordConfirmDismissed: true,
 		statusNote:             "Meeting ended — saved to /tmp/session",
 	}
@@ -135,10 +136,10 @@ func TestHandleDetectionClearsDismissedOnNewSession(t *testing.T) {
 	cfg.AutoRecordRequiresConfirmation = true
 
 	m := Model{
-		deps:       Deps{Config: cfg},
-		autoRecord: true,
+		deps:                   Deps{Config: cfg},
+		autoRecord:             true,
 		recordConfirmDismissed: true,
-		detection: detector.MeetingState{InMeeting: true, Provider: "teams", Title: "old"},
+		detection:              detector.MeetingState{InMeeting: true, Provider: "teams", Title: "old"},
 		lastMeetingSessionKey:  meetingSessionKey(detector.MeetingState{InMeeting: true, Provider: "teams", Title: "old"}),
 	}
 

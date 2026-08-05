@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	tea "charm.land/bubbletea/v2"
 	"anoted/internal/transcribe"
+	tea "charm.land/bubbletea/v2"
 )
 
 const transcribeLogMax = 30

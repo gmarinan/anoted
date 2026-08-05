@@ -1,10 +1,10 @@
 package tui
 
 import (
-	tea "charm.land/bubbletea/v2"
 	"anoted/internal/config"
 	"anoted/internal/setup"
 	"anoted/internal/transcribe"
+	tea "charm.land/bubbletea/v2"
 )
 
 // doctorCapsMsg carries cached Doctor-tab install availability (expensive checks).

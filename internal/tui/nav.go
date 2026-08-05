@@ -3,8 +3,8 @@ package tui
 import (
 	"time"
 
-	tea "charm.land/bubbletea/v2"
 	"anoted/internal/tui/components"
+	tea "charm.land/bubbletea/v2"
 )
 
 func (m Model) switchScreen(screen Screen) (tea.Model, tea.Cmd) {
@@ -154,6 +154,7 @@ func (m Model) handleHomeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if !m.autoRecord {
 			m.awaitingRecordConfirm = false
 			m.wantAutoRecordResume = false
+			m.resumeForSessionKey = ""
 			m.autoRecordRetryAfter = time.Time{}
 			m.autoRecordFailures = 0
 			return m, nil

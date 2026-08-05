@@ -3,8 +3,8 @@ package tui
 import (
 	"testing"
 
-	tea "charm.land/bubbletea/v2"
 	"anoted/internal/session"
+	tea "charm.land/bubbletea/v2"
 )
 
 func testSessions(n int) []session.Record {

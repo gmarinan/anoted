@@ -4,14 +4,14 @@ import (
 	"fmt"
 	"strings"
 
-	"charm.land/lipgloss/v2"
 	"anoted/internal/audio"
+	"charm.land/lipgloss/v2"
 )
 
 const (
-	configSidebarMinWidth   = 14
-	configSidebarMaxWidth   = 20
-	configSidebarLayoutMin  = 72
+	configSidebarMinWidth  = 14
+	configSidebarMaxWidth  = 20
+	configSidebarLayoutMin = 72
 )
 
 var (
@@ -30,10 +30,10 @@ var (
 
 // ConfigFieldRow is one row in the config menu.
 type ConfigFieldRow struct {
-	Label    string
-	Value    string
-	Selected bool
-	Kind     string // bool, enum, text, int, list, readonly
+	Label     string
+	Value     string
+	Selected  bool
+	Kind      string // bool, enum, text, int, list, readonly
 	ListItems []ConfigListItem
 }
 
@@ -52,12 +52,12 @@ type ConfigSectionPanel struct {
 
 // ConfigMenuView renders the interactive Config tab.
 type ConfigMenuView struct {
-	Path          string
-	Sections      []ConfigSectionPanel
-	ModalOpen     bool
-	ModalTitle    string
-	ModalOptions  []string
-	ModalCursor   int
+	Path             string
+	Sections         []ConfigSectionPanel
+	ModalOpen        bool
+	ModalTitle       string
+	ModalOptions     []string
+	ModalCursor      int
 	DevicePickerOpen bool
 	DeviceTitle      string
 	DeviceSection    AudioSection
@@ -67,10 +67,10 @@ type ConfigMenuView struct {
 	DeviceErr        string
 	SystemMonitor    string
 	Microphone       string
-	Editing        bool
-	InputValue     string
-	Width          int
-	Height         int
+	Editing          bool
+	InputValue       string
+	Width            int
+	Height           int
 }
 
 func (v ConfigMenuView) View() string {

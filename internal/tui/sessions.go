@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"path/filepath"
 
-	tea "charm.land/bubbletea/v2"
 	"anoted/internal/config"
 	"anoted/internal/open"
 	"anoted/internal/session"
 	"anoted/internal/tui/components"
+	tea "charm.land/bubbletea/v2"
 )
 
 func (m Model) sessionsPageCount() int {

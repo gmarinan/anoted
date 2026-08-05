@@ -4,11 +4,11 @@ import (
 	"strings"
 	"time"
 
-	tea "charm.land/bubbletea/v2"
 	"anoted/internal/config"
 	"anoted/internal/open"
 	"anoted/internal/transcribe"
 	"anoted/internal/tui/components"
+	tea "charm.land/bubbletea/v2"
 )
 
 func (m Model) View() tea.View {

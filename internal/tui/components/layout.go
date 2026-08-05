@@ -31,7 +31,7 @@ var (
 			BorderForeground(lipgloss.Color("63")).
 			Background(lipgloss.Color("235")).
 			Padding(0, 2)
-	magentaStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("213"))
+	magentaStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("213"))
 	subTabActiveStyle = lipgloss.NewStyle().
 				Bold(true).
 				Foreground(lipgloss.Color("229")).
@@ -50,15 +50,15 @@ var (
 				Padding(0, 1)
 	keyStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("86"))
 	// TX status colors
-	txDoneStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("42"))
-	txPendingStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	txActiveStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("214"))
+	txDoneStyle      = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("42"))
+	txPendingStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	txActiveStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("214"))
 	txActiveAltStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("220"))
-	txErrorStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("203"))
-	footerBarStyle = lipgloss.NewStyle().
-			Border(lipgloss.NormalBorder(), false, false, true, false).
-			BorderForeground(lipgloss.Color("238")).
-			Padding(0, 0)
+	txErrorStyle     = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("203"))
+	footerBarStyle   = lipgloss.NewStyle().
+				Border(lipgloss.NormalBorder(), false, false, true, false).
+				BorderForeground(lipgloss.Color("238")).
+				Padding(0, 0)
 )
 
 // TabID identifies the active main screen (switch with 1–4, not Tab).

@@ -11,14 +11,37 @@ import (
 func TestAutoRecordActionResumeForcesStart(t *testing.T) {
 	cfg := config.Default()
 	cfg.AutoRecordRequiresConfirmation = true
+	meet := detector.MeetingState{InMeeting: true, Provider: "google_meet", Title: "standup"}
 	m := Model{
-		deps:                 Deps{Config: cfg},
-		autoRecord:           true,
-		wantAutoRecordResume: true,
+		deps:                   Deps{Config: cfg},
+		autoRecord:             true,
+		detection:              meet,
+		wantAutoRecordResume:   true,
+		resumeForSessionKey:    meetingSessionKey(meet),
 		recordConfirmDismissed: true,
 	}
 	if got := m.autoRecordAction(time.Now(), false); got != autoRecordStart {
-		t.Fatalf("resume should force start, got %v", got)
+		t.Fatalf("resume should force start for the granting meeting, got %v", got)
+	}
+}
+
+func TestAutoRecordResumeDoesNotCarryToAnotherMeeting(t *testing.T) {
+	// A resume granted by one meeting must not let a later, unrelated meeting
+	// skip the confirmation prompt — that silently bypassed
+	// auto_record_requires_confirmation for every meeting after the first.
+	cfg := config.Default()
+	cfg.AutoRecordRequiresConfirmation = true
+	granted := detector.MeetingState{InMeeting: true, Provider: "google_meet", Title: "standup"}
+	other := detector.MeetingState{InMeeting: true, Provider: "teams", Title: "1:1 with Sam"}
+	m := Model{
+		deps:                 Deps{Config: cfg},
+		autoRecord:           true,
+		detection:            other,
+		wantAutoRecordResume: true,
+		resumeForSessionKey:  meetingSessionKey(granted),
+	}
+	if got := m.autoRecordAction(time.Now(), true); got != autoRecordConfirm {
+		t.Fatalf("a different meeting must still ask for confirmation, got %v", got)
 	}
 }
 

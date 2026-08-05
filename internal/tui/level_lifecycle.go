@@ -3,8 +3,8 @@ package tui
 import (
 	"time"
 
-	tea "charm.land/bubbletea/v2"
 	"anoted/internal/config"
+	tea "charm.land/bubbletea/v2"
 )
 
 func (m Model) levelMeterEnabled() bool {
