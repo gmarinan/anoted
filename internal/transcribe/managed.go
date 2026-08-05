@@ -120,6 +120,9 @@ func installManaged(progress, stdout, stderr io.Writer) error {
 		{"Upgrading pip", pipInstallArgs(python, "-U", "pip"), true},
 		{"Installing PyTorch (CPU)", pipInstallArgs(python, "torch", "--index-url", "https://download.pytorch.org/whl/cpu"), false},
 		{"Installing openai-whisper", pipInstallArgs(python, "-U", "openai-whisper"), false},
+		// Soft: faster-whisper is an optional accelerated backend, so a failure
+		// here must not leave the user without any working transcription.
+		{"Installing faster-whisper", pipInstallArgs(python, "-U", "faster-whisper"), true},
 	}
 	for _, step := range steps {
 		fmt.Fprintf(progress, "  %s…\n", step.desc)

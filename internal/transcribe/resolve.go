@@ -13,6 +13,21 @@ import (
 var whisperCppNames = []string{"whisper-cli", "whisper-cpp", "whisper.cpp"}
 
 func resolveBinary(cfg config.TranscriptionConfig) (path, backend string, err error) {
+	// faster-whisper is a Python library, not a CLI, so it resolves to an
+	// interpreter. This has to run before the configured-binary shortcut below,
+	// which would otherwise hand back the openai-whisper CLI path.
+	//
+	// It is deliberately opt-in and never chosen by "auto": it needs the model
+	// in CTranslate2 format, so selecting it silently would trigger a
+	// multi-gigabyte download the user did not ask for.
+	if strings.EqualFold(strings.TrimSpace(cfg.Backend), BackendFasterWhisper) {
+		py := FasterWhisperPython(cfg)
+		if py == "" {
+			return "", "", fmt.Errorf("faster-whisper is not installed — run `anoted setup` or pip install faster-whisper into the whisper venv")
+		}
+		return py, BackendFasterWhisper, nil
+	}
+
 	if cfg.Binary != "" {
 		if _, err := os.Stat(cfg.Binary); err != nil {
 			return "", "", fmt.Errorf("transcription binary %q: %w", cfg.Binary, err)

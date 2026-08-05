@@ -25,7 +25,12 @@ func TranscribeProgressBar(percent float64, barWidth int, eta time.Duration, bli
 	}
 	bar := strings.Repeat("█", filled) + strings.Repeat("░", barWidth-filled)
 	pct := int(percent)
-	etaStr := transcribe.FormatETA(eta)
+	// An ETA of zero means "not estimable yet", not "finished" — rendering it as
+	// 0m 00s at the start of a job read as though it were already done.
+	etaStr := "—"
+	if eta > 0 {
+		etaStr = transcribe.FormatETA(eta)
+	}
 	body := fmt.Sprintf("[%s] %d%% - ETA: %s", bar, pct, etaStr)
 	style := txActiveStyle
 	if blink {

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"time"
 
 	"anoted/internal/audio"
 	"anoted/internal/autostart"
@@ -71,6 +72,7 @@ func newRootCmd() *cobra.Command {
 		watchCmd(),
 		statusCmd(),
 		sessionsCmd(),
+		transcribeCmd(),
 		configCmd(),
 		doctorCmd(),
 		autostartCmd(),
@@ -245,6 +247,69 @@ func sessionsCmd() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+func transcribeCmd() *cobra.Command {
+	var backend, model, device string
+	cmd := &cobra.Command{
+		Use:   "transcribe <session-dir>",
+		Short: "Transcribe a recorded session and report how long it took",
+		Long: "Transcribe a session directory containing recording.wav.\n\n" +
+			"--backend lets you re-run the same audio through a different engine, " +
+			"which is the simplest way to compare speed and output on your own hardware.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, _, err := loadConfig()
+			if err != nil {
+				return err
+			}
+			if backend != "" {
+				cfg.Transcription.Backend = backend
+				// A configured CLI path pins the engine, so clear it when the
+				// caller explicitly asks for a different backend.
+				cfg.Transcription.Binary = ""
+			}
+			if model != "" {
+				cfg.Transcription.Model = model
+			}
+			if device != "" {
+				cfg.Transcription.Device = device
+			}
+
+			sessionDir := args[0]
+			audio := transcribe.AudioPath(sessionDir)
+			dur, durErr := transcribe.AudioDuration(audio)
+
+			started := time.Now()
+			res, err := transcribe.New(cfg).TranscribeSessionWithProgress(
+				cmd.Context(), sessionDir,
+				func(p transcribe.Progress) {
+					if p.SegmentText != "" {
+						fmt.Fprintf(os.Stderr, "\r%5.1f%% %-70.70s", p.Percent, p.SegmentText)
+					}
+				})
+			elapsed := time.Since(started)
+			fmt.Fprintln(os.Stderr)
+			if err != nil {
+				return err
+			}
+
+			fmt.Printf("backend:  %s\n", cfg.Transcription.Backend)
+			fmt.Printf("model:    %s\n", cfg.Transcription.Model)
+			fmt.Printf("elapsed:  %s\n", elapsed.Round(time.Millisecond))
+			if durErr == nil && dur > 0 {
+				fmt.Printf("audio:    %s (%.2fx realtime)\n", dur.Round(time.Second), dur.Seconds()/elapsed.Seconds())
+			}
+			for _, f := range res.Files {
+				fmt.Printf("wrote:    %s\n", f)
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&backend, "backend", "", "override transcription backend (auto, openai-whisper, faster-whisper, whisper-cpp)")
+	cmd.Flags().StringVar(&model, "model", "", "override model (e.g. large-v3, turbo)")
+	cmd.Flags().StringVar(&device, "device", "", "override device (cpu, cuda, auto)")
+	return cmd
 }
 
 func configCmd() *cobra.Command {

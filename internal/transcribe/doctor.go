@@ -51,6 +51,18 @@ func DoctorChecks(cfg config.Config) []Check {
 		Detail: resolvedModel(tcfg),
 	})
 
+	// Report faster-whisper availability even when another backend is selected,
+	// so the speedup is discoverable rather than something you have to know about.
+	if backend != BackendFasterWhisper {
+		if py := FasterWhisperPython(tcfg); py != "" {
+			checks = append(checks, Check{
+				Name:   "faster_whisper",
+				Status: "ok",
+				Detail: "available — set transcription.backend: faster-whisper to use it",
+			})
+		}
+	}
+
 	if tcfg.AutoAfterRecording {
 		checks = append(checks, Check{
 			Name:   "auto_transcription",

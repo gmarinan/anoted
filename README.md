@@ -79,6 +79,7 @@ anoted detects WSL2 and will use the helper for real Windows audio when the prot
 | `anoted status` | Print detection and recorder status |
 | `anoted sessions` | List recorded sessions |
 | `anoted config` | Show config file |
+| `anoted transcribe <dir>` | Transcribe a session and report elapsed time |
 | `anoted doctor` | Check OS, tools, output path |
 | `anoted autostart enable --record` | Start at login and enable auto-record |
 
@@ -175,7 +176,7 @@ Recordings are saved under `~/Music/anoted/` by default:
 ```yaml
 transcription:
   auto_after_recording: false   # transcribe when recording stops
-  backend: auto                 # auto, openai-whisper, whisper-cpp
+  backend: auto                 # auto, openai-whisper, faster-whisper, whisper-cpp
   model: turbo                  # tiny, base, small, medium, large, turbo (recommended)
   device: auto                  # cpu, cuda, auto
   gpu_layers: 0                 # whisper.cpp only (99 = full GPU)
@@ -191,6 +192,30 @@ transcription:
 ```
 
 `transcript.md` includes YAML frontmatter (start/end time, duration, provider, platform, tags) and the full transcript text below. Enable `md` in `output_formats` to generate it. Set `transcription.output_dir` to write transcripts to a shared folder (e.g. your Obsidian vault); each meeting gets a unique filename derived from the recording session folder name.
+
+#### Backends
+
+`faster-whisper` runs the same Whisper weights on CTranslate2 instead of PyTorch.
+Measured on an RTX 4070 SUPER with `large-v3` over 5 minutes of real meeting audio:
+
+| Backend | Elapsed | Speed |
+|---------|---------|-------|
+| openai-whisper | 46.4s | 6.5x realtime |
+| faster-whisper | 15.8s | 19.0x realtime |
+
+Same model, so accuracy is equivalent — and because faster-whisper applies a VAD
+filter, it emitted far fewer of Whisper's looping hallucinations on silence
+(4 of 94 segments repeated the previous one, versus 22 of 111).
+
+It is opt-in rather than part of `auto`, because it needs the model in
+CTranslate2 format and would otherwise trigger a multi-gigabyte download
+unannounced. Set `transcription.backend: faster-whisper`, or compare for
+yourself on one of your own recordings:
+
+```bash
+anoted transcribe ~/Music/anoted/<session> --backend openai-whisper
+anoted transcribe ~/Music/anoted/<session> --backend faster-whisper
+```
 
 Install: run `anoted setup` (installs a local venv at `~/.local/share/anoted/whisper-venv`, no sudo). Optional: `sudo pacman -S python-openai-whisper` or `yay -S whisper.cpp` for GPU.
 
