@@ -2,6 +2,7 @@ package transcribe
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"regexp"
@@ -144,8 +145,37 @@ func emitProgress(onProgress ProgressFunc, p Progress) {
 func scanLines(r io.Reader, fn func(string)) error {
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 64*1024), 1024*1024)
+	sc.Split(scanLinesOrCR)
 	for sc.Scan() {
 		fn(sc.Text())
 	}
 	return sc.Err()
+}
+
+// scanLinesOrCR splits on \n and on \r.
+//
+// openai-whisper draws its tqdm progress bar with carriage returns and emits no
+// newline until the bar closes, so a plain line splitter saw the whole bar as a
+// single token. On a long CPU transcription that token grew past the 1 MiB
+// limit and the scan failed — turning a run that had already written
+// transcript.txt to disk into a reported failure. It also meant
+// ParseTqdmProgressLine essentially never fired while the run was in progress,
+// only once at the end, so the progress bar in the UI barely moved.
+func scanLinesOrCR(data []byte, atEOF bool) (int, []byte, error) {
+	if atEOF && len(data) == 0 {
+		return 0, nil, nil
+	}
+	if i := bytes.IndexAny(data, "\r\n"); i >= 0 {
+		// Consume \r\n as one terminator so CRLF output does not yield a blank
+		// token between every line.
+		width := 1
+		if data[i] == '\r' && i+1 < len(data) && data[i+1] == '\n' {
+			width = 2
+		}
+		return i + width, data[:i], nil
+	}
+	if atEOF {
+		return len(data), data, nil
+	}
+	return 0, nil, nil
 }

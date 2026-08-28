@@ -170,6 +170,10 @@ type Model struct {
 	sessionsPage          int
 	sessionsDeleteConfirm bool
 	sessionsDeleteCursor  int
+
+	// scroll coalesces high-frequency wheel input; see scroll_input.go for why
+	// it is a pointer.
+	scroll *sessionScrollAccumulator
 }
 
 // NewModel creates the initial TUI model.
@@ -180,6 +184,7 @@ func NewModel(deps Deps) Model {
 		appState:   StateIdle,
 		provider:   "none",
 		autoRecord: deps.Config.AutoRecord,
+		scroll:     newSessionScroll(),
 		recStatus:  deps.Recorder.Status(),
 	}
 	if setup.NeedsSetup(deps.Config, deps.Platform) {

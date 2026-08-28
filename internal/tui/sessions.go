@@ -138,7 +138,7 @@ func (m Model) handleSessionsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m = m.sessionsPageJump(1)
 		return m, nil
 	case "f":
-		sessionScroll.reset()
+		m.scroll.resetSafe()
 		m.sessionsOpenerPicker = true
 		m.sessionsOpenerCursor = m.openerCursorIndex()
 		m.sessionsDesktopNote = ""
@@ -167,7 +167,7 @@ func (m Model) handleSessionsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.sessionsErr = "cannot delete the active recording session"
 			return m, nil
 		}
-		sessionScroll.reset()
+		m.scroll.resetSafe()
 		m.sessionsDeleteConfirm = true
 		m.sessionsDeleteCursor = 0
 		m.sessionsErr = ""

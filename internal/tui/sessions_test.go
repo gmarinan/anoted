@@ -58,16 +58,17 @@ func TestSessionsPageJumpNeverNegativeCursor(t *testing.T) {
 }
 
 func TestSessionScrollAccumulatorCoalescesBurst(t *testing.T) {
-	sessionScroll.reset()
+	scroll := newSessionScroll()
+	scroll.reset()
 	for range 200 {
-		sessionScroll.add(1)
+		scroll.add(1)
 	}
-	if sessionScroll.pending != sessionsScrollMaxPending {
-		t.Fatalf("pending=%d want %d", sessionScroll.pending, sessionsScrollMaxPending)
+	if scroll.pending != sessionsScrollMaxPending {
+		t.Fatalf("pending=%d want %d", scroll.pending, sessionsScrollMaxPending)
 	}
 	total := 0
-	for sessionScroll.hasPending() {
-		total += sessionScroll.take()
+	for scroll.hasPending() {
+		total += scroll.take()
 	}
 	if total != sessionsScrollMaxPending {
 		t.Fatalf("drained=%d want %d", total, sessionsScrollMaxPending)
@@ -75,8 +76,8 @@ func TestSessionScrollAccumulatorCoalescesBurst(t *testing.T) {
 }
 
 func TestSessionScrollFilterDropsBurst(t *testing.T) {
-	sessionScroll.reset()
-	m := Model{screen: ScreenMain, sessions: testSessions(10)}
+	scroll := newSessionScroll()
+	m := Model{screen: ScreenMain, sessions: testSessions(10), scroll: scroll}
 	var ticks int
 	for range 50 {
 		out := SessionScrollFilter(m, tea.MouseWheelMsg{Button: tea.MouseWheelDown})
@@ -87,8 +88,8 @@ func TestSessionScrollFilterDropsBurst(t *testing.T) {
 	if ticks != 1 {
 		t.Fatalf("ticks=%d want 1", ticks)
 	}
-	if sessionScroll.pending != 18 {
-		t.Fatalf("pending=%d want 18", sessionScroll.pending)
+	if scroll.pending != 18 {
+		t.Fatalf("pending=%d want 18", scroll.pending)
 	}
-	sessionScroll.reset()
+	scroll.reset()
 }

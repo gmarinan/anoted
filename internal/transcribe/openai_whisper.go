@@ -3,6 +3,7 @@ package transcribe
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -210,12 +211,14 @@ func runWithProgress(ctx context.Context, bin string, args []string, onProgress 
 
 	out := []byte(outBuf.String() + errBuf.String())
 	if err == nil {
-		// A scanner that stops early (e.g. a line past the buffer limit) leaves
-		// the pipe undrained, so report it rather than treating a partial read
-		// as a clean run.
+		// A scanner that stops early leaves the pipe undrained, which is worth
+		// knowing about — but it is not a transcription failure. whisper exiting
+		// zero means the transcript is already on disk, and turning that into an
+		// error discarded a finished run and showed the user a red row for a
+		// session that had actually succeeded.
 		for _, se := range scanErr {
 			if se != nil {
-				return out, fmt.Errorf("read whisper output: %w", se)
+				slog.Warn("whisper output truncated while reading", "err", se)
 			}
 		}
 	}

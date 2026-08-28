@@ -12,7 +12,7 @@ func (m Model) switchScreen(screen Screen) (tea.Model, tea.Cmd) {
 	enteringMain := m.screen != ScreenMain && screen == ScreenMain
 
 	if leavingMain {
-		sessionScroll.reset()
+		m.scroll.resetSafe()
 	}
 
 	var cmds []tea.Cmd

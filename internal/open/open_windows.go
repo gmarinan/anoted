@@ -74,12 +74,20 @@ func explorerCommand(path string) (string, []string, error) {
 	return bin, []string{path}, nil
 }
 
+// fileOpenerCommand opens a file with its registered handler.
+//
+// This used to go through `cmd.exe /c start "" <path>`, the one place a
+// user-controlled path crossed a command interpreter. cmd re-parses its own
+// arguments, so &, ^, | and %VAR% in a session directory name were interpreted
+// rather than treated literally — a recording under a folder with an ampersand
+// simply failed to open. rundll32 takes the path as a plain argument and reaches
+// the same file-association machinery.
 func fileOpenerCommand(path string) (string, []string, error) {
-	bin, err := exec.LookPath("cmd.exe")
+	bin, err := exec.LookPath("rundll32.exe")
 	if err != nil {
-		return "", nil, fmt.Errorf("cmd.exe not found")
+		return "", nil, fmt.Errorf("rundll32.exe not found")
 	}
-	return bin, []string{"/c", "start", "", path}, nil
+	return bin, []string{"url.dll,FileProtocolHandler", path}, nil
 }
 
 func commandFor(opener string, custom []string, path string) (string, []string, error) {

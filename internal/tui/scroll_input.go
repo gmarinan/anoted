@@ -21,7 +21,12 @@ type sessionScrollAccumulator struct {
 	tickInFlight bool
 }
 
-var sessionScroll sessionScrollAccumulator
+// The accumulator lives on the Model rather than at package scope. It has to be
+// a pointer: SessionScrollFilter runs outside Update and receives a copy of the
+// Model, so a value field could not carry state back. Project conventions ask for no
+// unnecessary globals, and a process-wide one also meant tests could not run in
+// parallel and state leaked between Model instances.
+func newSessionScroll() *sessionScrollAccumulator { return &sessionScrollAccumulator{} }
 
 func (a *sessionScrollAccumulator) add(delta int) (scheduleTick bool) {
 	a.mu.Lock()
@@ -108,7 +113,10 @@ func SessionScrollFilter(m tea.Model, msg tea.Msg) tea.Msg {
 	if !ok || !model.canSessionScroll() {
 		return msg
 	}
-	if sessionScroll.add(delta) {
+	if model.scroll == nil {
+		return msg
+	}
+	if model.scroll.add(delta) {
 		return sessionScrollTickMsg{}
 	}
 	return nil
@@ -126,16 +134,24 @@ func (m Model) scheduleSessionScrollTick() tea.Cmd {
 
 func (m Model) handleSessionScrollTick() (tea.Model, tea.Cmd) {
 	if !m.canSessionScroll() {
-		sessionScroll.reset()
+		m.scroll.resetSafe()
 		return m, nil
 	}
-	delta := sessionScroll.take()
+	delta := m.scroll.take()
 	if delta == 0 {
 		return m, nil
 	}
 	m = m.sessionsNavigate(delta)
-	if sessionScroll.hasPending() {
+	if m.scroll.hasPending() {
 		return m, m.scheduleSessionScrollTick()
 	}
 	return m, nil
+}
+
+// Nil-safe wrappers: focused unit tests build a Model directly and never call
+// NewModel, so the accumulator can legitimately be absent.
+func (a *sessionScrollAccumulator) resetSafe() {
+	if a != nil {
+		a.reset()
+	}
 }

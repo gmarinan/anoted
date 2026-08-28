@@ -33,6 +33,7 @@ var (
 	cfgPath    string
 	useMock    bool
 	forceDummy bool
+	logLevel   string
 )
 
 // idleFriendlyFPS caps the Bubble Tea renderer well below its 60 FPS default.
@@ -70,6 +71,7 @@ func newRootCmd() *cobra.Command {
 	}
 
 	root.PersistentFlags().StringVar(&cfgPath, "config", "", "config file path")
+	root.PersistentFlags().StringVar(&logLevel, "log-level", "info", "log level: debug, info, warn, error")
 	root.PersistentFlags().BoolVar(&useMock, "mock-detector", false, "use mock meeting detector")
 	root.PersistentFlags().BoolVar(&forceDummy, "dummy-recorder", false, "use dummy recorder backend")
 
@@ -121,10 +123,19 @@ func watchCmd() *cobra.Command {
 }
 
 func runTUI(cmd *cobra.Command, args []string) error {
-	logger, err := logging.SetupFile(slog.LevelInfo)
+	// Not named "level": that would shadow the internal/level package below.
+	logLvl, err := logging.ParseLevel(logLevel)
 	if err != nil {
+		cmd.SilenceUsage = true
 		return err
 	}
+	logger, logFile, err := logging.SetupFile(logLvl)
+	if err != nil {
+		// Not fatal — the TUI still runs — but say so, because the log is where
+		// every diagnostic instruction points.
+		fmt.Fprintf(os.Stderr, "anoted: file logging unavailable: %v\n", err)
+	}
+	defer func() { _ = logFile.Close() }()
 	slog.SetDefault(logger)
 
 	cfg, path, err := loadConfig()
@@ -137,6 +148,20 @@ func runTUI(cmd *cobra.Command, args []string) error {
 	if setup.NeedsSetup(cfg, plat) {
 		fmt.Fprintln(os.Stderr, "Tip: press S in the TUI to run setup, or: anoted setup")
 	}
+
+	// One recorder per machine. Two instances sharing sessions.db is easy to
+	// hit — an autostart entry plus a manual launch — and means two processes
+	// recording the same meeting to different files.
+	cfgDir, err := config.ConfigDir()
+	if err != nil {
+		return err
+	}
+	lock, err := session.AcquireInstanceLock(cfgDir)
+	if err != nil {
+		cmd.SilenceUsage = true
+		return err
+	}
+	defer func() { _ = lock.Release() }()
 
 	store, err := openStore()
 	if err != nil {
@@ -337,16 +362,13 @@ func transcribeCmd() *cobra.Command {
 }
 
 func configCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "config",
 		Short: "Show config file path and contents",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			path, err := config.EnsureDefault()
+			path, err := configFilePath()
 			if err != nil {
 				return err
-			}
-			if cfgPath != "" {
-				path = cfgPath
 			}
 			data, err := os.ReadFile(path)
 			if err != nil {
@@ -356,6 +378,36 @@ func configCmd() *cobra.Command {
 			return nil
 		},
 	}
+	cmd.AddCommand(configValidateCmd())
+	return cmd
+}
+
+// configValidateCmd checks a config without starting anything, so a bad value
+// can be caught before it fails in the middle of a meeting.
+func configValidateCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "validate",
+		Short: "Check the config file for values that are out of range",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, path, err := loadConfig()
+			if err != nil {
+				return err
+			}
+			if err := cfg.Validate(); err != nil {
+				cmd.SilenceUsage = true
+				return err
+			}
+			fmt.Printf("%s: OK\n", path)
+			return nil
+		},
+	}
+}
+
+func configFilePath() (string, error) {
+	if cfgPath != "" {
+		return cfgPath, nil
+	}
+	return config.EnsureDefault()
 }
 
 func doctorCmd() *cobra.Command {

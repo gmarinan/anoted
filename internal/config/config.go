@@ -210,11 +210,18 @@ func LoadDefault() (Config, string, error) {
 }
 
 // Save writes configuration to path, creating parent directories as needed.
+//
+// Values that are out of range are rejected here rather than at the point of
+// use: a bad poll interval or sample rate otherwise surfaced as an ffmpeg
+// failure in the middle of a meeting.
 func Save(path string, cfg Config) error {
 	cfg.applyDefaults()
-	data, err := yaml.Marshal(&cfg)
-	if err != nil {
-		return fmt.Errorf("marshal config: %w", err)
+	if err := cfg.Validate(); err != nil {
+		return err
+	}
+	data := marshalPreservingComments(path, cfg)
+	if data == nil {
+		return fmt.Errorf("marshal config")
 	}
 
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
