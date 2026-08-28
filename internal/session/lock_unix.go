@@ -13,8 +13,14 @@ import (
 // Signal 0 runs the existence and permission checks without delivering
 // anything, which is the standard way to ask this on Unix.
 func processAlive(pid int) bool {
-	if pid <= 0 || pid == os.Getpid() {
+	if pid <= 0 {
 		return false
+	}
+	if pid == os.Getpid() {
+		// Our own pid in the file means this process already holds the lock, so
+		// it is very much alive. Treating it as stale let a second acquire in
+		// the same process quietly steal it.
+		return true
 	}
 	proc, err := os.FindProcess(pid)
 	if err != nil {
