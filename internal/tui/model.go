@@ -51,6 +51,12 @@ type Deps struct {
 	LevelMonitor level.Monitor
 	Transcriber  *transcribe.Service
 	Tray         tray.Indicator
+
+	// Injected rather than reached as package globals; see services.go.
+	// Leaving any of them nil is fine — NewModel substitutes the real thing.
+	Opener       Opener
+	Autostart    Autostart
+	FolderPicker FolderPicker
 }
 
 // Model is the Bubble Tea model.
@@ -191,6 +197,7 @@ type Model struct {
 
 // NewModel creates the initial TUI model.
 func NewModel(deps Deps) Model {
+	deps = deps.withDefaults()
 	m := Model{
 		deps:       deps,
 		screen:     ScreenMain,

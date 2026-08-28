@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"anoted/internal/config"
-	"anoted/internal/folderpicker"
 	tea "charm.land/bubbletea/v2"
 )
 
@@ -18,8 +17,9 @@ type configFolderPickMsg struct {
 
 func (m Model) pickConfigFolderCmd() tea.Cmd {
 	startDir := m.configFolderStartDir()
+	picker := m.deps.FolderPicker
 	return func() tea.Msg {
-		path, canceled, err := folderpicker.Pick(context.Background(), startDir)
+		path, canceled, err := picker.Pick(context.Background(), startDir)
 		return configFolderPickMsg{path: path, canceled: canceled, err: err}
 	}
 }

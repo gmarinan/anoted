@@ -206,7 +206,7 @@ func (m Model) deleteSelectedSessionCmd() tea.Cmd {
 }
 
 func (m Model) handleSessionsOpenerKey(key string) (tea.Model, tea.Cmd) {
-	opts := open.OpenerOptions(m.deps.Config.Desktop)
+	opts := m.deps.Opener.OpenerOptions(m.deps.Config.Desktop)
 	switch key {
 	case "esc":
 		m.sessionsOpenerPicker = false
@@ -236,8 +236,8 @@ func (m Model) handleSessionsOpenerKey(key string) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) openerCursorIndex() int {
-	current := open.CurrentOpenerID(m.deps.Config.Desktop)
-	opts := open.OpenerOptions(m.deps.Config.Desktop)
+	current := m.deps.Opener.CurrentOpenerID(m.deps.Config.Desktop)
+	opts := m.deps.Opener.OpenerOptions(m.deps.Config.Desktop)
 	for i, o := range opts {
 		if o.ID == current {
 			return i
@@ -267,6 +267,7 @@ func (m Model) openSessionPath(play bool) tea.Cmd {
 	dir := rec.Dir
 	target := dir
 	cfg := m.deps.Config
+	opener := m.deps.Opener
 	if play {
 		target = filepath.Join(dir, "recording.wav")
 	}
@@ -275,7 +276,7 @@ func (m Model) openSessionPath(play bool) tea.Cmd {
 		if play {
 			kind = open.KindFile
 		}
-		if err := open.Open(target, cfg.Desktop, kind); err != nil {
+		if err := opener.Open(target, cfg.Desktop, kind); err != nil {
 			return sessionsActionMsg{err: fmt.Errorf("open %s: %w", target, err)}
 		}
 		return sessionsActionMsg{}
@@ -328,13 +329,13 @@ func (m Model) handleDesktopOpenerSaved(msg desktopOpenerSavedMsg) (tea.Model, t
 	}
 	m = m.applyConfig(msg.cfg)
 	m.sessionsErr = ""
-	m.sessionsDesktopNote = fmt.Sprintf("folder opener: %s", openerLabel(msg.id))
+	m.sessionsDesktopNote = fmt.Sprintf("folder opener: %s", m.openerLabel(msg.id))
 	m.markStatusTransient()
 	return m, doctorReportCmd(m.deps.Config)
 }
 
-func openerLabel(id string) string {
-	for _, o := range open.OpenerOptions(config.DesktopConfig{Opener: id}) {
+func (m Model) openerLabel(id string) string {
+	for _, o := range m.deps.Opener.OpenerOptions(config.DesktopConfig{Opener: id}) {
 		if o.ID == id {
 			return o.Label
 		}
@@ -353,7 +354,7 @@ func (m Model) sessionsOpenerChoicesIfOpen() []components.FolderOpenerChoice {
 }
 
 func (m Model) sessionsOpenerChoices() []components.FolderOpenerChoice {
-	opts := open.OpenerOptions(m.deps.Config.Desktop)
+	opts := m.deps.Opener.OpenerOptions(m.deps.Config.Desktop)
 	out := make([]components.FolderOpenerChoice, len(opts))
 	for i, o := range opts {
 		out[i] = components.FolderOpenerChoice{

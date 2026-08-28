@@ -4,7 +4,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"anoted/internal/autostart"
 	"anoted/internal/config"
 	"anoted/internal/open"
 	"anoted/internal/recorder"
@@ -80,10 +79,10 @@ const previewLines = 12
 // than from the render path. open.Detected alone runs exec.LookPath across up
 // to six file managers.
 func (m Model) refreshEnvironment() Model {
-	m.openerCurrent = open.CurrentOpenerID(m.deps.Config.Desktop)
-	m.openerDetected = open.Detected(m.deps.Config.Desktop, open.KindFolder)
-	m.autostartAvail = autostart.Available()
-	m.autostartOn = autostart.Enabled()
+	m.openerCurrent = m.deps.Opener.CurrentOpenerID(m.deps.Config.Desktop)
+	m.openerDetected = m.deps.Opener.Detected(m.deps.Config.Desktop, open.KindFolder)
+	m.autostartAvail = m.deps.Autostart.Available()
+	m.autostartOn = m.deps.Autostart.Enabled()
 	m.levelAvailable = m.deps.LevelMonitor != nil && m.deps.LevelMonitor.Available()
 	return m
 }
@@ -92,5 +91,6 @@ func (m Model) envFacts() envFacts {
 	return envFacts{
 		AutostartAvailable: m.autostartAvail,
 		AutostartEnabled:   m.autostartOn,
+		Autostart:          m.deps.Autostart,
 	}
 }

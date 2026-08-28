@@ -5,7 +5,6 @@ import (
 	"strconv"
 	"strings"
 
-	"anoted/internal/autostart"
 	"anoted/internal/config"
 	"anoted/internal/tui/components"
 	tea "charm.land/bubbletea/v2"
@@ -48,6 +47,7 @@ type cfgField struct {
 type envFacts struct {
 	AutostartAvailable bool
 	AutostartEnabled   bool
+	Autostart          Autostart
 }
 
 func cfgFields(section int) []cfgField { return cfgFieldsWithEnv(section, envFacts{}) }
@@ -109,13 +109,13 @@ func generalCfgFields(env envFacts) []cfgField {
 					return err
 				}
 				if b {
-					entry, err := autostart.EntryFromConfig(*c)
+					entry, err := env.Autostart.EntryFromConfig(*c)
 					if err != nil {
 						return err
 					}
-					return autostart.Enable(entry)
+					return env.Autostart.Enable(entry)
 				}
-				return autostart.Disable()
+				return env.Autostart.Disable()
 			},
 		},
 		{
