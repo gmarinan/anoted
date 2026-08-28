@@ -21,6 +21,7 @@ func (b *blockingRecorder) Start(_ context.Context, _ recorder.SessionConfig) er
 func (b *blockingRecorder) Stop(context.Context) error      { return nil }
 func (b *blockingRecorder) Status() recorder.RecorderStatus { return recorder.RecorderStatus{} }
 func (b *blockingRecorder) Name() string                    { return "blocking" }
+func (b *blockingRecorder) Unusable() string                { return "" }
 
 func TestStartRecorderWithTimeoutReturnsError(t *testing.T) {
 	rec := &blockingRecorder{startDelay: 200 * time.Millisecond}

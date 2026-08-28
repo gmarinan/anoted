@@ -294,3 +294,16 @@ func loadSessionRecords(store session.Store) ([]session.Record, error) {
 	}
 	return store.List(sessionsListLimit)
 }
+
+// recorderUnusable reports why the active backend cannot capture audio, or ""
+// when it can. Both the r key and auto-record consult it so anoted never shows
+// a recording indicator for a backend that writes nothing.
+func (m Model) recorderUnusable() string {
+	// NewModel calls deps.Recorder.Status(), so a real Model always has one;
+	// only focused unit tests construct a Model without it, and they are asking
+	// about the decision logic rather than backend availability.
+	if m.deps.Recorder == nil {
+		return ""
+	}
+	return m.deps.Recorder.Unusable()
+}

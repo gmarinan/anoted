@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"anoted/internal/config"
+	"anoted/internal/level"
 	tea "charm.land/bubbletea/v2"
 )
 
@@ -62,6 +63,25 @@ func (m Model) stopSystemLevelCmd() tea.Cmd {
 		_ = mon.StopSystem()
 		return levelStopMsg{}
 	}
+}
+
+// recorderFeedsLevels reports whether the recorder hands PCM back to the level
+// monitor, in which case the monitor must not open the devices itself.
+func (m Model) recorderFeedsLevels() bool {
+	_, ok := m.deps.LevelMonitor.(level.PCMFeedConfig)
+	return ok
+}
+
+// micLevelDuringRecordingCmd starts the microphone meter for the duration of a
+// recording on backends that do not feed PCM back.
+//
+// The mic meter was unreachable before: startMicLevelCmd had no callers, and
+// the Tab binding the README advertised for switching to it was never handled.
+func (m Model) micLevelDuringRecordingCmd() tea.Cmd {
+	if m.recorderFeedsLevels() {
+		return nil
+	}
+	return m.startMicLevelCmd()
 }
 
 func (m Model) startMicLevelCmd() tea.Cmd {

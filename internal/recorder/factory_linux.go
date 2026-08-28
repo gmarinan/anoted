@@ -23,5 +23,6 @@ func newPlatformRecorder(cfg config.Config, plat platform.Info) Recorder {
 			}
 		}
 	}
-	return NewDummyRecorder()
+	return NewUnavailableRecorder(
+		"no Linux audio backend available — install pipewire-pulse (pw-cat) or ffmpeg, then run `anoted doctor`")
 }

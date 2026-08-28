@@ -54,7 +54,12 @@ func extractWhisperError(out string) string {
 			return line
 		}
 	}
-	return strings.TrimSpace(out)
+	// No recognised error pattern. Returning the raw output here leaked meeting
+	// content into the UI and the log: with --verbose, whisper's stdout *is* the
+	// transcript, so an unrecognised failure painted a fragment of the user's
+	// own conversation on the session row in red. The caller substitutes a
+	// generic message; the full output stays in the diagnostic log.
+	return ""
 }
 
 func isCUDAFailure(out []byte) bool {

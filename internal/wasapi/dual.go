@@ -114,6 +114,24 @@ func (r *DualRecorder) run(ctx context.Context, onLoopPCM, onMicPCM func([]byte)
 }
 
 // SampleRate returns the configured capture sample rate.
+// DeadCaptureTimeout is how long an endpoint may deliver no PCM at all before
+// the capture is considered dead. Generous enough to ride out a device change
+// or a scheduling stall, short enough that the user is not told at the end of
+// the meeting.
+const DeadCaptureTimeout = 5 * time.Second
+
+// DeadCapture names an endpoint that has stopped delivering audio, or "" if
+// both are healthy.
+func (r *DualRecorder) DeadCapture(now time.Time) string {
+	if r.loop != nil && r.loop.SilentFor(now) > DeadCaptureTimeout {
+		return "system audio"
+	}
+	if r.mic != nil && r.mic.SilentFor(now) > DeadCaptureTimeout {
+		return "microphone"
+	}
+	return ""
+}
+
 func (r *DualRecorder) SampleRate() uint32 {
 	if r.sampleRate > 0 {
 		return r.sampleRate

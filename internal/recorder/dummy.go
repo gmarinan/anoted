@@ -20,8 +20,14 @@ type DummyRecorder struct {
 	mu      sync.Mutex
 	backend string
 	status  RecorderStatus
+	// unusable is empty when the dummy was asked for on purpose
+	// (--dummy-recorder) and carries the reason when it is standing in for a
+	// real backend that could not be built.
+	unusable string
 }
 
+// NewDummyRecorder returns the placeholder backend, explicitly requested via
+// --dummy-recorder. It is usable in the sense that the caller asked for it.
 func NewDummyRecorder() *DummyRecorder {
 	return &DummyRecorder{
 		backend: "dummy",
@@ -29,11 +35,25 @@ func NewDummyRecorder() *DummyRecorder {
 	}
 }
 
+// NewUnavailableRecorder returns a recorder that refuses to record and explains
+// why. Used when no real backend could be built, so the failure is visible up
+// front instead of after an hour of empty recording.
+func NewUnavailableRecorder(reason string) *DummyRecorder {
+	r := NewDummyRecorder()
+	r.unusable = reason
+	return r
+}
+
+func (r *DummyRecorder) Unusable() string { return r.unusable }
+
 func (r *DummyRecorder) Name() string { return "dummy" }
 
 func (r *DummyRecorder) Start(_ context.Context, cfg SessionConfig) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.unusable != "" {
+		return fmt.Errorf("cannot record: %s", r.unusable)
+	}
 	if r.status.Status == StatusRecording {
 		return fmt.Errorf("already recording")
 	}

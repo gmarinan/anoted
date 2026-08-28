@@ -62,12 +62,15 @@ func Run(cfg config.Config) Report {
 		rep.Checks = append(rep.Checks, detectionChecks(plat, cfg)...)
 	}
 
+	// The status was hardcoded to "ok", so a machine that could not record at
+	// all still passed this check — the single most misleading thing doctor did.
 	rec := recorder.New(cfg, plat, false)
-	rep.Checks = append(rep.Checks, Check{
-		Name:   "recorder_backend",
-		Status: "ok",
-		Detail: rec.Name(),
-	})
+	recorderCheck := Check{Name: "recorder_backend", Status: "ok", Detail: rec.Name()}
+	if reason := rec.Unusable(); reason != "" {
+		recorderCheck.Status = "fail"
+		recorderCheck.Detail = fmt.Sprintf("%s — %s", rec.Name(), reason)
+	}
+	rep.Checks = append(rep.Checks, recorderCheck)
 
 	if plat.IsWSL2 {
 		rep.Checks = append(rep.Checks, helperCheck())

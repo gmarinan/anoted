@@ -144,6 +144,17 @@ func runTUI(cmd *cobra.Command, args []string) error {
 	}
 	defer store.Close()
 
+	// Recover anything the previous run left behind before the UI reads the
+	// list: rows stuck "active" because anoted was killed mid-recording, and
+	// recordings on disk that never made it into the database at all.
+	if outDir, dirErr := cfg.ResolvedOutputDir(); dirErr == nil {
+		if res, rErr := session.Reconcile(store, outDir); rErr != nil {
+			logger.Warn("session reconciliation failed", "err", rErr)
+		} else if res.Closed > 0 || res.Adopted > 0 {
+			logger.Info("reconciled sessions", "closed", res.Closed, "adopted", res.Adopted)
+		}
+	}
+
 	audioProvider := audio.NewProvider()
 
 	tr := tray.New(tray.Options{

@@ -235,5 +235,30 @@ func (r *WindowsWASAPIRecorder) Stop(_ context.Context) error {
 func (r *WindowsWASAPIRecorder) Status() RecorderStatus {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	// Reconcile against the writer, the way the Linux backends reconcile against
+	// their capture child. WritePCM runs on the audio callback, which has nowhere
+	// to report a failure, so it keeps the first error and drops every later
+	// sample. Without this the UI showed a healthy, growing recording for the
+	// rest of the meeting and the error only surfaced at Stop — by which point
+	// the session row could no longer be saved.
+	if r.status.Status == StatusRecording && r.writer != nil {
+		if err := r.writer.Err(); err != nil {
+			r.status.Status = StatusError
+			r.status.Error = err.Error()
+		}
+	}
+	// Same idea for the capture side: malgo stops calling back when an endpoint
+	// disappears, and the mixer happily writes silence in its place.
+	if r.status.Status == StatusRecording && r.dual != nil {
+		if dead := r.dual.DeadCapture(time.Now()); dead != "" {
+			r.status.Status = StatusError
+			r.status.Error = fmt.Sprintf("no audio from %s for %s — device may have been disconnected",
+				dead, wasapi.DeadCaptureTimeout)
+		}
+	}
 	return r.status
 }
+
+// Unusable is always "": NewWindowsWASAPIRecorder fails when no WASAPI context
+// can be created, so reaching this method means capture is available.
+func (r *WindowsWASAPIRecorder) Unusable() string { return "" }

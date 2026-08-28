@@ -39,6 +39,10 @@ func (m Model) autoRecordAction(now time.Time, newSession bool) autoRecordStartA
 	switch {
 	case !m.autoRecord || m.recording:
 		action = autoRecordNoop
+	// Never let auto-record burn its retry budget on a backend that cannot
+	// capture; the user needs the reason on screen, not three failed attempts.
+	case m.recorderUnusable() != "":
+		action = autoRecordNoop
 	case m.recordOpInFlight:
 		action = autoRecordWait
 	case !m.autoRecordRetryAfter.IsZero() && now.Before(m.autoRecordRetryAfter):

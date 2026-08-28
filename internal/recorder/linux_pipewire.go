@@ -127,3 +127,7 @@ func (r *LinuxPipeWireRecorder) Status() RecorderStatus {
 	}
 	return r.status
 }
+
+// Unusable is always "": constructing this recorder already proved pw-cat and
+// ffmpeg are present.
+func (r *LinuxPipeWireRecorder) Unusable() string { return "" }

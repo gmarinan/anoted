@@ -345,7 +345,11 @@ func (m Model) handleRecordToggle(msg recordToggleResultMsg) (tea.Model, tea.Cmd
 		// dead for the whole recording without this.
 		m.levelGen++
 		m.levelQuiet = 0
-		return m, tea.Batch(m.scheduleDurationTick(), m.scheduleLevelTick(m.levelGen))
+		return m, tea.Batch(
+			m.scheduleDurationTick(),
+			m.scheduleLevelTick(m.levelGen),
+			m.micLevelDuringRecordingCmd(),
+		)
 	}
 
 	m.recording = false
@@ -394,7 +398,9 @@ func (m Model) handleRecordToggle(msg recordToggleResultMsg) (tea.Model, tea.Cmd
 	}
 	m.levelGen++
 	m.levelQuiet = 0
-	cmds = append(cmds, m.restartHomeLevelsAfterRecord(), m.scheduleLevelTick(m.levelGen))
+	// The mic meter only runs while recording; stop it so parec does not keep a
+	// capture stream open on an idle machine.
+	cmds = append(cmds, m.stopMicLevelCmd(), m.restartHomeLevelsAfterRecord(), m.scheduleLevelTick(m.levelGen))
 	// Route the resume through autoRecordAction rather than dispatching
 	// directly, so the confirmation requirement and restart cooldown still
 	// apply — going straight to dispatch skipped both.
@@ -495,8 +501,18 @@ func startRecordingCmd(m Model) tea.Cmd {
 	sampleRate := m.deps.Config.Audio.SampleRate
 	channels := m.deps.Config.Audio.Channels
 
+	feeder, recorderFeedsLevels := mon.(level.PCMFeedConfig)
+
 	return func() tea.Msg {
-		if mon != nil {
+		// Only hand the devices over when the recorder will feed levels back.
+		//
+		// This used to stop both monitors unconditionally, but PCMFeedConfig is
+		// implemented on Windows alone. On Linux that killed parec and nothing
+		// replaced it, so the meters sat flat for the entire recording —
+		// precisely when the user needs to see that audio is arriving. Pulse and
+		// PipeWire allow several readers of the same source, so the monitors can
+		// simply keep running.
+		if mon != nil && recorderFeedsLevels {
 			_ = mon.StopSystem()
 			_ = mon.StopMic()
 		}
@@ -517,7 +533,7 @@ func startRecordingCmd(m Model) tea.Cmd {
 			SystemMonitor: cfg.Audio.SystemMonitor,
 			Microphone:    cfg.Audio.Microphone,
 		}
-		if feeder, ok := mon.(level.PCMFeedConfig); ok {
+		if recorderFeedsLevels {
 			feeder.SetFeedChannels(channels)
 			sessCfg.OnSystemPCM = feeder.FeedSystemPCM
 			sessCfg.OnMicPCM = feeder.FeedMicPCM

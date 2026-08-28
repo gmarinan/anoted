@@ -26,6 +26,7 @@ type Stream struct {
 	wg                 sync.WaitGroup
 	configuredRate     uint32
 	configuredChannels int
+	lastPCM            time.Time
 }
 
 // LoopbackStreamConfig configures system audio loopback capture.
@@ -258,11 +259,27 @@ func (s *Stream) push(input []byte) {
 		return
 	}
 	s.pending = append(s.pending, input...)
+	s.lastPCM = time.Now()
 	s.mu.Unlock()
 	select {
 	case s.wake <- struct{}{}:
 	default:
 	}
+}
+
+// SilentFor reports how long it has been since the device delivered any PCM.
+//
+// malgo's data callback simply stops firing when an endpoint disappears — the
+// channel is never closed and no error surfaces — so unplugging a USB headset
+// mid-meeting kept the mixer emitting silent frames and the recording grew for
+// hours with nothing in it. Zero means no PCM has arrived at all yet.
+func (s *Stream) SilentFor(now time.Time) time.Duration {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed || s.lastPCM.IsZero() {
+		return 0
+	}
+	return now.Sub(s.lastPCM)
 }
 
 func (s *Stream) forward() {

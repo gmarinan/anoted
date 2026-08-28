@@ -106,3 +106,7 @@ func (r *LinuxFFmpegRecorder) Status() RecorderStatus {
 	}
 	return r.status
 }
+
+// Unusable is always "": constructing this recorder already proved ffmpeg is
+// present.
+func (r *LinuxFFmpegRecorder) Unusable() string { return "" }

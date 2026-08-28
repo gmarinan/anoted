@@ -15,5 +15,6 @@ func newPlatformRecorder(cfg config.Config, _ platform.Info) Recorder {
 			}
 		}
 	}
-	return NewDummyRecorder()
+	return NewUnavailableRecorder(
+		"WASAPI capture unavailable — check Windows microphone privacy settings, then run `anoted doctor`")
 }

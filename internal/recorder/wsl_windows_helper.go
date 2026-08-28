@@ -29,12 +29,26 @@ func NewWSLHelperRecorder(cfg config.Config) *WSLHelperRecorder {
 
 func (r *WSLHelperRecorder) Name() string { return "wsl-windows-helper" }
 
-func (r *WSLHelperRecorder) Start(ctx context.Context, sess SessionConfig) error {
-	if r.helperAvailable(ctx) {
-		// Future: JSON-RPC over stdin/stdout to windows-recorder.exe
-		return fmt.Errorf("windows helper found at %s but protocol not yet implemented; using dummy backend", r.helper)
+// Unusable always reports a reason: the helper protocol is not implemented.
+//
+// The previous behaviour was backwards. With the helper installed, Start
+// returned an error and nothing recorded; without it, Start fell through to the
+// dummy backend and produced a 44-byte WAV while the UI showed a healthy
+// recording. Installing the documented dependency made things worse, and the
+// silent path was the one that lost meetings. WSL2 cannot capture Windows audio
+// today, so say so once, up front.
+func (r *WSLHelperRecorder) Unusable() string {
+	if r.helper == "" {
+		return "WSL2 cannot capture Windows audio; windows-recorder.exe is not installed " +
+			"and its protocol is not implemented yet — run anoted natively on Windows"
 	}
-	return r.inner.Start(ctx, sess)
+	return fmt.Sprintf("windows helper found at %s but its protocol is not implemented yet "+
+		"— run anoted natively on Windows", r.helper)
+}
+
+func (r *WSLHelperRecorder) Start(ctx context.Context, _ SessionConfig) error {
+	_ = ctx
+	return fmt.Errorf("cannot record: %s", r.Unusable())
 }
 
 func (r *WSLHelperRecorder) Stop(ctx context.Context) error {

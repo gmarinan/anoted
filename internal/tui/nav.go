@@ -155,6 +155,16 @@ func (m Model) handleHomeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.recordOpAt = time.Now()
 			return m, stopRecordingCmd(m, false)
 		}
+		// Refuse up front rather than starting a backend that cannot capture.
+		if reason := m.recorderUnusable(); reason != "" {
+			m.errMsg = reason
+			return m, nil
+		}
+		// Two quick presses used to fire two concurrent starts, the second of
+		// which lost the mutex race and reported "already recording".
+		if m.recordOpInFlight {
+			return m, nil
+		}
 		m.autoRecordFailures = 0
 		m.recordOpInFlight = true
 		m.recordOpAt = time.Now()

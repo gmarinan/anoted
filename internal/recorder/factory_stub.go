@@ -8,5 +8,5 @@ import (
 )
 
 func newPlatformRecorder(_ config.Config, _ platform.Info) Recorder {
-	return NewDummyRecorder()
+	return NewUnavailableRecorder("audio capture is not implemented on this platform")
 }
