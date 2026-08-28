@@ -174,6 +174,19 @@ type Model struct {
 	// scroll coalesces high-frequency wheel input; see scroll_input.go for why
 	// it is a pointer.
 	scroll *sessionScrollAccumulator
+
+	// Cached environment facts. View must be a pure function of the Model, and
+	// these were all being probed from inside it: exec.LookPath sweeps across
+	// several file managers, stat calls per session row, a transcript read, and
+	// autostart's own filesystem checks — up to thirty times a second.
+	sessionArtifacts map[string]components.SessionArtifacts
+	previewDir       string
+	previewText      string
+	openerDetected   string
+	openerCurrent    string
+	autostartAvail   bool
+	autostartOn      bool
+	levelAvailable   bool
 }
 
 // NewModel creates the initial TUI model.
@@ -187,6 +200,7 @@ func NewModel(deps Deps) Model {
 		scroll:     newSessionScroll(),
 		recStatus:  deps.Recorder.Status(),
 	}
+	m = m.refreshEnvironment()
 	if setup.NeedsSetup(deps.Config, deps.Platform) {
 		m = m.openSetupWizard()
 	}
@@ -250,7 +264,9 @@ func (m Model) tickDuration() time.Duration {
 func (m Model) applyConfig(cfg config.Config) Model {
 	m.deps.Config = cfg
 	m.deps.Transcriber = transcribe.New(cfg)
-	return m
+	// The opener and autostart facts are derived from this config, so they have
+	// to be re-resolved here rather than from View.
+	return m.refreshEnvironment()
 }
 
 type pollTickMsg struct{}

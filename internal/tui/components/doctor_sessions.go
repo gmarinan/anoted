@@ -2,7 +2,6 @@ package components
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -10,7 +9,6 @@ import (
 	"anoted/internal/config"
 	"anoted/internal/doctor"
 	"anoted/internal/session"
-	"anoted/internal/transcribe"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 )
@@ -211,6 +209,19 @@ type SessionsView struct {
 	TranscribeErrDir     string
 	Transcription        config.TranscriptionConfig
 	PreviewText          string
+	// Artifacts is keyed by session directory. Gathered once per session load
+	// so rendering does not stat the filesystem per row, per frame.
+	Artifacts map[string]SessionArtifacts
+}
+
+// SessionArtifacts records what a session directory actually contains.
+type SessionArtifacts struct {
+	HasTranscript bool
+	HasAudio      bool
+}
+
+func (v SessionsView) artifacts(dir string) SessionArtifacts {
+	return v.Artifacts[dir]
 }
 
 func (v SessionsView) View() string {
@@ -299,7 +310,7 @@ func (v SessionsView) previewMode() PreviewMode {
 		}
 	}
 	rec, ok := v.selectedRecord()
-	if ok && transcribe.HasTranscript(rec.Dir, v.Transcription) {
+	if ok && v.artifacts(rec.Dir).HasTranscript {
 		return PreviewTranscript
 	}
 	return PreviewIdle
@@ -498,13 +509,13 @@ func (v SessionsView) formatTXColumn(r session.Record, tableWidth int) string {
 		}
 		return TranscribeProgressBar(v.TranscribePercent, barW, v.TranscribeETA, v.TranscribeBlink)
 	}
-	if transcribe.HasTranscript(r.Dir, v.Transcription) {
+	if v.artifacts(r.Dir).HasTranscript {
 		if v.compactTable() {
 			return txDoneStyle.Render("✓")
 		}
 		return TXStatusLabel("yes")
 	}
-	if audioExists(r.Dir) {
+	if v.artifacts(r.Dir).HasAudio {
 		if v.compactTable() {
 			return txPendingStyle.Render("·")
 		}
@@ -514,11 +525,6 @@ func (v SessionsView) formatTXColumn(r session.Record, tableWidth int) string {
 		return txPendingStyle.Render("—")
 	}
 	return TXStatusLabel("no")
-}
-
-func audioExists(sessionDir string) bool {
-	_, err := os.Stat(filepath.Join(sessionDir, sessionAudioName))
-	return err == nil
 }
 
 func (v SessionsView) detailsBox(width int) string {

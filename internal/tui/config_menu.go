@@ -43,10 +43,19 @@ type cfgField struct {
 	delItem       func(c *config.Config, i int)
 }
 
-func cfgFields(section int) []cfgField {
+// envFacts carries cached environment answers into the field definitions so
+// their read closures do not hit the filesystem from View.
+type envFacts struct {
+	AutostartAvailable bool
+	AutostartEnabled   bool
+}
+
+func cfgFields(section int) []cfgField { return cfgFieldsWithEnv(section, envFacts{}) }
+
+func cfgFieldsWithEnv(section int, env envFacts) []cfgField {
 	switch section {
 	case 0:
-		return generalCfgFields()
+		return generalCfgFields(env)
 	case 1:
 		return audioCfgFields()
 	case 2:
@@ -62,7 +71,7 @@ func cfgFields(section int) []cfgField {
 	}
 }
 
-func generalCfgFields() []cfgField {
+func generalCfgFields(env envFacts) []cfgField {
 	return []cfgField{
 		{
 			label: "output_dir",
@@ -89,10 +98,10 @@ func generalCfgFields() []cfgField {
 			label: "launch_at_login",
 			kind:  fieldBool,
 			editable: func(c config.Config) bool {
-				return autostart.Available()
+				return env.AutostartAvailable
 			},
 			get: func(c config.Config) string {
-				return fmt.Sprintf("%v", autostart.Enabled())
+				return fmt.Sprintf("%v", env.AutostartEnabled)
 			},
 			set: func(c *config.Config, v string) error {
 				b, err := strconv.ParseBool(v)
@@ -713,7 +722,7 @@ func privacyCfgFields() []cfgField {
 }
 
 func (m Model) currentCfgFields() []cfgField {
-	return cfgFields(m.configSection)
+	return cfgFieldsWithEnv(m.configSection, m.envFacts())
 }
 
 func (m Model) currentCfgField() (cfgField, bool) {

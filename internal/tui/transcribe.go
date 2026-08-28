@@ -137,6 +137,11 @@ func (m Model) handleTranscribeResult(msg transcribeResultMsg) (tea.Model, tea.C
 	m.transcribeActive = false
 	m.transcribeBlink = false
 	m.clearTranscribeCancel()
+	// A finished run creates transcript files, so the cached artifacts and the
+	// preview are both stale.
+	m.sessionArtifacts = gatherSessionFacts(m.sessions, m.deps.Config.Transcription)
+	m.previewDir = ""
+	m = m.refreshPreview()
 
 	if msg.err != nil {
 		if errors.Is(msg.err, context.Canceled) {

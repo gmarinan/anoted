@@ -5,8 +5,6 @@ import (
 	"time"
 
 	"anoted/internal/config"
-	"anoted/internal/open"
-	"anoted/internal/transcribe"
 	"anoted/internal/tui/components"
 	tea "charm.land/bubbletea/v2"
 )
@@ -82,7 +80,7 @@ func (m Model) homeView() components.HomeView {
 		SystemBands:    m.systemBands,
 		MicBands:       m.micBands,
 		LevelEnabled:   config.LevelMeterEnabled(m.deps.Config),
-		LevelAvailable: m.deps.LevelMonitor != nil && m.deps.LevelMonitor.Available(),
+		LevelAvailable: m.levelAvailable,
 		MonitorWarn:    m.audioMonitorWarn,
 		LevelFrame:     m.levelFrame,
 
@@ -92,12 +90,6 @@ func (m Model) homeView() components.HomeView {
 
 func (m Model) sessionsPanel() components.SessionsView {
 	rec, _ := m.selectedSession()
-	preview := ""
-	if rec.Dir != "" && transcribe.HasTranscript(rec.Dir, m.deps.Config.Transcription) && !(m.transcribeActive && rec.Dir == m.transcribeSessionDir) {
-		if text, err := transcribe.ReadPreview(rec.Dir, m.deps.Config.Transcription, 12); err == nil {
-			preview = text
-		}
-	}
 	v := components.SessionsView{
 		PageRecords:          m.sessionsPageRecords(),
 		Cursor:               m.sessionCursor,
@@ -111,8 +103,8 @@ func (m Model) sessionsPanel() components.SessionsView {
 		OpenerPicker:         m.sessionsOpenerPicker,
 		OpenerCursor:         m.sessionsOpenerCursor,
 		OpenerChoices:        m.sessionsOpenerChoicesIfOpen(),
-		CurrentOpener:        open.CurrentOpenerID(m.deps.Config.Desktop),
-		OpenerDetected:       open.Detected(m.deps.Config.Desktop, open.KindFolder),
+		CurrentOpener:        m.openerCurrent,
+		OpenerDetected:       m.openerDetected,
 		DeleteConfirm:        m.sessionsDeleteConfirm,
 		DeleteCursor:         m.sessionsDeleteCursor,
 		TranscribeActive:     m.transcribeActive,
@@ -124,7 +116,8 @@ func (m Model) sessionsPanel() components.SessionsView {
 		TranscribeErr:        m.transcribeErr,
 		TranscribeErrDir:     m.transcribeSessionDir,
 		Transcription:        m.deps.Config.Transcription,
-		PreviewText:          preview,
+		PreviewText:          m.previewText,
+		Artifacts:            m.sessionArtifacts,
 	}
 	if m.sessionsDeleteConfirm {
 		v.DeleteID = rec.ID
@@ -199,7 +192,7 @@ func (m Model) configView() components.ConfigMenuView {
 	cfg := m.deps.Config
 	sections := make([]components.ConfigSectionPanel, 0, configSectionCount)
 	for s := 0; s < configSectionCount; s++ {
-		fields := cfgFields(s)
+		fields := cfgFieldsWithEnv(s, m.envFacts())
 		rows := make([]components.ConfigFieldRow, 0, len(fields))
 		for i, f := range fields {
 			value := cfgFieldValue(f, cfg)

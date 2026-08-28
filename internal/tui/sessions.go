@@ -62,7 +62,9 @@ func (m Model) clampSessionsCursor() Model {
 	if m.sessionCursor < 0 {
 		m.sessionCursor = 0
 	}
-	return m
+	// Single choke point for selection changes, so the preview is resolved here
+	// instead of being read from disk on every frame in View.
+	return m.refreshPreview()
 }
 
 // sessionsNavigate moves the selection by delta rows across page boundaries.
@@ -110,6 +112,7 @@ func (m Model) refreshSessions() Model {
 	} else {
 		m.sessionsErr = ""
 		m.sessions = recs
+		m.sessionArtifacts = gatherSessionFacts(recs, m.deps.Config.Transcription)
 	}
 	return m.clampSessionsCursor()
 }

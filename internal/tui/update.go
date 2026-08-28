@@ -10,6 +10,7 @@ import (
 	"anoted/internal/level"
 	"anoted/internal/recorder"
 	"anoted/internal/session"
+	"anoted/internal/tui/components"
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/term"
 )
@@ -32,15 +33,21 @@ func (m Model) Init() tea.Cmd {
 }
 
 type sessionsLoadedMsg struct {
-	records []session.Record
-	err     error
+	records   []session.Record
+	artifacts map[string]components.SessionArtifacts
+	err       error
 }
 
 func (m Model) loadSessionsCmd() tea.Cmd {
 	store := m.deps.Store
+	cfg := m.deps.Config.Transcription
 	return func() tea.Msg {
 		recs, err := loadSessionRecords(store)
-		return sessionsLoadedMsg{records: recs, err: err}
+		return sessionsLoadedMsg{
+			records:   recs,
+			artifacts: gatherSessionFacts(recs, cfg),
+			err:       err,
+		}
 	}
 }
 
@@ -96,6 +103,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.sessionsErr = ""
 			m.sessions = msg.records
+			m.sessionArtifacts = msg.artifacts
 			m = m.clampSessionsCursor()
 		}
 		return m, nil
