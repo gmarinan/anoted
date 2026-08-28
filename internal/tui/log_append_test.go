@@ -13,14 +13,14 @@ func TestLogAppendersMutateModel(t *testing.T) {
 		t.Fatalf("appendTranscribeLog did not mutate: %v", m.transcribeLog)
 	}
 
-	m.appendWhisperInstallLog("installing")
-	if len(m.whisperInstallLog) != 1 {
-		t.Fatalf("appendWhisperInstallLog did not mutate: %v", m.whisperInstallLog)
+	m.whisperInstall.appendLine("installing")
+	if len(m.whisperInstall.Log) != 1 {
+		t.Fatalf("appendWhisperInstallLog did not mutate: %v", m.whisperInstall.Log)
 	}
 
-	m.appendGPUInstallLog("cuda")
-	if len(m.gpuInstallLog) != 1 {
-		t.Fatalf("appendGPUInstallLog did not mutate: %v", m.gpuInstallLog)
+	m.gpuInstall.appendLine("cuda")
+	if len(m.gpuInstall.Log) != 1 {
+		t.Fatalf("appendGPUInstallLog did not mutate: %v", m.gpuInstall.Log)
 	}
 
 	// Blank lines are still ignored.

@@ -148,17 +148,9 @@ type Model struct {
 	transcribeBlink      bool
 	transcribeCancel     context.CancelFunc
 
-	whisperInstallActive bool
-	whisperInstallLog    []string
-	whisperInstallErr    string
-	whisperInstallScroll int
-	whisperInstallCancel context.CancelFunc
-
-	gpuInstallActive bool
-	gpuInstallLog    []string
-	gpuInstallErr    string
-	gpuInstallScroll int
-	gpuInstallCancel context.CancelFunc
+	// Two identical installers sharing one type; see install_state.go.
+	whisperInstall installState
+	gpuInstall     installState
 
 	installFrame uint64 // drives the spinner while installs run
 

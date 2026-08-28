@@ -145,21 +145,21 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m.startGPUInstall()
 		}
 	case "pgup":
-		if m.gpuInstallActive || len(m.gpuInstallLog) > 0 {
-			m.gpuInstallScroll = clampScroll(m.gpuInstallScroll-3, m.maxGPUInstallScroll(installLogRows))
+		if m.gpuInstall.hasContent() {
+			m.gpuInstall.scrollBy(-3, installLogRows)
 			return m, nil
 		}
-		if m.whisperInstallActive || len(m.whisperInstallLog) > 0 {
-			m.whisperInstallScroll = clampScroll(m.whisperInstallScroll-3, m.maxWhisperInstallScroll(installLogRows))
+		if m.whisperInstall.hasContent() {
+			m.whisperInstall.scrollBy(-3, installLogRows)
 			return m, nil
 		}
 	case "pgdown":
-		if m.gpuInstallActive || len(m.gpuInstallLog) > 0 {
-			m.gpuInstallScroll = clampScroll(m.gpuInstallScroll+3, m.maxGPUInstallScroll(installLogRows))
+		if m.gpuInstall.hasContent() {
+			m.gpuInstall.scrollBy(3, installLogRows)
 			return m, nil
 		}
-		if m.whisperInstallActive || len(m.whisperInstallLog) > 0 {
-			m.whisperInstallScroll = clampScroll(m.whisperInstallScroll+3, m.maxWhisperInstallScroll(installLogRows))
+		if m.whisperInstall.hasContent() {
+			m.whisperInstall.scrollBy(3, installLogRows)
 			return m, nil
 		}
 	case "S":

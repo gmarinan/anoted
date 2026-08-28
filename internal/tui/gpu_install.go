@@ -3,12 +3,10 @@ package tui
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"anoted/internal/config"
 	"anoted/internal/setup"
 	"anoted/internal/transcribe"
-	"anoted/internal/tui/components"
 	tea "charm.land/bubbletea/v2"
 )
 
@@ -65,40 +63,23 @@ func waitGPUInstallMsg(ch <-chan tea.Msg) tea.Cmd {
 	}
 }
 
-// Pointer receiver: see appendTranscribeLog.
-func (m *Model) appendGPUInstallLog(line string) {
-	line = strings.TrimSpace(line)
-	if line == "" {
-		return
-	}
-	line = components.ClampLogLine(line)
-	m.gpuInstallLog = append(m.gpuInstallLog, line)
-	if len(m.gpuInstallLog) > gpuInstallLogMax {
-		m.gpuInstallLog = m.gpuInstallLog[len(m.gpuInstallLog)-gpuInstallLogMax:]
-	}
-}
-
 func (m Model) startGPUInstall() (Model, tea.Cmd) {
-	if m.gpuInstallActive {
+	if m.gpuInstall.Active {
 		return m, nil
 	}
 	if !setup.GPUOfferAvailable(m.deps.Config) {
 		return m, nil
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	m.gpuInstallCancel = cancel
-	m.gpuInstallActive = true
-	m.gpuInstallLog = []string{"enabling GPU (PyTorch CUDA)…"}
-	m.gpuInstallErr = ""
-	m.gpuInstallScroll = 0
+	m.gpuInstall.begin("enabling GPU (PyTorch CUDA)…", cancel)
 	return m, tea.Batch(gpuInstallCmd(ctx), m.scheduleInstallSpin())
 }
 
 func (m Model) handleGPUInstallEnvelope(msg gpuInstallEnvelopeMsg) (tea.Model, tea.Cmd) {
 	switch inner := msg.inner.(type) {
 	case gpuInstallProgressMsg:
-		m.appendGPUInstallLog(inner.line)
-		m.gpuInstallScroll = m.maxGPUInstallScroll(8)
+		m.gpuInstall.appendLine(inner.line)
+		m.gpuInstall.Scroll = m.gpuInstall.maxScroll(installLogRows)
 		return m, waitGPUInstallMsg(msg.ch)
 	case gpuInstallResultMsg:
 		return m.handleGPUInstallResult(inner)
@@ -108,15 +89,11 @@ func (m Model) handleGPUInstallEnvelope(msg gpuInstallEnvelopeMsg) (tea.Model, t
 }
 
 func (m Model) handleGPUInstallResult(msg gpuInstallResultMsg) (tea.Model, tea.Cmd) {
-	m.gpuInstallActive = false
-	if m.gpuInstallCancel != nil {
-		m.gpuInstallCancel()
-		m.gpuInstallCancel = nil
-	}
+	m.gpuInstall.finish()
 
 	if msg.err != nil {
-		m.gpuInstallErr = msg.err.Error()
-		m.appendGPUInstallLog(fmt.Sprintf("failed: %v", msg.err))
+		m.gpuInstall.Err = msg.err.Error()
+		m.gpuInstall.appendLine(fmt.Sprintf("failed: %v", msg.err))
 		return m, nil
 	}
 
@@ -140,39 +117,13 @@ type gpuInstallSavedMsg struct {
 
 func (m Model) handleGPUInstallSaved(msg gpuInstallSavedMsg) (tea.Model, tea.Cmd) {
 	if msg.err != nil {
-		m.gpuInstallErr = msg.err.Error()
+		m.gpuInstall.Err = msg.err.Error()
 		return m, nil
 	}
 	m = m.applyConfig(msg.cfg)
-	m.gpuInstallErr = ""
-	m.appendGPUInstallLog("✓ GPU enabled (PyTorch CUDA)")
+	m.gpuInstall.Err = ""
+	m.gpuInstall.appendLine("✓ GPU enabled (PyTorch CUDA)")
 	transcribe.InvalidateTorchCUDACache()
 	m.doctorGPUCanInstall = false
 	return m, doctorReportCmd(m.deps.Config)
-}
-
-func (m Model) maxGPUInstallScroll(viewHeight int) int {
-	n := len(m.gpuInstallLog) - viewHeight
-	if n < 0 {
-		return 0
-	}
-	return n
-}
-
-func (m Model) visibleGPUInstallLog(viewHeight int) []string {
-	if viewHeight < 1 {
-		viewHeight = 6
-	}
-	if len(m.gpuInstallLog) <= viewHeight {
-		return m.gpuInstallLog
-	}
-	start := m.gpuInstallScroll
-	maxStart := m.maxGPUInstallScroll(viewHeight)
-	if start > maxStart {
-		start = maxStart
-	}
-	if start < 0 {
-		start = 0
-	}
-	return m.gpuInstallLog[start : start+viewHeight]
 }

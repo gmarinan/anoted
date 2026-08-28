@@ -14,7 +14,7 @@ type installSpinMsg struct{}
 
 // installBusy reports whether any long-running install is on screen.
 func (m Model) installBusy() bool {
-	return m.whisperInstallActive || m.gpuInstallActive || m.setupWizard.Busy
+	return m.whisperInstall.Active || m.gpuInstall.Active || m.setupWizard.Busy
 }
 
 // scheduleInstallSpin keeps the spinner turning while something is installing.

@@ -142,13 +142,13 @@ func (m Model) doctorView() components.DoctorView {
 		DetectionWarn:        m.detection.Warning,
 		Width:                m.width,
 		Height:               m.height,
-		WhisperInstallActive: m.whisperInstallActive,
-		WhisperInstallLog:    m.visibleWhisperInstallLog(installLogRows),
-		WhisperInstallErr:    m.whisperInstallErr,
+		WhisperInstallActive: m.whisperInstall.Active,
+		WhisperInstallLog:    m.whisperInstall.visible(installLogRows),
+		WhisperInstallErr:    m.whisperInstall.Err,
 		WhisperCanInstall:    m.doctorWhisperOffer(),
-		GPUInstallActive:     m.gpuInstallActive,
-		GPUInstallLog:        m.visibleGPUInstallLog(installLogRows),
-		GPUInstallErr:        m.gpuInstallErr,
+		GPUInstallActive:     m.gpuInstall.Active,
+		GPUInstallLog:        m.gpuInstall.visible(installLogRows),
+		GPUInstallErr:        m.gpuInstall.Err,
 		GPUCanInstall:        m.doctorGPUOffer(),
 		InstallFrame:         m.installFrame,
 	}
@@ -168,10 +168,10 @@ func (m Model) sessionsFooter() components.SessionsFooterMode {
 }
 
 func (m Model) doctorFooter() components.DoctorFooterMode {
-	if m.gpuInstallActive {
+	if m.gpuInstall.Active {
 		return components.DoctorFooterInstallingGPU
 	}
-	if m.whisperInstallActive {
+	if m.whisperInstall.Active {
 		return components.DoctorFooterInstalling
 	}
 	whisper := m.doctorWhisperOffer()

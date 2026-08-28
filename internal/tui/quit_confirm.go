@@ -6,14 +6,14 @@ import (
 )
 
 func (m Model) quitGuarded() bool {
-	return m.recording || m.transcribeActive || m.whisperInstallActive || m.gpuInstallActive || m.setupWizard.Busy
+	return m.recording || m.transcribeActive || m.whisperInstall.Active || m.gpuInstall.Active || m.setupWizard.Busy
 }
 
 func (m Model) quitConfirmReasons() []string {
 	return components.FormatQuitReasons(
 		m.recording,
 		m.transcribeActive,
-		m.whisperInstallActive || m.gpuInstallActive || m.setupWizard.Busy,
+		m.whisperInstall.Active || m.gpuInstall.Active || m.setupWizard.Busy,
 	)
 }
 
@@ -69,14 +69,10 @@ func (m Model) performQuit() (tea.Model, tea.Cmd) {
 	if m.setupCancel != nil {
 		m.setupCancel()
 	}
-	if m.gpuInstallCancel != nil {
-		m.gpuInstallCancel()
-	}
-	// Whisper installs are multi-gigabyte pip downloads. Without this, quitting
-	// left one running with no UI attached and no way to stop it.
-	if m.whisperInstallCancel != nil {
-		m.whisperInstallCancel()
-	}
+	// Whisper installs are multi-gigabyte pip downloads; quitting used to leave
+	// one running with no UI attached and no way to stop it.
+	m.gpuInstall.cancel()
+	m.whisperInstall.cancel()
 	var cmds []tea.Cmd
 	if m.deps.LevelMonitor != nil {
 		cmds = append(cmds, func() tea.Msg {

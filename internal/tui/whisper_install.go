@@ -7,7 +7,6 @@ import (
 
 	"anoted/internal/config"
 	"anoted/internal/transcribe"
-	"anoted/internal/tui/components"
 	tea "charm.land/bubbletea/v2"
 )
 
@@ -105,38 +104,19 @@ func waitWhisperInstallMsg(ch <-chan tea.Msg) tea.Cmd {
 	}
 }
 
-// Pointer receiver: see appendTranscribeLog — a value receiver silently
-// discarded every line, so the install pane looked frozen for the whole
-// multi-minute pip download.
-func (m *Model) appendWhisperInstallLog(line string) {
-	line = strings.TrimSpace(line)
-	if line == "" {
-		return
-	}
-	line = components.ClampLogLine(line)
-	m.whisperInstallLog = append(m.whisperInstallLog, line)
-	if len(m.whisperInstallLog) > whisperInstallLogMax {
-		m.whisperInstallLog = m.whisperInstallLog[len(m.whisperInstallLog)-whisperInstallLogMax:]
-	}
-}
-
 func (m Model) startWhisperInstall() (Model, tea.Cmd) {
-	if m.whisperInstallActive || transcribe.IsInstalled(m.deps.Config) {
+	if m.whisperInstall.Active || transcribe.IsInstalled(m.deps.Config) {
 		return m, nil
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	m.whisperInstallCancel = cancel
-	m.whisperInstallActive = true
-	m.whisperInstallLog = []string{"starting whisper install…"}
-	m.whisperInstallErr = ""
-	m.whisperInstallScroll = 0
+	m.whisperInstall.begin("starting whisper install…", cancel)
 	return m, tea.Batch(whisperInstallCmd(ctx), m.scheduleInstallSpin())
 }
 
 func (m Model) handleWhisperInstallEnvelope(msg whisperInstallEnvelopeMsg) (tea.Model, tea.Cmd) {
 	switch inner := msg.inner.(type) {
 	case whisperInstallProgressMsg:
-		m.appendWhisperInstallLog(inner.line)
+		m.whisperInstall.appendLine(inner.line)
 		return m, waitWhisperInstallMsg(msg.ch)
 	case whisperInstallResultMsg:
 		return m.handleWhisperInstallResult(inner)
@@ -146,17 +126,11 @@ func (m Model) handleWhisperInstallEnvelope(msg whisperInstallEnvelopeMsg) (tea.
 }
 
 func (m Model) handleWhisperInstallResult(msg whisperInstallResultMsg) (tea.Model, tea.Cmd) {
-	m.whisperInstallActive = false
-	if m.whisperInstallCancel != nil {
-		// Dropping the reference without calling it leaked the context: the
-		// cancel function was never invoked anywhere in the package.
-		m.whisperInstallCancel()
-		m.whisperInstallCancel = nil
-	}
+	m.whisperInstall.finish()
 
 	if msg.err != nil {
-		m.whisperInstallErr = msg.err.Error()
-		m.appendWhisperInstallLog(fmt.Sprintf("failed: %v", msg.err))
+		m.whisperInstall.Err = msg.err.Error()
+		m.whisperInstall.appendLine(fmt.Sprintf("failed: %v", msg.err))
 		return m, nil
 	}
 
@@ -183,45 +157,16 @@ type whisperInstallSavedMsg struct {
 
 func (m Model) handleWhisperInstallSaved(msg whisperInstallSavedMsg) (tea.Model, tea.Cmd) {
 	if msg.err != nil {
-		m.whisperInstallErr = msg.err.Error()
+		m.whisperInstall.Err = msg.err.Error()
 		return m, nil
 	}
 	m = m.applyConfig(msg.cfg)
-	m.whisperInstallErr = ""
-	m.appendWhisperInstallLog("✓ whisper installed")
+	m.whisperInstall.Err = ""
+	m.whisperInstall.appendLine("✓ whisper installed")
 	m.doctorWhisperCanInstall = false
 	return m, doctorReportCmd(m.deps.Config)
 }
 
 func (m Model) whisperCanInstall() bool {
-	return !m.whisperInstallActive && !transcribe.IsInstalled(m.deps.Config)
-}
-
-// The whisper install pane used to render its entire 40-line buffer with no
-// window and no scroll keys, while the GPU pane next to it had both. During a
-// multi-gigabyte pip download the pane grew until it pushed the footer off the
-// bottom of any terminal shorter than about 45 rows.
-func (m Model) maxWhisperInstallScroll(viewHeight int) int {
-	n := len(m.whisperInstallLog) - viewHeight
-	if n < 0 {
-		return 0
-	}
-	return n
-}
-
-func (m Model) visibleWhisperInstallLog(viewHeight int) []string {
-	if viewHeight < 1 {
-		viewHeight = 6
-	}
-	if len(m.whisperInstallLog) <= viewHeight {
-		return m.whisperInstallLog
-	}
-	start := m.whisperInstallScroll
-	if maxStart := m.maxWhisperInstallScroll(viewHeight); start > maxStart {
-		start = maxStart
-	}
-	if start < 0 {
-		start = 0
-	}
-	return m.whisperInstallLog[start : start+viewHeight]
+	return !m.whisperInstall.Active && !transcribe.IsInstalled(m.deps.Config)
 }

@@ -13,16 +13,16 @@ func TestQuitGuarded(t *testing.T) {
 		t.Fatal("expected guarded while transcribing")
 	}
 	m.transcribeActive = false
-	m.whisperInstallActive = true
+	m.whisperInstall.Active = true
 	if !m.quitGuarded() {
 		t.Fatal("expected guarded while whisper installing")
 	}
-	m.whisperInstallActive = false
-	m.gpuInstallActive = true
+	m.whisperInstall.Active = false
+	m.gpuInstall.Active = true
 	if !m.quitGuarded() {
 		t.Fatal("expected guarded while GPU installing")
 	}
-	m.gpuInstallActive = false
+	m.gpuInstall.Active = false
 	if m.quitGuarded() {
 		t.Fatal("expected not guarded when idle")
 	}

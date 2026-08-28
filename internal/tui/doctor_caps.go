@@ -53,10 +53,10 @@ func (m Model) invalidateDoctorCapsCmd() tea.Cmd {
 
 // doctorWhisperOffer reports cached whisper install availability for UI hints.
 func (m Model) doctorWhisperOffer() bool {
-	return m.doctorWhisperCanInstall && !m.whisperInstallActive
+	return m.doctorWhisperCanInstall && !m.whisperInstall.Active
 }
 
 // doctorGPUOffer reports cached GPU install availability for UI hints.
 func (m Model) doctorGPUOffer() bool {
-	return m.doctorGPUCanInstall && !m.gpuInstallActive
+	return m.doctorGPUCanInstall && !m.gpuInstall.Active
 }
