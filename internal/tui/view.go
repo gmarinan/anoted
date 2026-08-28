@@ -15,7 +15,10 @@ func (m Model) View() tea.View {
 	var content strings.Builder
 
 	tab := components.ScreenToTab(string(m.screen))
-	content.WriteString(components.Header(m.deps.Platform.Subtitle()))
+	content.WriteString(components.Header(
+		m.deps.Platform.Subtitle(),
+		m.recording && m.deps.Config.Privacy.ShowRecordingIndicator,
+	))
 	content.WriteString("\n")
 	content.WriteString(components.TabBar(tab))
 	content.WriteString("\n\n")

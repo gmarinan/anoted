@@ -15,12 +15,19 @@ const wavHeaderSize = 44
 // both size fields are uint32. Past this the sizes would silently wrap.
 const maxWAVDataSize = int64(math.MaxUint32) - 36
 
+// headerSyncSeconds is how much audio may be written before the on-disk chunk
+// sizes are refreshed. Each refresh is a 44-byte pwrite, so the cost is
+// negligible next to the PCM stream itself.
+const headerSyncSeconds = 5
+
 // NewWAVWriter creates a WAV writer that streams s16le PCM straight to path.
 //
 // The file is opened up front with a placeholder header and PCM is appended as
-// it arrives, so memory stays bounded for a multi-hour recording and an
-// abnormal exit still leaves a file whose audio can be recovered — only the
-// chunk sizes in the header are stale.
+// it arrives, so memory stays bounded for a multi-hour recording. The header is
+// rewritten every few seconds as well as on Close: a stale header declares
+// dataSize = 0, which every player, ffmpeg and whisper read as an empty file, so
+// a crash or power loss used to turn a gigabyte of good audio into a recording
+// nothing could open.
 func NewWAVWriter(path string, sampleRate, channels int) (*WAVWriter, error) {
 	if sampleRate <= 0 {
 		sampleRate = 48000
@@ -28,7 +35,7 @@ func NewWAVWriter(path string, sampleRate, channels int) (*WAVWriter, error) {
 	if channels <= 0 {
 		channels = 2
 	}
-	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o644)
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, SessionFileMode)
 	if err != nil {
 		return nil, fmt.Errorf("create wav %s: %w", path, err)
 	}
@@ -41,6 +48,7 @@ func NewWAVWriter(path string, sampleRate, channels int) (*WAVWriter, error) {
 		buf:        bufio.NewWriterSize(f, 64*1024),
 		sampleRate: sampleRate,
 		channels:   channels,
+		syncEvery:  int64(sampleRate * channels * 2 * headerSyncSeconds),
 	}, nil
 }
 
@@ -52,6 +60,8 @@ type WAVWriter struct {
 	sampleRate int
 	channels   int
 	n          int64
+	syncEvery  int64
+	syncedAt   int64
 	err        error
 	closed     bool
 }
@@ -72,7 +82,45 @@ func (w *WAVWriter) WritePCM(pcm []byte) {
 	w.n += int64(n)
 	if err != nil {
 		w.err = fmt.Errorf("write pcm: %w", err)
+		return
 	}
+	if w.syncEvery > 0 && w.n-w.syncedAt >= w.syncEvery {
+		w.syncHeaderLocked()
+	}
+}
+
+// syncHeaderLocked flushes buffered PCM and rewrites the RIFF and data chunk
+// sizes so the file on disk is playable at any moment, not only after Close.
+// Callers must hold w.mu.
+func (w *WAVWriter) syncHeaderLocked() {
+	if err := w.buf.Flush(); err != nil {
+		if w.err == nil {
+			w.err = fmt.Errorf("flush pcm: %w", err)
+		}
+		return
+	}
+	size := w.n
+	if size > maxWAVDataSize {
+		size = maxWAVDataSize
+	}
+	// WriteAt uses pwrite and leaves the append offset alone, so it is safe to
+	// interleave with the buffered sequential writes above.
+	if _, err := w.f.WriteAt(minimalWAVHeader(w.sampleRate, w.channels, int(size)), 0); err != nil {
+		if w.err == nil {
+			w.err = fmt.Errorf("patch wav header: %w", err)
+		}
+		return
+	}
+	w.syncedAt = w.n
+}
+
+// Err reports the first write failure seen so far, without closing the file.
+// Recorders poll this so a full disk surfaces in the UI while the meeting is
+// still running, instead of at Stop when the session row can no longer be saved.
+func (w *WAVWriter) Err() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.err
 }
 
 // Written reports how many PCM bytes have been accepted so far.

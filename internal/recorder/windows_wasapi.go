@@ -58,9 +58,9 @@ func (r *WindowsWASAPIRecorder) Start(_ context.Context, sess SessionConfig) err
 	}
 	r.mu.Unlock()
 
-	dir := sessionDir(sess)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return fmt.Errorf("create session dir: %w", err)
+	dir, err := createSessionDir(sess)
+	if err != nil {
+		return err
 	}
 
 	devs, err := resolveFromSession(sess)

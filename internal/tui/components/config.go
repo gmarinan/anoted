@@ -271,7 +271,7 @@ func (v ConfigMenuView) renderModal() string {
 
 func (v ConfigMenuView) renderDeviceModal() string {
 	var lines []string
-	lines = append(lines, row("Selección", v.deviceSelectionLabel()))
+	lines = append(lines, row("Selection", v.deviceSelectionLabel()))
 	lines = append(lines, "")
 
 	if v.DeviceLoading {

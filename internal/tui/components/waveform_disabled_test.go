@@ -13,7 +13,7 @@ func TestWaveformVizDisabled(t *testing.T) {
 		Width:        40,
 	}
 	out := stripANSI(v.Render())
-	if strings.Contains(out, "█") || strings.Contains(out, "activo al grabar") {
+	if strings.Contains(out, "█") || strings.Contains(out, "active while recording") {
 		t.Fatalf("disabled meter should not render bars: %q", out)
 	}
 	if !strings.Contains(out, "alsa") {

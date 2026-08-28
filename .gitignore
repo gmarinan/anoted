@@ -5,3 +5,5 @@ bin/
 .DS_Store
 .env
 .env.*
+# Stray build output from the project's former name.
+/meetctl

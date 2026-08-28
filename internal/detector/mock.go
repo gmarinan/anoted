@@ -41,14 +41,33 @@ const (
 )
 
 // MatchProvider returns the provider key if text matches any configured pattern.
+//
+// The longest matching pattern wins, with the provider name as a tiebreak. Two
+// things made the naive version misbehave:
+//
+//   - Ranging over the map made the winner random when a title matched two
+//     providers. The provider is part of the meeting session key, so it flipped
+//     between polls, which read as a brand new meeting every two seconds and
+//     re-raised the "start recording?" prompt the user had just dismissed.
+//   - strings.Contains(x, "") is always true, so a single blank entry in the
+//     patterns list — easy to produce by hand-editing the YAML — matched every
+//     window title and, with auto-record on, recorded continuously.
 func MatchProvider(text string, providers map[string][]string) string {
 	lower := strings.ToLower(text)
+	best, bestLen := ProviderUnknown, -1
 	for name, patterns := range providers {
 		for _, p := range patterns {
-			if strings.Contains(lower, strings.ToLower(p)) {
-				return name
+			p = strings.TrimSpace(p)
+			if p == "" {
+				continue
+			}
+			if !strings.Contains(lower, strings.ToLower(p)) {
+				continue
+			}
+			if len(p) > bestLen || (len(p) == bestLen && name < best) {
+				best, bestLen = name, len(p)
 			}
 		}
 	}
-	return ProviderUnknown
+	return best
 }

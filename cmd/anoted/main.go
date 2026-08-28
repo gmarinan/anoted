@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"anoted/internal/audio"
@@ -33,6 +34,11 @@ var (
 	useMock    bool
 	forceDummy bool
 )
+
+// idleFriendlyFPS caps the Bubble Tea renderer well below its 60 FPS default.
+// This app is idle most of its life, and every frame tick is a timer wakeup
+// that keeps the CPU out of deep sleep states on battery.
+const idleFriendlyFPS = 15
 
 func main() {
 	if err := newRootCmd().Execute(); err != nil {
@@ -180,7 +186,14 @@ func runTUI(cmd *cobra.Command, args []string) error {
 		Tray:         tr,
 	}
 
-	p := tea.NewProgram(tui.NewModel(deps), tea.WithFilter(tui.SessionScrollFilter))
+	// anoted sits idle for hours waiting for a meeting, so the renderer's default
+	// 60 FPS ticker is 3600 pointless timer wakeups per minute — the single
+	// largest source of idle CPU wakeups even with the level meter off. 15 FPS
+	// caps repaint latency at 67ms, which is imperceptible for this UI.
+	p := tea.NewProgram(tui.NewModel(deps),
+		tea.WithFilter(tui.SessionScrollFilter),
+		tea.WithFPS(idleFriendlyFPS),
+	)
 	// Send a message rather than calling p.Quit(): Bubble Tea returns from the
 	// event loop on QuitMsg without dispatching it to Update, which skipped
 	// performQuit and left an active recording running after the app exited.
@@ -345,6 +358,12 @@ func doctorCmd() *cobra.Command {
 			}
 			rep := doctor.Run(cfg)
 			fmt.Print(doctor.Format(rep))
+			// Exit non-zero on failures so `anoted doctor && anoted watch` and
+			// CI checks actually gate on the result instead of always passing.
+			if failed := rep.Failures(); len(failed) > 0 {
+				cmd.SilenceUsage = true
+				return fmt.Errorf("doctor: %d check(s) failed: %s", len(failed), strings.Join(failed, ", "))
+			}
 			return nil
 		},
 	}

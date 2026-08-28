@@ -23,7 +23,7 @@ func NewSQLiteStore(path string) *SQLiteStore {
 }
 
 func (s *SQLiteStore) Open() error {
-	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(s.path), 0o700); err != nil {
 		return fmt.Errorf("create db dir: %w", err)
 	}
 	// modernc.org/sqlite installs no busy handler by default, so a write from a
@@ -60,11 +60,23 @@ func (s *SQLiteStore) migrate() error {
 			status TEXT NOT NULL,
 			metadata_json TEXT NOT NULL
 		);
+		-- Every List() is "ORDER BY started_at DESC LIMIT n", which was a full
+		-- table scan plus a sort on a table that only grows.
+		CREATE INDEX IF NOT EXISTS idx_sessions_started_at ON sessions(started_at DESC);
 	`)
 	if err != nil {
 		return fmt.Errorf("migrate sessions: %w", err)
 	}
 	return nil
+}
+
+// Count returns the number of recorded sessions.
+func (s *SQLiteStore) Count() (int, error) {
+	var n int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM sessions`).Scan(&n); err != nil {
+		return 0, fmt.Errorf("count sessions: %w", err)
+	}
+	return n, nil
 }
 
 func (s *SQLiteStore) Create(rec Record) (int64, error) {
@@ -197,11 +209,11 @@ func formatTime(t time.Time) string {
 }
 
 func writeFile(dir, name string, data []byte) error {
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("create session dir: %w", err)
 	}
 	path := filepath.Join(dir, name)
-	if err := os.WriteFile(path, data, 0o644); err != nil {
+	if err := os.WriteFile(path, data, 0o600); err != nil {
 		return fmt.Errorf("write %s: %w", path, err)
 	}
 	return nil

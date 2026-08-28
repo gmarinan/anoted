@@ -36,10 +36,10 @@ func SaveRaw(path string, content string) (Config, error) {
 	}
 	cfg.applyDefaults()
 
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return Config{}, fmt.Errorf("create config dir: %w", err)
 	}
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		return Config{}, fmt.Errorf("write config %s: %w", path, err)
 	}
 	return cfg, nil

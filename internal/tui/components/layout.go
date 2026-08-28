@@ -62,7 +62,7 @@ var (
 				Padding(0, 0)
 )
 
-// TabID identifies the active main screen (switch with 1–4, not Tab).
+// TabID identifies the active main screen (switch with 1–3, not Tab).
 type TabID int
 
 const (
@@ -75,19 +75,34 @@ var tabLabels = []string{"Home", "Doctor", "Config"}
 
 // Header renders the app title line, including the running build so a user
 // reporting a problem can say which version they are on without digging.
-func Header(subtitle string) string {
+//
+// The recording badge lives here rather than in a single screen: anoted must
+// make an active recording obvious at all times, and the old indicator only
+// existed on Home, so recording while sitting in Config or Doctor showed nothing
+// at all.
+func Header(subtitle string, recording bool) string {
 	out := headerStyle.Render("anoted") + subtleStyle.Render(" "+buildinfo.Version())
 	if subtitle != "" {
 		out += subtleStyle.Render(" · " + subtitle)
 	}
+	if recording {
+		out += "  " + recStyle.Render(" "+LabelRecording+" ")
+	}
 	return out
 }
 
-// TabBar renders the top main navigation tabs (visual only; use 1–4 to switch).
+// TabBar renders the top main navigation tabs (visual only; use 1–3 to switch).
 func TabBar(active TabID) string {
 	var parts []string
 	for i, label := range tabLabels {
-		text := fmt.Sprintf("[%d]", i+1) + "[" + label + "]"
+		// The marker carries the selection on its own. Styling the active tab
+		// only with a background colour left NO_COLOR and monochrome terminals
+		// with no way to tell which tab was focused.
+		marker := "  "
+		if TabID(i) == active {
+			marker = "▸ "
+		}
+		text := marker + fmt.Sprintf("[%d]", i+1) + "[" + label + "]"
 		if TabID(i) == active {
 			parts = append(parts, tabActiveStyle.Render(text))
 		} else {
@@ -103,19 +118,22 @@ func SubTabBar(labels []string, active int) string {
 	for i, label := range labels {
 		text := "[" + label + "]"
 		if i == active {
-			parts = append(parts, subTabActiveStyle.Render(text))
+			parts = append(parts, subTabActiveStyle.Render("▸ "+text))
 		} else {
-			parts = append(parts, subTabInactiveStyle.Render(text))
+			parts = append(parts, subTabInactiveStyle.Render("  "+text))
 		}
 	}
 	return strings.Join(parts, " ")
 }
 
 const (
-	TwoColumnMinWidth         = 80
-	HomeTopRowMinWidth        = 140 // status | audio side-by-side only when wide enough
+	TwoColumnMinWidth = 80
+	// Status needs ~34 columns and the compact equalizer ~40, so 140 left a
+	// 120-column terminal — a very common full-screen size — stacking panels
+	// vertically and wasting most of its width.
+	HomeTopRowMinWidth        = 100 // status | audio side-by-side only when wide enough
 	WaveformCompactWidth      = 72  // equalizer uses short layout below this inner width
-	SessionsCompactWidth      = 140
+	SessionsCompactWidth      = 110
 	SessionsUltraCompactWidth = 90
 	MinPanelWidth             = 28
 	panelColumnGap            = 1
@@ -308,6 +326,37 @@ func clampStyledWidth(s string, maxW int) string {
 	return ansi.Truncate(s, maxW, "…")
 }
 
+// LogLineWidth bounds a single line in the scrolling log panes.
+const LogLineWidth = 120
+
+// ClampLogLine trims one line of subprocess output to fit a log pane.
+//
+// These panes carry transcript previews and pip output, so the naive
+// line[:119] cut a multibyte character in half and the terminal drew a
+// replacement glyph. The same mistake had already been fixed twice elsewhere
+// in the codebase without being applied here.
+func ClampLogLine(line string) string {
+	return clampStyledWidth(line, LogLineWidth)
+}
+
+// padCell clamps s to w terminal cells and right-pads it to exactly w.
+//
+// Table rows must not be built with fmt's %-Ns padding: several cells carry SGR
+// escapes, and fmt counts bytes. A seven-cell coloured status took ~19 bytes, so
+// its "28-wide" column rendered about 16 cells and every column to its right
+// drifted out of line with the header — visibly worse while a progress bar was
+// animating and the escape length changed frame to frame.
+func padCell(s string, w int) string {
+	if w <= 0 {
+		return s
+	}
+	s = clampStyledWidth(s, w)
+	if gap := w - lipgloss.Width(s); gap > 0 {
+		s += strings.Repeat(" ", gap)
+	}
+	return s
+}
+
 // FloatCenter overlays content centered on a dimmed background.
 func FloatCenter(background, overlay string, width, height int) string {
 	if strings.TrimSpace(overlay) == "" {
@@ -360,11 +409,16 @@ func FloatCenter(background, overlay string, width, height int) string {
 		width = startX + modalW
 	}
 
+	// Strip the background's own SGR codes before dimming. Style.Render just
+	// wraps the string in one escape pair, so the first reset inside the
+	// background restored its original colour and only the unstyled prefix of
+	// each line actually dimmed — modals ended up floating over a
+	// full-brightness screen with no visual focus.
 	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("238"))
 	dimmedLines := make([]string, height)
 	for y := 0; y < height; y++ {
 		if y < len(bgLines) {
-			dimmedLines[y] = dimStyle.Render(bgLines[y])
+			dimmedLines[y] = dimStyle.Render(ansi.Strip(bgLines[y]))
 		} else {
 			dimmedLines[y] = ""
 		}

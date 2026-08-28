@@ -21,3 +21,5 @@ func (stubMonitor) StopMic() error { return nil }
 func (stubMonitor) Read() LevelSnapshot { return LevelSnapshot{} }
 
 func (stubMonitor) Close() error { return nil }
+
+func (stubMonitor) LiveWhenIdle() bool { return false }

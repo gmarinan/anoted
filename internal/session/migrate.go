@@ -40,7 +40,7 @@ func MigrateLegacyIfEmpty(currentDBPath string) error {
 		return nil
 	}
 
-	if err := os.MkdirAll(filepath.Dir(currentDBPath), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(currentDBPath), 0o700); err != nil {
 		return fmt.Errorf("create sessions dir: %w", err)
 	}
 	return copyFile(legacyDBPath, currentDBPath)
@@ -58,18 +58,10 @@ func sessionCount(dbPath string) (int, error) {
 		return 0, err
 	}
 	defer store.Close()
-	recs, err := store.List(1)
-	if err != nil {
-		return 0, err
-	}
-	if len(recs) == 0 {
-		return 0, nil
-	}
-	recs, err = store.List(10000)
-	if err != nil {
-		return 0, err
-	}
-	return len(recs), nil
+	// This runs before every subcommand, twice (current and legacy DB). It used
+	// to List(10000), which scans every row and JSON-unmarshals each one's
+	// metadata just to take len() of the slice.
+	return store.Count()
 }
 
 func copyFile(src, dst string) error {
@@ -84,7 +76,9 @@ func copyFile(src, dst string) error {
 	// which every anoted subcommand failed with "database disk image is
 	// malformed" and no indication of which file to remove.
 	tmp := dst + ".tmp"
-	out, err := os.Create(tmp)
+	// os.Create would use 0666; the session database records when and with whom
+	// every meeting happened, so it stays owner-only.
+	out, err := os.OpenFile(tmp, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
 		return fmt.Errorf("create sessions db: %w", err)
 	}

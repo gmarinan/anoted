@@ -8,6 +8,7 @@ import (
 	"anoted/internal/config"
 	"anoted/internal/setup"
 	"anoted/internal/transcribe"
+	"anoted/internal/tui/components"
 	tea "charm.land/bubbletea/v2"
 )
 
@@ -70,10 +71,7 @@ func (m *Model) appendGPUInstallLog(line string) {
 	if line == "" {
 		return
 	}
-	const max = 120
-	if len(line) > max {
-		line = line[:max-1] + "…"
-	}
+	line = components.ClampLogLine(line)
 	m.gpuInstallLog = append(m.gpuInstallLog, line)
 	if len(m.gpuInstallLog) > gpuInstallLogMax {
 		m.gpuInstallLog = m.gpuInstallLog[len(m.gpuInstallLog)-gpuInstallLogMax:]

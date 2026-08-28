@@ -23,7 +23,7 @@ type WaveformViz struct {
 	LevelAvailable bool
 	MonitorWarn    string
 	Width          int
-	LevelFrame     uint64 // changes every UI tick; keeps Bubble Tea from skipping identical frames
+	LevelFrame     uint64 // UI tick counter; Render must not depend on it (see waveform_test.go)
 	ForceCompact   bool   // narrow column layout (e.g. status | audio side-by-side)
 }
 
@@ -38,13 +38,6 @@ func (v WaveformViz) Render() string {
 		return v.renderCompact()
 	}
 	var b strings.Builder
-	// Zero-width chars bust Bubble Tea viewEquals without visible fake motion.
-	if v.LevelFrame > 0 {
-		b.WriteString("\u200b")
-		for i := uint64(0); i < v.LevelFrame%4; i++ {
-			b.WriteString("\u200b")
-		}
-	}
 	b.WriteString(labelStyle.Render("System audio"))
 	b.WriteString("\n")
 	b.WriteString(subtleStyle.Render(truncate(v.SystemLabel, v.barWidth())))
@@ -60,15 +53,15 @@ func (v WaveformViz) Render() string {
 	} else {
 		b.WriteString(v.renderIdleMeter())
 		b.WriteString("\n")
-		b.WriteString(subtleStyle.Render("— activo al grabar"))
+		b.WriteString(subtleStyle.Render("— active while recording"))
 	}
 	if v.MonitorWarn != "" {
 		b.WriteString("\n")
-		b.WriteString(warnStyle.Render("⚠ " + v.MonitorWarn))
+		b.WriteString(warnStyle.Render(LabelWarn + " " + v.MonitorWarn))
 	}
 	if !v.LevelAvailable {
 		b.WriteString("\n")
-		b.WriteString(subtleStyle.Render("niveles no disponibles en esta plataforma"))
+		b.WriteString(subtleStyle.Render("levels unavailable on this platform"))
 	}
 	return b.String()
 }
@@ -85,7 +78,7 @@ func (v WaveformViz) renderDisabled() string {
 		b.WriteString(subtleStyle.Render(truncate(v.MicLabel, max(8, v.Width/3))))
 		if v.MonitorWarn != "" {
 			b.WriteString("\n")
-			b.WriteString(warnStyle.Render("⚠ " + truncate(v.MonitorWarn, v.Width-4)))
+			b.WriteString(warnStyle.Render(LabelWarn + " " + truncate(v.MonitorWarn, v.Width-4)))
 		}
 		return b.String()
 	}
@@ -99,7 +92,7 @@ func (v WaveformViz) renderDisabled() string {
 	b.WriteString(subtleStyle.Render(truncate(v.MicLabel, v.barWidth())))
 	if v.MonitorWarn != "" {
 		b.WriteString("\n")
-		b.WriteString(warnStyle.Render("⚠ " + v.MonitorWarn))
+		b.WriteString(warnStyle.Render(LabelWarn + " " + v.MonitorWarn))
 	}
 	return b.String()
 }
@@ -153,9 +146,6 @@ func (v WaveformViz) eqRowCount() int {
 
 func (v WaveformViz) renderUltraCompact() string {
 	var b strings.Builder
-	if v.LevelFrame > 0 {
-		b.WriteString("\u200b")
-	}
 	b.WriteString(labelStyle.Render("Sys"))
 	b.WriteString(subtleStyle.Render(" " + truncate(v.SystemLabel, max(6, v.Width/4))))
 	b.WriteString("\n")
@@ -193,9 +183,6 @@ func (v WaveformViz) renderSparkline(bands []float64, colors [eqRows]string) str
 
 func (v WaveformViz) renderCompact() string {
 	var b strings.Builder
-	if v.LevelFrame > 0 {
-		b.WriteString("\u200b")
-	}
 	b.WriteString(labelStyle.Render("System"))
 	b.WriteString(" ")
 	b.WriteString(subtleStyle.Render(truncate(v.SystemLabel, max(8, v.Width/3))))
@@ -209,11 +196,11 @@ func (v WaveformViz) renderCompact() string {
 	if v.Recording {
 		b.WriteString(v.renderMeterRows(v.MicBands, micEQColors))
 	} else {
-		b.WriteString(subtleStyle.Render("— al grabar"))
+		b.WriteString(subtleStyle.Render("— while recording"))
 	}
 	if v.MonitorWarn != "" {
 		b.WriteString("\n")
-		b.WriteString(warnStyle.Render("⚠ " + truncate(v.MonitorWarn, v.Width-4)))
+		b.WriteString(warnStyle.Render(LabelWarn + " " + truncate(v.MonitorWarn, v.Width-4)))
 	}
 	return b.String()
 }

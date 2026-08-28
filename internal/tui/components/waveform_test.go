@@ -90,14 +90,36 @@ func TestWaveformVizRenderCompact(t *testing.T) {
 	}
 }
 
-func TestWaveformViewChangesEachFrame(t *testing.T) {
+// The renderer used to inject a varying number of zero-width spaces so Bubble
+// Tea's frame deduplication would never match, which forced a full terminal
+// write 30 times a second even in total silence. Render must be a pure function
+// of the bands so unchanged audio costs nothing.
+func TestWaveformViewStableForUnchangedBands(t *testing.T) {
 	bands := []float64{0.2, 0.3, 0.25, 0.4}
 	v := WaveformViz{SystemBands: bands, Width: 100, LevelFrame: 1, LevelEnabled: true}
-	a := stripANSI(v.Render())
+	a := v.Render()
 	v.LevelFrame = 2
-	b := stripANSI(v.Render())
-	if a == b {
-		t.Fatal("view should differ per frame via invisible sync marker")
+	if b := v.Render(); a != b {
+		t.Fatal("identical bands must render an identical frame")
+	}
+	for _, mode := range []WaveformViz{
+		{SystemBands: bands, Width: 55, ForceCompact: true, LevelEnabled: true},
+		{SystemBands: bands, Width: 40, ForceCompact: true, LevelEnabled: true},
+	} {
+		first := mode.Render()
+		mode.LevelFrame = 7
+		if second := mode.Render(); first != second {
+			t.Fatalf("compact layout at width %d must render identically", mode.Width)
+		}
+	}
+}
+
+func TestWaveformViewTracksBandChanges(t *testing.T) {
+	v := WaveformViz{SystemBands: []float64{0.1, 0.1}, Width: 100, LevelEnabled: true}
+	quiet := v.Render()
+	v.SystemBands = []float64{0.9, 0.9}
+	if loud := v.Render(); quiet == loud {
+		t.Fatal("changed bands must render a different frame")
 	}
 }
 
@@ -112,7 +134,7 @@ func TestWaveformVizMicIdle(t *testing.T) {
 		Width:          100,
 	}
 	out := v.Render()
-	if !strings.Contains(out, "activo al grabar") {
+	if !strings.Contains(out, "active while recording") {
 		t.Fatal("expected idle mic hint")
 	}
 }
@@ -128,7 +150,7 @@ func TestWaveformVizMicIdleCompact(t *testing.T) {
 		ForceCompact: true,
 	}
 	out := v.Render()
-	if !strings.Contains(out, "al grabar") {
+	if !strings.Contains(out, "while recording") {
 		t.Fatal("expected compact idle mic hint")
 	}
 }

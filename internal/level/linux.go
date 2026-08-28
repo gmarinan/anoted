@@ -88,7 +88,9 @@ func (m *linuxMonitor) StartSystem(monitorID string) error {
 	if err != nil {
 		return fmt.Errorf("start system level monitor: %w", err)
 	}
+	m.mu.Lock()
 	m.systemCancel = cancel
+	m.mu.Unlock()
 	return nil
 }
 
@@ -109,33 +111,41 @@ func (m *linuxMonitor) StartMic(sourceID string) error {
 	if err != nil {
 		return fmt.Errorf("start mic level monitor: %w", err)
 	}
+	m.mu.Lock()
 	m.micCancel = cancel
+	m.mu.Unlock()
 	return nil
 }
 
+// The cancel funcs are guarded by the same mutex as the band state. They used to
+// sit outside it while Start/Stop ran on separate tea.Cmd goroutines, so
+// navigating Home → Config → Home quickly could race and lose a cancel
+// entirely — orphaning a parec process that then read audio forever.
 func (m *linuxMonitor) StopSystem() error {
-	if m.systemCancel != nil {
-		m.systemCancel()
-		m.systemCancel = nil
-	}
 	m.mu.Lock()
+	cancel := m.systemCancel
+	m.systemCancel = nil
 	m.system = 0
 	m.systemBands = nil
 	m.systemPrev = nil
 	m.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
 	return nil
 }
 
 func (m *linuxMonitor) StopMic() error {
-	if m.micCancel != nil {
-		m.micCancel()
-		m.micCancel = nil
-	}
 	m.mu.Lock()
+	cancel := m.micCancel
+	m.micCancel = nil
 	m.mic = 0
 	m.micBands = nil
 	m.micPrev = nil
 	m.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
 	return nil
 }
 
@@ -236,3 +246,7 @@ func (m *linuxMonitor) startStream(device string, onChunk func(buf []byte, peak 
 
 	return cancel, nil
 }
+
+// LiveWhenIdle is true: parec streams the sink monitor whether or not anoted is
+// recording, so the meter has real data to show while idle.
+func (m *linuxMonitor) LiveWhenIdle() bool { return true }

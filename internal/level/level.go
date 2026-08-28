@@ -18,6 +18,12 @@ type Monitor interface {
 	StopMic() error
 	Read() LevelSnapshot
 	Close() error
+
+	// LiveWhenIdle reports whether Read can return non-zero levels while
+	// nothing is being recorded. Backends that are only fed PCM by the recorder
+	// return false, which lets the UI stop ticking a meter that can only ever
+	// draw zeros — and keeps that platform knowledge out of internal/tui.
+	LiveWhenIdle() bool
 }
 
 // NewMonitor returns a platform-specific level monitor.

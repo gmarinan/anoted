@@ -129,7 +129,10 @@ func Default() Config {
 					Patterns: []string{"meet.google.com", "Google Meet", "Meet -", "Meet |"},
 				},
 				"teams": {
-					Patterns: []string{"teams.microsoft.com", "Meeting with", "| Meet", "In a call"},
+					// "| Meet" is a Google Meet tab title, not a Teams one; it
+					// used to sit here and made every Meet call match both
+					// providers at once.
+					Patterns: []string{"teams.microsoft.com", "Meeting with", "In a call"},
 				},
 			},
 		},
@@ -214,12 +217,12 @@ func Save(path string, cfg Config) error {
 		return fmt.Errorf("marshal config: %w", err)
 	}
 
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("create config dir: %w", err)
 	}
 
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
 		return fmt.Errorf("write config %s: %w", tmp, err)
 	}
 	if err := os.Rename(tmp, path); err != nil {

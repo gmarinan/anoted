@@ -7,6 +7,7 @@ import (
 
 	"anoted/internal/config"
 	"anoted/internal/transcribe"
+	"anoted/internal/tui/components"
 	tea "charm.land/bubbletea/v2"
 )
 
@@ -112,10 +113,7 @@ func (m *Model) appendWhisperInstallLog(line string) {
 	if line == "" {
 		return
 	}
-	const max = 120
-	if len(line) > max {
-		line = line[:max-1] + "…"
-	}
+	line = components.ClampLogLine(line)
 	m.whisperInstallLog = append(m.whisperInstallLog, line)
 	if len(m.whisperInstallLog) > whisperInstallLogMax {
 		m.whisperInstallLog = m.whisperInstallLog[len(m.whisperInstallLog)-whisperInstallLogMax:]
@@ -149,6 +147,9 @@ func (m Model) handleWhisperInstallEnvelope(msg whisperInstallEnvelopeMsg) (tea.
 func (m Model) handleWhisperInstallResult(msg whisperInstallResultMsg) (tea.Model, tea.Cmd) {
 	m.whisperInstallActive = false
 	if m.whisperInstallCancel != nil {
+		// Dropping the reference without calling it leaked the context: the
+		// cancel function was never invoked anywhere in the package.
+		m.whisperInstallCancel()
 		m.whisperInstallCancel = nil
 	}
 

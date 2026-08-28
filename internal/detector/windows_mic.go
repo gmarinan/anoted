@@ -4,6 +4,7 @@ package detector
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"anoted/internal/audio"
@@ -26,13 +27,24 @@ func (d *windowsDetector) pollMic(ctx context.Context) (Snapshot, bool) {
 		return Snapshot{State: MeetingState{Warning: err.Error()}, CheckedAt: time.Now()}, false
 	}
 
-	titles := d.windowTitles(ctx)
+	// windowTitles spawns PowerShell, which costs hundreds of milliseconds of
+	// cold-start CPU. When nothing is capturing the mic — the normal idle case —
+	// the loop below never runs and the titles are never read, so resolving them
+	// eagerly burned a PowerShell process every poll for nothing.
+	var (
+		titles     []string
+		titlesOnce sync.Once
+	)
+	lazyTitles := func() []string {
+		titlesOnce.Do(func() { titles = d.windowTitles(ctx) })
+		return titles
+	}
 
 	for _, c := range captures {
 		if snap, ok := snapshotFromMicCapture(c, d.cfg.Providers); ok {
 			return snap, true
 		}
-		if snap, ok := snapshotFromBrowserMicAndTitles(c, titles, d.cfg.Providers); ok {
+		if snap, ok := snapshotFromBrowserMicAndTitles(c, lazyTitles(), d.cfg.Providers); ok {
 			return snap, true
 		}
 	}

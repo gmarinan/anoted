@@ -200,6 +200,15 @@ func (m Model) handleDetection(msg detectionResultMsg) (tea.Model, tea.Cmd) {
 		m.autoRecordFailures = 0
 	}
 
+	// Drives the poll-interval backoff in pollInterval(). Any sign of a meeting
+	// resets it so detection latency stays at the configured interval when it
+	// actually matters.
+	if msg.snap.State.InMeeting || wasInMeeting || m.recording {
+		m.idlePolls = 0
+	} else if m.idlePolls < idlePollsLong {
+		m.idlePolls++
+	}
+
 	m.detection = msg.snap.State
 	if msg.snap.State.InMeeting {
 		m.lastMeetingSessionKey = meetingSessionKey(msg.snap.State)
@@ -287,6 +296,7 @@ func (m Model) handleRecordToggle(msg recordToggleResultMsg) (tea.Model, tea.Cmd
 	m.recordOpAt = time.Time{}
 	if msg.err != nil {
 		m.recording = false
+		m.sessionID = 0
 		m.errMsg = msg.err.Error()
 		slog.Warn("record toggle failed", "err", msg.err, "in_meeting", m.detection.InMeeting, "auto_record", m.autoRecord)
 		if m.autoRecord && m.detection.InMeeting {
@@ -317,6 +327,7 @@ func (m Model) handleRecordToggle(msg recordToggleResultMsg) (tea.Model, tea.Cmd
 		m.recording = true
 		m.recordStart = st.StartedAt
 		m.sessionDir = st.SessionDir
+		m.sessionID = msg.sessionID
 		m.awaitingRecordConfirm = false
 		m.wantAutoRecordResume = false
 		m.resumeForSessionKey = ""
@@ -329,10 +340,16 @@ func (m Model) handleRecordToggle(msg recordToggleResultMsg) (tea.Model, tea.Cmd
 		m.systemBands = nil
 		m.micBands = nil
 		m.syncTrayState()
-		return m, m.scheduleDurationTick()
+		// Restart the level chain under a fresh generation. On recorder-fed
+		// backends the tick is suppressed while idle, so the meter would stay
+		// dead for the whole recording without this.
+		m.levelGen++
+		m.levelQuiet = 0
+		return m, tea.Batch(m.scheduleDurationTick(), m.scheduleLevelTick(m.levelGen))
 	}
 
 	m.recording = false
+	m.sessionID = 0
 	m.stopWhenMeetingEnds = false
 	m.meetingAbsentSince = time.Time{}
 	if msg.meetingEnded {
@@ -375,7 +392,9 @@ func (m Model) handleRecordToggle(msg recordToggleResultMsg) (tea.Model, tea.Cmd
 		m, transcribeCmd = m.startTranscribe(savedDir)
 		cmds = append(cmds, transcribeCmd)
 	}
-	cmds = append(cmds, m.restartHomeLevelsAfterRecord())
+	m.levelGen++
+	m.levelQuiet = 0
+	cmds = append(cmds, m.restartHomeLevelsAfterRecord(), m.scheduleLevelTick(m.levelGen))
 	// Route the resume through autoRecordAction rather than dispatching
 	// directly, so the confirmation requirement and restart cooldown still
 	// apply — going straight to dispatch skipped both.
@@ -527,11 +546,12 @@ func startRecordingCmd(m Model) tea.Cmd {
 			return recordToggleResultMsg{err: err}
 		}
 		st := rec.Status()
+		var sessionID int64
 		if store != nil {
 			// A dropped insert here used to be invisible: the audio and
 			// metadata.json existed on disk but the session never appeared in
 			// the Sessions tab and could not be opened or transcribed.
-			if _, err := store.Create(session.Record{
+			id, err := store.Create(session.Record{
 				Dir:       st.SessionDir,
 				Provider:  p,
 				Platform:  platformName,
@@ -546,12 +566,15 @@ func startRecordingCmd(m Model) tea.Cmd {
 					AutoRecord: sessCfg.AutoRecord,
 					Manual:     sessCfg.Manual,
 				},
-			}); err != nil {
+			})
+			if err != nil {
 				slog.Error("failed to record session in store",
 					"session_dir", st.SessionDir, "err", err)
+			} else {
+				sessionID = id
 			}
 		}
-		return recordToggleResultMsg{recording: true}
+		return recordToggleResultMsg{recording: true, sessionID: sessionID}
 	}
 }
 
@@ -568,45 +591,66 @@ func (m Model) restartHomeLevelsAfterRecord() tea.Cmd {
 func stopRecordingCmd(m Model, becauseMeetingEnded bool) tea.Cmd {
 	rec := m.deps.Recorder
 	store := m.deps.Store
+	sessionID := m.sessionID
 	return func() tea.Msg {
 		stopBegin := time.Now()
 		st := rec.Status()
 		sessionDir := st.SessionDir
-		err := rec.Stop(context.Background())
+		stopErr := rec.Stop(context.Background())
 		slog.Info("record stop finished",
 			"duration_ms", time.Since(stopBegin).Milliseconds(),
 			"meeting_ended", becauseMeetingEnded,
 			"session_dir", sessionDir,
-			"err", err,
+			"session_id", sessionID,
+			"err", stopErr,
 		)
-		if err != nil {
-			return recordToggleResultMsg{err: err}
+
+		// Close the row even when Stop failed. Returning early left the session
+		// marked active forever and skipped auto-transcription of audio that was
+		// usually complete on disk.
+		status := session.StatusStopped
+		if stopErr != nil {
+			status = session.StatusError
 		}
-		if store != nil && sessionDir != "" {
-			ended := time.Now()
-			recs, listErr := store.List(1)
-			switch {
-			case listErr != nil:
-				slog.Error("failed to load session for update", "session_dir", sessionDir, "err", listErr)
-			case len(recs) > 0 && recs[0].Dir == sessionDir:
-				recs[0].EndedAt = ended
-				recs[0].Status = session.StatusStopped
-				recs[0].Metadata.EndedAt = ended
-				recs[0].Metadata.Duration = ended.Sub(recs[0].StartedAt).Round(time.Second).String()
-				if err := store.Update(recs[0]); err != nil {
-					slog.Error("failed to mark session stopped", "session_dir", sessionDir, "err", err)
-				}
-			default:
-				// The row is missing or belongs to a different session, so the
-				// recording stays marked active and never shows its duration.
-				slog.Warn("no matching session row to close", "session_dir", sessionDir)
-			}
+		closeSessionRow(store, sessionID, sessionDir, status)
+
+		if stopErr != nil {
+			return recordToggleResultMsg{err: stopErr, savedDir: sessionDir}
 		}
 		return recordToggleResultMsg{
 			recording:    false,
 			meetingEnded: becauseMeetingEnded,
 			savedDir:     sessionDir,
 		}
+	}
+}
+
+// closeSessionRow stamps the end time on the row this recording created.
+//
+// It used to re-find the row with List(1) and compare directories. started_at
+// has second precision, so with two anoted instances sharing one database — easy
+// to hit with autostart plus a manual launch — the newest row could belong to
+// the other instance, and this instance's session stayed active with no end time
+// or duration for good. Carrying the id from Create removes the guesswork.
+func closeSessionRow(store session.Store, id int64, dir string, status session.Status) {
+	if store == nil || id == 0 {
+		if dir != "" {
+			slog.Warn("no session row to close", "session_dir", dir, "session_id", id)
+		}
+		return
+	}
+	rec, err := store.Get(id)
+	if err != nil {
+		slog.Error("failed to load session for update", "session_id", id, "session_dir", dir, "err", err)
+		return
+	}
+	ended := time.Now()
+	rec.EndedAt = ended
+	rec.Status = status
+	rec.Metadata.EndedAt = ended
+	rec.Metadata.Duration = ended.Sub(rec.StartedAt).Round(time.Second).String()
+	if err := store.Update(rec); err != nil {
+		slog.Error("failed to mark session stopped", "session_id", id, "session_dir", dir, "err", err)
 	}
 }
 

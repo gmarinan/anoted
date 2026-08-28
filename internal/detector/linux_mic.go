@@ -4,8 +4,10 @@ package detector
 
 import (
 	"context"
+	"fmt"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -35,7 +37,14 @@ func (d *linuxDetector) pollMicOnly(ctx context.Context) (Snapshot, error) {
 	if found {
 		return snap, nil
 	}
-	return Snapshot{State: MeetingState{Warning: d.platformWarning()}, CheckedAt: time.Now()}, nil
+	// Keep any warning pollMic produced. Dropping it meant that once pactl
+	// started failing (PipeWire restart moving the pulse socket, say) detection
+	// silently reported "idle" forever with nothing on screen to explain why.
+	warning := snap.State.Warning
+	if warning == "" {
+		warning = d.platformWarning()
+	}
+	return Snapshot{State: MeetingState{Warning: warning}, CheckedAt: time.Now()}, nil
 }
 
 func (d *linuxDetector) pollMic(ctx context.Context) (Snapshot, bool) {
@@ -99,14 +108,20 @@ func (d *linuxDetector) platformWarning() string {
 	return ""
 }
 
+// pactlPath is resolved once: this runs on every detection poll for the life of
+// the process, and $PATH does not change underneath a running anoted.
+var pactlPath = sync.OnceValues(func() (string, error) {
+	return exec.LookPath("pactl")
+})
+
 func listMicCaptures(ctx context.Context) ([]micCapture, error) {
-	path, err := exec.LookPath("pactl")
+	path, err := pactlPath()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("find pactl: %w", err)
 	}
 	out, err := exec.CommandContext(ctx, path, "list", "source-outputs").Output()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("pactl list source-outputs: %w", err)
 	}
 
 	var captures []micCapture

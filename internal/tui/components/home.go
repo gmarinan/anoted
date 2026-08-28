@@ -90,13 +90,13 @@ func (v HomeView) statusBox(width int) string {
 		lines = append(lines, row("Output", truncate(v.SessionDir, width-8)))
 	}
 	if v.AwaitingConfirm {
-		lines = append(lines, warnStyle.Render("⚠ "+v.ConfirmPrompt))
+		lines = append(lines, warnStyle.Render(LabelWarn+" "+v.ConfirmPrompt))
 	}
 	if v.StatusNote != "" {
 		lines = append(lines, okStyle.Render("✓ "+v.StatusNote))
 	}
 	if v.DetectionWarn != "" {
-		lines = append(lines, warnStyle.Render("⚠ "+v.DetectionWarn))
+		lines = append(lines, warnStyle.Render(LabelWarn+" "+v.DetectionWarn))
 	}
 	if v.ErrorMsg != "" {
 		lines = append(lines, errStyle.Render("✗ "+v.ErrorMsg))
@@ -149,12 +149,12 @@ func displayState(state string) string {
 	}
 }
 
-// truncate counts runes, not bytes: slicing a multibyte character in half
-// emits invalid UTF-8 and the terminal renders a replacement glyph.
+// truncate clamps s to max terminal cells.
+//
+// It counted runes before, which is wrong twice over: a CJK character or emoji
+// occupies two cells, so a "12 rune" device name could render 24 columns wide
+// and blow out its box; and reserving three runes for a one-cell ellipsis threw
+// away two columns at every call site.
 func truncate(s string, max int) string {
-	r := []rune(s)
-	if max <= 3 || len(r) <= max {
-		return s
-	}
-	return string(r[:max-3]) + "…"
+	return clampStyledWidth(s, max)
 }

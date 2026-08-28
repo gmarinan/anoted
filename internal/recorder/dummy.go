@@ -5,13 +5,19 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"anoted/internal/session"
 )
 
 // DummyRecorder creates empty WAV placeholders and metadata for MVP testing.
+//
+// The mutex is not optional: Start runs on its own goroutine (see the TUI's
+// record command) while the poll tick reads Status from the Bubble Tea loop, and
+// this recorder is reachable in production as the fallback backend.
 type DummyRecorder struct {
+	mu      sync.Mutex
 	backend string
 	status  RecorderStatus
 }
@@ -26,20 +32,18 @@ func NewDummyRecorder() *DummyRecorder {
 func (r *DummyRecorder) Name() string { return "dummy" }
 
 func (r *DummyRecorder) Start(_ context.Context, cfg SessionConfig) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if r.status.Status == StatusRecording {
 		return fmt.Errorf("already recording")
 	}
 
-	dirName := fmt.Sprintf("%s_%s",
-		time.Now().Format("2006-01-02_15-04-05"),
-		cfg.Provider,
-	)
-	dir := filepath.Join(cfg.OutputRoot, dirName)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return fmt.Errorf("create session dir: %w", err)
+	dir, err := createSessionDir(cfg)
+	if err != nil {
+		return err
 	}
 
-	if err := os.WriteFile(filepath.Join(dir, SessionAudioFile), minimalWAV(cfg.SampleRate, cfg.Channels), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, SessionAudioFile), minimalWAV(cfg.SampleRate, cfg.Channels), SessionFileMode); err != nil {
 		return fmt.Errorf("write %s: %w", SessionAudioFile, err)
 	}
 
@@ -66,6 +70,8 @@ func (r *DummyRecorder) Start(_ context.Context, cfg SessionConfig) error {
 }
 
 func (r *DummyRecorder) Stop(_ context.Context) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if r.status.Status != StatusRecording {
 		return nil
 	}
@@ -89,6 +95,8 @@ func (r *DummyRecorder) Stop(_ context.Context) error {
 }
 
 func (r *DummyRecorder) Status() RecorderStatus {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	return r.status
 }
 

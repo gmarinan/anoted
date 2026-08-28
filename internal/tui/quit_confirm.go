@@ -72,6 +72,11 @@ func (m Model) performQuit() (tea.Model, tea.Cmd) {
 	if m.gpuInstallCancel != nil {
 		m.gpuInstallCancel()
 	}
+	// Whisper installs are multi-gigabyte pip downloads. Without this, quitting
+	// left one running with no UI attached and no way to stop it.
+	if m.whisperInstallCancel != nil {
+		m.whisperInstallCancel()
+	}
 	var cmds []tea.Cmd
 	if m.deps.LevelMonitor != nil {
 		cmds = append(cmds, func() tea.Msg {

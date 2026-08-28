@@ -9,7 +9,7 @@ import (
 
 const autoRecordRetryDelay = 2 * time.Second
 const maxAutoRecordFailures = 3
-const autoRecordGiveUpMsg = "Auto-record falló — pulsa r para reintentar"
+const autoRecordGiveUpMsg = "Auto-record failed — press r to retry"
 
 // autoRecordStartAction describes what handleDetection should do for auto-record.
 type autoRecordStartAction int

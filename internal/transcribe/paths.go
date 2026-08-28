@@ -20,7 +20,7 @@ func OutputDir(tcfg config.TranscriptionConfig, sessionDir string) (string, erro
 	if err != nil {
 		return "", fmt.Errorf("expand transcription output_dir: %w", err)
 	}
-	if err := os.MkdirAll(base, 0o755); err != nil {
+	if err := os.MkdirAll(base, 0o700); err != nil {
 		return "", fmt.Errorf("create transcript dir %s: %w", base, err)
 	}
 	return base, nil

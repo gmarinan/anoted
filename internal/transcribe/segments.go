@@ -48,7 +48,7 @@ func writeSegmentFiles(dir, fileBase string, segs []Segment, formats []string, l
 			continue
 		}
 		path := filepath.Join(dir, fileBase+ext)
-		if err := os.WriteFile(path, body, 0o644); err != nil {
+		if err := os.WriteFile(path, body, 0o600); err != nil {
 			return written, fmt.Errorf("write %s: %w", path, err)
 		}
 		written = append(written, path)

@@ -152,3 +152,8 @@ func (m *windowsMonitor) resolveMic(sourceID string) (string, error) {
 	}
 	return mic, nil
 }
+
+// LiveWhenIdle is false: StartSystem and StartMic are deliberate no-ops here
+// (opening a loopback client reconfigures the Windows audio engine), so bands
+// only arrive via FeedSystemPCM/FeedMicPCM during a recording.
+func (m *windowsMonitor) LiveWhenIdle() bool { return false }

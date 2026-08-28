@@ -5,7 +5,6 @@ package recorder
 import (
 	"context"
 	"fmt"
-	"os"
 	"os/exec"
 	"sync"
 	"time"
@@ -47,8 +46,8 @@ func (r *LinuxPipeWireRecorder) Start(_ context.Context, sess SessionConfig) err
 		return fmt.Errorf("already recording")
 	}
 
-	dir := sessionDir(sess)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	dir, err := createSessionDir(sess)
+	if err != nil {
 		return err
 	}
 
@@ -85,11 +84,24 @@ func (r *LinuxPipeWireRecorder) Start(_ context.Context, sess SessionConfig) err
 }
 
 func (r *LinuxPipeWireRecorder) Stop(_ context.Context) error {
+	// captureProc.Stop blocks for up to captureStopTimeout waiting for ffmpeg to
+	// exit. Holding r.mu across that wait also blocked Status(), which the poll
+	// tick calls from the Bubble Tea Update loop — so an ffmpeg that ignored
+	// SIGINT froze the entire UI for five seconds. Take the capture handle under
+	// the lock, wait without it, then reacquire to publish the result.
 	r.mu.Lock()
-	defer r.mu.Unlock()
-	stopErr := r.capture.Stop()
+	capture := r.capture
 	r.capture = nil
 	if r.status.Status == StatusRecording {
+		r.status.Status = StatusStopping
+	}
+	r.mu.Unlock()
+
+	stopErr := capture.Stop()
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.status.Status == StatusStopping {
 		if r.status.SessionDir != "" && !r.status.StartedAt.IsZero() {
 			_ = session.UpdateMetadataEnded(r.status.SessionDir, r.status.StartedAt, time.Now())
 		}

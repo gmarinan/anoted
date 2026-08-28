@@ -85,6 +85,7 @@ type Model struct {
 	statusNote           string
 	recordStart          time.Time
 	sessionDir           string
+	sessionID            int64 // row id of the in-flight recording; 0 when not recording
 	errMsg               string
 	doctorReport         doctor.Report
 	sessions             []session.Record
@@ -114,7 +115,9 @@ type Model struct {
 	systemBands []float64
 	micBands    []float64
 	levelGen    int
-	levelFrame  uint64 // bumps each level tick so View content changes every frame
+	levelFrame  uint64 // bumps each level tick; purely informational
+	levelQuiet  int    // consecutive unchanged level reads, drives tick backoff
+	idlePolls   int    // consecutive detection polls with no meeting, drives poll backoff
 
 	// Config interactive menu
 	configSection      int
@@ -180,13 +183,39 @@ func NewModel(deps Deps) Model {
 	return m
 }
 
+// pollInterval is the delay before the next detection poll. Each poll forks an
+// external tool (pactl, ps, xdotool, PowerShell), which is by far the most
+// expensive recurring thing anoted does. Once nothing has happened for a while
+// the interval stretches out; any detected meeting snaps it back immediately,
+// so the only cost is a slower first detection on a long-idle machine.
 func (m Model) pollInterval() time.Duration {
+	base := m.pollIntervalBase()
+	if m.recording || m.detection.InMeeting {
+		return base
+	}
+	switch {
+	case m.idlePolls >= idlePollsLong:
+		return base * 5
+	case m.idlePolls >= idlePollsShort:
+		return base * 3
+	default:
+		return base
+	}
+}
+
+func (m Model) pollIntervalBase() time.Duration {
 	ms := m.deps.Config.Detection.PollIntervalMS
 	if ms <= 0 {
 		ms = 2000
 	}
 	return time.Duration(ms) * time.Millisecond
 }
+
+const (
+	// ~2 min of quiet at the default 2s base interval, then ~10 min.
+	idlePollsShort = 60
+	idlePollsLong  = 160
+)
 
 func (m Model) levelTickInterval() time.Duration {
 	ms := m.deps.Config.Audio.LevelUITickMS
@@ -237,6 +266,7 @@ type recordToggleResultMsg struct {
 	err          error
 	meetingEnded bool
 	savedDir     string
+	sessionID    int64
 }
 
 type audioCatalogMsg struct {

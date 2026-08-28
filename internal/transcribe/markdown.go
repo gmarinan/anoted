@@ -57,7 +57,7 @@ func WriteMeetingMarkdown(sessionDir, outDir string, cfg config.TranscriptionCon
 	b.Write(body)
 
 	outPath := filepath.Join(outDir, markdownFilename(cfg, sessionDir))
-	if err := os.WriteFile(outPath, []byte(b.String()), 0o644); err != nil {
+	if err := os.WriteFile(outPath, []byte(b.String()), 0o600); err != nil {
 		return fmt.Errorf("write %s: %w", outPath, err)
 	}
 	return nil

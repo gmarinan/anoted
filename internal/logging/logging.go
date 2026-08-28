@@ -20,7 +20,7 @@ func Setup(level slog.Level) (*slog.Logger, error) {
 		return slog.New(handler), nil
 	}
 
-	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		return slog.New(handler), nil
 	}
@@ -37,7 +37,7 @@ func SetupFile(level slog.Level) (*slog.Logger, error) {
 	if err != nil {
 		return slog.New(slog.NewJSONHandler(io.Discard, opts)), nil
 	}
-	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		return slog.New(slog.NewJSONHandler(io.Discard, opts)), nil
 	}

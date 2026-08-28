@@ -5,7 +5,6 @@ package recorder
 import (
 	"context"
 	"fmt"
-	"os"
 	"os/exec"
 	"sync"
 	"time"
@@ -41,8 +40,8 @@ func (r *LinuxFFmpegRecorder) Start(_ context.Context, sess SessionConfig) error
 		return fmt.Errorf("already recording")
 	}
 
-	dir := sessionDir(sess)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	dir, err := createSessionDir(sess)
+	if err != nil {
 		return err
 	}
 

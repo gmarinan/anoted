@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -25,6 +26,17 @@ type Check struct {
 type Report struct {
 	Platform platform.Info
 	Checks   []Check
+}
+
+// Failures returns the names of every check that failed outright.
+func (r Report) Failures() []string {
+	var out []string
+	for _, c := range r.Checks {
+		if c.Status == "fail" {
+			out = append(out, c.Name)
+		}
+	}
+	return out
 }
 
 // Run executes system diagnostics.
@@ -84,9 +96,17 @@ func outputDirCheck(cfg config.Config) Check {
 	if err != nil {
 		return Check{Name: "output_dir", Status: "fail", Detail: err.Error()}
 	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return Check{Name: "output_dir", Status: "fail", Detail: err.Error()}
 	}
+	// MkdirAll returns nil for an existing directory whatever its mode, so a
+	// read-only mount or a 0555 directory passed the check and only failed once
+	// a meeting had already started. Prove writability instead.
+	probe := filepath.Join(dir, ".anoted-write-test")
+	if err := os.WriteFile(probe, nil, 0o600); err != nil {
+		return Check{Name: "output_dir", Status: "fail", Detail: fmt.Sprintf("%s is not writable: %v", dir, err)}
+	}
+	_ = os.Remove(probe)
 	return Check{Name: "output_dir", Status: "ok", Detail: dir}
 }
 

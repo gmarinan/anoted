@@ -12,6 +12,7 @@ import (
 	"anoted/internal/session"
 	"anoted/internal/transcribe"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // DoctorView renders the Doctor tab.
@@ -394,15 +395,21 @@ func (v SessionsView) tableBox(width int) string {
 
 	title := fmt.Sprintf("Sessions (%d/%d · %d total)", v.Page, v.PageCount, v.TotalCount)
 	header := v.tableHeader()
-	lines := []string{subtleStyle.Render(header)}
+	lines := []string{subtleStyle.Render("  " + header)}
 	for i, r := range v.PageRecords {
 		line := v.formatRow(r, width)
-		line = clampStyledWidth(line, width-4)
 		if i == v.Cursor {
+			// Strip the row's own escapes first: Style.Render only wraps the
+			// string, so the first internal reset cancelled the highlight and
+			// left the right half of the selected row unhighlighted. The marker
+			// carries the selection where colour is unavailable.
+			line = clampStyledWidth(ansi.Strip(line), width-6)
 			line = lipgloss.NewStyle().
 				Background(lipgloss.Color("63")).
 				Foreground(lipgloss.Color("229")).
-				Render(line)
+				Render("▸ " + line)
+		} else {
+			line = "  " + clampStyledWidth(line, width-6)
 		}
 		lines = append(lines, line)
 	}
@@ -445,32 +452,23 @@ func (v SessionsView) formatRow(r session.Record, tableWidth int) string {
 	} else if v.compactTable() {
 		dateFmt = "06-01-02 15:04"
 	}
+	id := fmt.Sprintf("#%-3d", r.ID)
+	date := session.FormatLocalTime(r.StartedAt, dateFmt)
 	if v.ultraCompactTable() {
-		return fmt.Sprintf("#%-3d  %-11s  %-8s  %s",
-			r.ID,
-			session.FormatLocalTime(r.StartedAt, dateFmt),
-			meet,
-			tx,
-		)
+		return joinCells(padCell(id, 4), padCell(date, 11), padCell(meet, 8), tx)
 	}
 	if v.compactTable() {
-		return fmt.Sprintf("#%-3d  %-14s  %-9s  %-6s  %s",
-			r.ID,
-			session.FormatLocalTime(r.StartedAt, dateFmt),
-			meet,
-			truncate(dur, 6),
-			tx,
-		)
+		return joinCells(padCell(id, 4), padCell(date, 14), padCell(meet, 9),
+			padCell(dur, 6), tx)
 	}
 	path := filepath.Join(r.Dir, sessionAudioName)
-	return fmt.Sprintf("#%-3d  %-16s  %-12s  %-8s  %-28s  %s",
-		r.ID,
-		session.FormatLocalTime(r.StartedAt, dateFmt),
-		meet,
-		truncate(dur, 8),
-		tx,
-		truncate(path, 36),
-	)
+	return joinCells(padCell(id, 4), padCell(date, 16), padCell(meet, 12),
+		padCell(dur, 8), padCell(tx, 28), truncate(path, 36))
+}
+
+// joinCells separates table cells with the same two spaces the header uses.
+func joinCells(cells ...string) string {
+	return strings.Join(cells, "  ")
 }
 
 func meetColWidth(v SessionsView) int {

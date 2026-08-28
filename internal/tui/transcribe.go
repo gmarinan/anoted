@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"anoted/internal/transcribe"
+	"anoted/internal/tui/components"
 	tea "charm.land/bubbletea/v2"
 )
 
@@ -43,10 +44,14 @@ func transcribeSessionCmd(m Model, sessionDir string, ctx context.Context) tea.C
 				return
 			}
 			eta := transcribe.ComputeETA(p.Percent, time.Since(started))
+			// Progress is best-effort: drop the update rather than block the
+			// transcriber if the UI is behind. The ctx.Done case that used to
+			// sit here was unreachable — a select with a default never blocks,
+			// so it only made the cancellation path look handled. The real
+			// check is the ctx.Err() guard above.
 			select {
 			case ch <- transcribeProgressMsg{percent: p.Percent, segmentText: p.SegmentText, eta: eta}:
 			default:
-			case <-ctx.Done():
 			}
 		})
 		sendTranscribeMsg(ch, ctx, transcribeResultMsg{result: res, err: err, sessionDir: sessionDir})
@@ -88,10 +93,7 @@ func (m *Model) appendTranscribeLog(line string) {
 	if line == "" {
 		return
 	}
-	const max = 120
-	if len(line) > max {
-		line = line[:max-1] + "…"
-	}
+	line = components.ClampLogLine(line)
 	m.transcribeLog = append(m.transcribeLog, line)
 	if len(m.transcribeLog) > transcribeLogMax {
 		m.transcribeLog = m.transcribeLog[len(m.transcribeLog)-transcribeLogMax:]

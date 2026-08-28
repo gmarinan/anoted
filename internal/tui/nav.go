@@ -61,24 +61,35 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleQuitConfirmKey(key)
 	}
 
+	// Config text fields must see "q" before the global quit binding does.
+	// Otherwise typing a path like ~/Documents/quarterly, the language code "qu"
+	// or any detection pattern containing a q quit the app outright and threw
+	// away the edit. ctrl+c stays global as the escape hatch.
+	if m.screen == ScreenConfig && m.configAbsorbsKeys() && key != "ctrl+c" {
+		return m.handleConfigKey(msg)
+	}
+
 	switch key {
 	case "q", "ctrl+c":
 		return m.requestQuit()
 	}
 
 	if m.screen == ScreenConfig {
-		if !m.configAbsorbsKeys() && m.isTabSwitchKey(key) {
+		if m.isTabSwitchKey(key) {
 			model, cmd, _ := m.handleTabSwitch(key)
 			return model, cmd
 		}
 		return m.handleConfigKey(msg)
 	}
 
+	// Dismiss Home overlays before leaving, not after: handleTabSwitch already
+	// returns the next model, so clearing the flags on the old receiver here was
+	// discarded and the delete-confirm modal reappeared on the way back.
+	if m.screen == ScreenMain && m.isTabSwitchKey(key) {
+		m.sessionsOpenerPicker = false
+		m.sessionsDeleteConfirm = false
+	}
 	if model, cmd, ok := m.handleTabSwitch(key); ok {
-		if m.screen == ScreenMain {
-			m.sessionsOpenerPicker = false
-			m.sessionsDeleteConfirm = false
-		}
 		return model, cmd
 	}
 
