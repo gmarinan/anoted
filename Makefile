@@ -1,4 +1,4 @@
-.PHONY: build test lint lint-windows run clean build-windows build-windows-helper
+.PHONY: build test test-race lint lint-windows run clean build-windows build-windows-helper
 
 BINARY=anoted
 # Derived from git so every build identifies its commit; override with
@@ -20,16 +20,27 @@ test:
 
 lint:
 	go vet ./...
-	@test -z "$$(gofmt -l .)" || (echo "run gofmt -w ." && exit 1)
+	@test -z "$$(gofmt -l ./cmd ./internal ./tools)" || (echo "run gofmt -w ." && exit 1)
+	@command -v golangci-lint >/dev/null 2>&1 \
+		&& golangci-lint run \
+		|| echo "golangci-lint not installed; skipping (see .golangci.yml)"
 
 # Windows-tagged code is never compiled by `make lint` on Linux, so bugs there
 # reach users uncaught. This checks the packages that do not need cgo; a full
 # check needs MinGW-w64 and is what `make build-windows` does.
+#
+# detector, setup, transcribe and recorder cannot be added here: on Windows they
+# all reach internal/wasapi through internal/audio, which needs cgo. That is a
+# large share of the Windows-specific surface, and the only thing that really
+# covers it is the windows-latest job in .github/workflows/ci.yml.
 lint-windows:
 	CGO_ENABLED=0 GOOS=windows go build \
 		./internal/autostart/ ./internal/config/ ./internal/session/ \
 		./internal/folderpicker/ ./internal/open/ ./internal/platform/ \
 		./internal/logging/ ./internal/tray/ ./tools/windows-recorder/
+
+test-race:
+	go test -race ./...
 
 run: build
 	./bin/$(BINARY) watch

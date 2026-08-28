@@ -139,19 +139,30 @@ Other terminals: `kitty --class=anoted`, `foot --app-id=anoted`.
 
 ## TUI keys
 
+Sessions live inside the Home tab; there is no separate Sessions screen.
+
 | Key | Action |
 |-----|--------|
-| `1`–`4` | Switch screens: Home, Doctor, Sessions, Config |
-| `Tab` | Switch audio subsection (Output / Microphone) on Home |
-| `q` | Quit |
+| `1`–`3` | Switch tabs: Home, Doctor, Config |
+| `q` | Quit (ignored while editing a Config text field — use `Esc` first) |
+| `Ctrl+C` | Quit from anywhere |
 | `r` | Start/stop manual recording |
 | `a` | Toggle auto-record |
-| `y` / `n` | Confirm or dismiss auto-record prompt |
-| `Ctrl+S` | Save config (Config screen) |
-| `↑`/`↓` | Navigate audio devices (Home) or sessions list, or YAML editor lines |
-| `Enter` | Select audio device (Home) / new line in config editor |
-| `o` / `p` | Open session folder / play recording (Sessions) |
-| `R` | Refresh current screen |
+| `y` / `n` | Confirm or dismiss the auto-record prompt |
+| `↑`/`↓` | Navigate the sessions list, config fields or device picker |
+| `[` / `]` | Previous / next page of sessions |
+| `t` | Transcribe the selected session (`s` stops a running transcription) |
+| `o` / `p` | Open the session folder / play the recording |
+| `f` | Choose which file manager `o` uses |
+| `d` | Delete the selected session |
+| `Enter` | Apply the focused field, device or modal choice |
+| `Esc` | Close a modal or cancel an edit |
+| `R` | Refresh the current tab |
+| `S` | Open the setup wizard |
+| `i` / `g` | Install Whisper / GPU support (Doctor) |
+| `PgUp`/`PgDn` | Scroll an install log (Doctor) |
+
+Config is saved automatically; there is no explicit save key.
 
 ## Configuration
 

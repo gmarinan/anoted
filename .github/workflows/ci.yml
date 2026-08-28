@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+      - run: go build ./...
+      - run: go vet ./...
+      - name: gofmt
+        run: test -z "$(gofmt -l ./cmd ./internal ./tools)" || (gofmt -l ./cmd ./internal ./tools; exit 1)
+      - run: go test -race ./...
+
+  # The Windows half of the codebase — WASAPI capture, COM device enumeration,
+  # the window-title detector — needs cgo and never compiles during normal Linux
+  # development. A real Windows runner is the only way it gets built at all.
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+      - run: go build ./...
+      - run: go vet ./...
+      - run: go test -race ./...
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+      # Second pass over the build-tagged Windows sources the run above cannot
+      # see. Limited to packages that build without cgo — everything reaching
+      # internal/wasapi is covered by the windows-latest job instead.
+      - name: cross-compile check (windows tags)
+        run: make lint-windows

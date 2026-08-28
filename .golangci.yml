@@ -1,0 +1,49 @@
+version: "2"
+
+run:
+  # Windows-only files are behind build tags, so they are invisible to a Linux
+  # run. CI lints with GOOS=windows as a second job (see .github/workflows/ci.yml).
+  build-tags: []
+
+linters:
+  enable:
+    # Every finding below was a real bug in this codebase at some point.
+    - errcheck      # silently dropped config.Save errors
+    - govet
+    - staticcheck
+    - ineffassign
+    - unused
+    - bodyclose
+    - contextcheck  # Recorder.Start took a ctx it never honoured
+    - noctx
+    - copyloopvar
+    - wrapcheck     # never return a bare error that loses the call site
+
+  settings:
+    wrapcheck:
+      ignore-sigs:
+        - .Errorf(
+        - errors.New(
+        - errors.Join(
+        - .Wrap(
+        - .WithMessage(
+    staticcheck:
+      checks:
+        - all
+
+  exclusions:
+    rules:
+      # Tests may ignore errors and skip wrapping for brevity.
+      - path: _test\.go
+        linters:
+          - errcheck
+          - wrapcheck
+          - noctx
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+formatters:
+  enable:
+    - gofmt
