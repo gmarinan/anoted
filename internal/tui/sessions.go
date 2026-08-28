@@ -15,15 +15,15 @@ func (m Model) sessionsPageCount() int {
 	if len(m.sessions) == 0 {
 		return 1
 	}
-	return (len(m.sessions) + sessionsPageSize - 1) / sessionsPageSize
+	return (len(m.sessions) + m.sessionsPageSize() - 1) / m.sessionsPageSize()
 }
 
 func (m Model) sessionsPageRecords() []session.Record {
-	start := m.sessionsPage * sessionsPageSize
+	start := m.sessionsPage * m.sessionsPageSize()
 	if start >= len(m.sessions) {
 		return nil
 	}
-	end := start + sessionsPageSize
+	end := start + m.sessionsPageSize()
 	if end > len(m.sessions) {
 		end = len(m.sessions)
 	}
@@ -31,7 +31,7 @@ func (m Model) sessionsPageRecords() []session.Record {
 }
 
 func (m Model) selectedSession() (session.Record, bool) {
-	idx := m.sessionsPage*sessionsPageSize + m.sessionCursor
+	idx := m.sessionsPage*m.sessionsPageSize() + m.sessionCursor
 	if idx < 0 || idx >= len(m.sessions) {
 		return session.Record{}, false
 	}
@@ -44,15 +44,15 @@ func (m Model) clampSessionsCursor() Model {
 		m.sessionCursor = 0
 		return m
 	}
-	global := m.sessionsPage*sessionsPageSize + m.sessionCursor
+	global := m.sessionsPage*m.sessionsPageSize() + m.sessionCursor
 	if global >= len(m.sessions) {
 		global = len(m.sessions) - 1
 	}
 	if global < 0 {
 		global = 0
 	}
-	m.sessionsPage = global / sessionsPageSize
-	m.sessionCursor = global % sessionsPageSize
+	m.sessionsPage = global / m.sessionsPageSize()
+	m.sessionCursor = global % m.sessionsPageSize()
 	pageLen := len(m.sessionsPageRecords())
 	if pageLen == 0 {
 		m.sessionCursor = 0
@@ -72,15 +72,15 @@ func (m Model) sessionsNavigate(delta int) Model {
 		m.sessionCursor = 0
 		return m
 	}
-	global := m.sessionsPage*sessionsPageSize + m.sessionCursor + delta
+	global := m.sessionsPage*m.sessionsPageSize() + m.sessionCursor + delta
 	if global < 0 {
 		global = 0
 	}
 	if global >= len(m.sessions) {
 		global = len(m.sessions) - 1
 	}
-	m.sessionsPage = global / sessionsPageSize
-	m.sessionCursor = global % sessionsPageSize
+	m.sessionsPage = global / m.sessionsPageSize()
+	m.sessionCursor = global % m.sessionsPageSize()
 	return m.clampSessionsCursor()
 }
 
@@ -322,6 +322,7 @@ func (m Model) handleSessionsDeleted(msg sessionsDeletedMsg) (tea.Model, tea.Cmd
 	m.sessionsErr = ""
 	if msg.note != "" {
 		m.sessionsDesktopNote = msg.note
+		m.markStatusTransient()
 	}
 	m = m.clampSessionsCursor()
 	return m, nil
@@ -336,6 +337,7 @@ func (m Model) handleDesktopOpenerSaved(msg desktopOpenerSavedMsg) (tea.Model, t
 	m = m.applyConfig(msg.cfg)
 	m.sessionsErr = ""
 	m.sessionsDesktopNote = fmt.Sprintf("folder opener: %s", openerLabel(msg.id))
+	m.markStatusTransient()
 	return m, doctorReportCmd(m.deps.Config)
 }
 

@@ -35,6 +35,8 @@ type DoctorView struct {
 	GPUInstallLog        []string
 	GPUInstallErr        string
 	GPUCanInstall        bool
+	// InstallFrame drives the spinner on long-running installs.
+	InstallFrame uint64
 }
 
 func (v DoctorView) View() string {
@@ -72,7 +74,7 @@ func (v DoctorView) useSingleColumn() bool {
 func (v DoctorView) whisperInstallBox(width int) string {
 	var lines []string
 	if v.WhisperInstallActive {
-		lines = append(lines, warnStyle.Render("Installing Whisper (Python + venv, ~500MB)…"))
+		lines = append(lines, warnStyle.Render(Spinner(v.InstallFrame)+" Installing Whisper (Python + venv, ~500MB)…"))
 	} else if v.WhisperInstallErr != "" {
 		lines = append(lines, errStyle.Render("Install failed: "+v.WhisperInstallErr))
 	} else if v.WhisperCanInstall {
@@ -90,7 +92,7 @@ func (v DoctorView) whisperInstallBox(width int) string {
 func (v DoctorView) gpuInstallBox(width int) string {
 	var lines []string
 	if v.GPUInstallActive {
-		lines = append(lines, warnStyle.Render("Enabling GPU (PyTorch CUDA, ~1–2 GB)…"))
+		lines = append(lines, warnStyle.Render(Spinner(v.InstallFrame)+" Enabling GPU (PyTorch CUDA, ~1–2 GB)…"))
 	} else if v.GPUInstallErr != "" {
 		lines = append(lines, errStyle.Render("GPU setup failed: "+v.GPUInstallErr))
 	} else if v.GPUCanInstall {

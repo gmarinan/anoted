@@ -767,6 +767,7 @@ func (m Model) reloadConfigFromDisk() Model {
 	m.audioMonitorWarn = m.deps.Audio.MonitorWarning(cfg.Audio.SystemMonitor)
 	m.configErr = ""
 	m.configSavedMsg = "reloaded from disk"
+	m.markStatusTransient()
 	return m
 }
 
@@ -1052,6 +1053,7 @@ func (m Model) handleConfigMenuSave(msg configMenuSaveMsg) (tea.Model, tea.Cmd) 
 	}
 	m.configErr = ""
 	m.configSavedMsg = "saved"
+	m.markStatusTransient()
 	m = m.applyConfig(msg.cfg)
 	m.autoRecord = msg.cfg.AutoRecord
 	m.audioMonitorWarn = m.deps.Audio.MonitorWarning(msg.cfg.Audio.SystemMonitor)

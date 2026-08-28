@@ -164,7 +164,7 @@ func (m Model) setupAdvance() (tea.Model, tea.Cmd) {
 		m.setupWizard.LogScroll = 0
 		ctx, cancel := context.WithCancel(context.Background())
 		m.setupCancel = cancel
-		return m, m.runSetupInstallCmd(ctx)
+		return m, tea.Batch(m.runSetupInstallCmd(ctx), m.scheduleInstallSpin())
 	case setup.WizardDone:
 		return m.closeSetupWizard(), nil
 	}
@@ -276,13 +276,14 @@ func (m Model) setupWizardOverlay(base string) string {
 		return base
 	}
 	return components.SetupWizardView{
-		State:      m.setupWizard,
-		Choices:    setup.DetectionChoices(m.deps.Platform),
-		Config:     m.deps.Config,
-		ConfigPath: m.deps.ConfigPath,
-		Platform:   m.deps.Platform.Name(),
-		Width:      m.width,
-		Height:     m.height,
-		Summary:    m.setupSummary,
+		State:        m.setupWizard,
+		Choices:      setup.DetectionChoices(m.deps.Platform),
+		Config:       m.deps.Config,
+		ConfigPath:   m.deps.ConfigPath,
+		Platform:     m.deps.Platform.Name(),
+		Width:        m.width,
+		Height:       m.height,
+		Summary:      m.setupSummary,
+		InstallFrame: m.installFrame,
 	}.View(base)
 }

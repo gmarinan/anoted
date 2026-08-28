@@ -91,7 +91,7 @@ func (m Model) startGPUInstall() (Model, tea.Cmd) {
 	m.gpuInstallLog = []string{"enabling GPU (PyTorch CUDA)…"}
 	m.gpuInstallErr = ""
 	m.gpuInstallScroll = 0
-	return m, gpuInstallCmd(ctx)
+	return m, tea.Batch(gpuInstallCmd(ctx), m.scheduleInstallSpin())
 }
 
 func (m Model) handleGPUInstallEnvelope(msg gpuInstallEnvelopeMsg) (tea.Model, tea.Cmd) {

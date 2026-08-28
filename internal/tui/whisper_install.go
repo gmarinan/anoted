@@ -129,7 +129,8 @@ func (m Model) startWhisperInstall() (Model, tea.Cmd) {
 	m.whisperInstallActive = true
 	m.whisperInstallLog = []string{"starting whisper install…"}
 	m.whisperInstallErr = ""
-	return m, whisperInstallCmd(ctx)
+	m.whisperInstallScroll = 0
+	return m, tea.Batch(whisperInstallCmd(ctx), m.scheduleInstallSpin())
 }
 
 func (m Model) handleWhisperInstallEnvelope(msg whisperInstallEnvelopeMsg) (tea.Model, tea.Cmd) {
@@ -194,4 +195,33 @@ func (m Model) handleWhisperInstallSaved(msg whisperInstallSavedMsg) (tea.Model,
 
 func (m Model) whisperCanInstall() bool {
 	return !m.whisperInstallActive && !transcribe.IsInstalled(m.deps.Config)
+}
+
+// The whisper install pane used to render its entire 40-line buffer with no
+// window and no scroll keys, while the GPU pane next to it had both. During a
+// multi-gigabyte pip download the pane grew until it pushed the footer off the
+// bottom of any terminal shorter than about 45 rows.
+func (m Model) maxWhisperInstallScroll(viewHeight int) int {
+	n := len(m.whisperInstallLog) - viewHeight
+	if n < 0 {
+		return 0
+	}
+	return n
+}
+
+func (m Model) visibleWhisperInstallLog(viewHeight int) []string {
+	if viewHeight < 1 {
+		viewHeight = 6
+	}
+	if len(m.whisperInstallLog) <= viewHeight {
+		return m.whisperInstallLog
+	}
+	start := m.whisperInstallScroll
+	if maxStart := m.maxWhisperInstallScroll(viewHeight); start > maxStart {
+		start = maxStart
+	}
+	if start < 0 {
+		start = 0
+	}
+	return m.whisperInstallLog[start : start+viewHeight]
 }

@@ -266,6 +266,47 @@ func JoinFooter(hints ...string) string {
 	return subtleStyle.Render(strings.Join(hints, "  ·  "))
 }
 
+const footerSeparatorWidth = 5 // "  ·  "
+
+// FitFooter joins as many hints as fit on one line, most important first, and
+// appends a pointer to the help overlay when it has to drop any.
+//
+// FooterBar renders through a lipgloss Style with an explicit width, and
+// Render wraps rather than truncates. Home's full hint list measures 158 cells,
+// so on anything narrower than a 160-column terminal the footer silently became
+// two or three rows, pushing content off the bottom of the screen.
+func FitFooter(width int, hints ...string) string {
+	if width <= 0 || len(hints) == 0 {
+		return JoinFooter(hints...)
+	}
+	helpHint := FooterHint("?", "help")
+	helpWidth := lipgloss.Width(helpHint) + footerSeparatorWidth
+
+	fitted := make([]string, 0, len(hints))
+	used := 0
+	for i, h := range hints {
+		w := lipgloss.Width(h)
+		if i > 0 {
+			w += footerSeparatorWidth
+		}
+		// Leave room for the "? help" pointer unless this is the last hint and
+		// everything fits without it.
+		reserve := helpWidth
+		if i == len(hints)-1 {
+			reserve = 0
+		}
+		if used+w+reserve > width {
+			break
+		}
+		fitted = append(fitted, h)
+		used += w
+	}
+	if len(fitted) < len(hints) {
+		fitted = append(fitted, helpHint)
+	}
+	return JoinFooter(fitted...)
+}
+
 // FooterBar renders a single-line footer bar (htop/lazygit style).
 func FooterBar(hints string, width int) string {
 	if width > 0 {
@@ -299,6 +340,22 @@ func PadView(content string, width, height int) string {
 	if len(lines) == 1 && lines[0] == "" {
 		lines = nil
 	}
+	// Keep the last line visible when the content overflows.
+	//
+	// PadView only ever padded, never truncated, so on a terminal too short for
+	// the panels the alternate screen clipped the bottom — taking the footer
+	// with it, which is the only place shortcuts are listed. Dropping from the
+	// middle keeps the header and the footer, which are the two rows that
+	// orient the user.
+	if height > 2 && len(lines) > height {
+		keepTail := 1 // the footer
+		keepHead := height - keepTail - 1
+		trimmed := make([]string, 0, height)
+		trimmed = append(trimmed, lines[:keepHead]...)
+		trimmed = append(trimmed, subtleStyle.Render(overflowNotice(len(lines)-height+1)))
+		trimmed = append(trimmed, lines[len(lines)-keepTail:]...)
+		lines = trimmed
+	}
 	out := make([]string, 0, height)
 	for _, line := range lines {
 		out = append(out, padLineWidth(line, width))
@@ -308,6 +365,10 @@ func PadView(content string, width, height int) string {
 		out = append(out, blank)
 	}
 	return strings.Join(out, "\n")
+}
+
+func overflowNotice(hidden int) string {
+	return fmt.Sprintf("  … %d more rows — resize the terminal, ? for shortcuts", hidden)
 }
 
 func padLineWidth(line string, width int) string {

@@ -22,6 +22,29 @@ type AudioPanel struct {
 	Cursor        int
 	SystemMonitor string
 	Microphone    string
+	// MaxRows bounds how many devices are drawn at once. Zero means unbounded,
+	// which is only appropriate for short, fixed lists.
+	MaxRows int
+}
+
+// deviceWindow returns the slice of indices to draw, keeping Cursor visible.
+//
+// A PipeWire desktop routinely exposes 20-40 nodes and renderDevice adds a line
+// per linked application on top, so an unwindowed list ran off the bottom of the
+// terminal: the cursor could sit on a device that was not being drawn and the
+// user was choosing blind.
+func (p AudioPanel) deviceWindow(n int) (int, int) {
+	if p.MaxRows <= 0 || n <= p.MaxRows {
+		return 0, n
+	}
+	start := p.Cursor - p.MaxRows/2
+	if start < 0 {
+		start = 0
+	}
+	if start+p.MaxRows > n {
+		start = n - p.MaxRows
+	}
+	return start, start + p.MaxRows
 }
 
 func (p AudioPanel) renderDeviceList() string {
@@ -38,9 +61,14 @@ func (p AudioPanel) renderDeviceList() string {
 	if len(devices) == 0 {
 		return subtleStyle.Render("  (no devices found)")
 	}
+	start, end := p.deviceWindow(len(devices))
 	var lines []string
-	for i, d := range devices {
-		lines = append(lines, p.renderDevice(devices, i, d, selected))
+	for i := start; i < end; i++ {
+		lines = append(lines, p.renderDevice(devices, i, devices[i], selected))
+	}
+	if start > 0 || end < len(devices) {
+		lines = append(lines, subtleStyle.Render(
+			fmt.Sprintf("  %d/%d  ↑↓ to scroll", p.Cursor+1, len(devices))))
 	}
 	return strings.Join(lines, "\n")
 }

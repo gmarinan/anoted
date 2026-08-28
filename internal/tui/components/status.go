@@ -31,7 +31,7 @@ func FooterForTab(tab TabID, awaitingConfirm bool, sessionsMode SessionsFooterMo
 	switch tab {
 	case TabHome:
 		if sessionsMode == SessionsFooterDeleteConfirm {
-			return JoinFooter(
+			return FitFooter(width,
 				FooterHint("↑↓", "choose"),
 				FooterHint("Enter", "apply"),
 				FooterHint("Esc", "cancel"),
@@ -39,7 +39,7 @@ func FooterForTab(tab TabID, awaitingConfirm bool, sessionsMode SessionsFooterMo
 			)
 		}
 		if sessionsMode == SessionsFooterOpenerPicker {
-			return JoinFooter(
+			return FitFooter(width,
 				FooterHint("↑↓", "choose"),
 				FooterHint("Enter", "apply"),
 				FooterHint("Esc", "cancel"),
@@ -47,14 +47,14 @@ func FooterForTab(tab TabID, awaitingConfirm bool, sessionsMode SessionsFooterMo
 			)
 		}
 		if awaitingConfirm {
-			return JoinFooter(
+			return FitFooter(width,
 				FooterHint("y", "start recording"),
 				FooterHint("n", "dismiss"),
 				FooterHint("q", "quit"),
 			)
 		}
 		if sessionsMode == SessionsFooterTranscribing {
-			return JoinFooter(
+			return FitFooter(width,
 				FooterHint("s", "stop transcribe"),
 				FooterHint("↑↓", "navigate"),
 				FooterHint("[ ]", "page"),
@@ -64,7 +64,7 @@ func FooterForTab(tab TabID, awaitingConfirm bool, sessionsMode SessionsFooterMo
 				FooterHint("q", "quit…"),
 			)
 		}
-		return JoinFooter(
+		return FitFooter(width,
 			FooterHint("r", "record"),
 			FooterHint("S", "setup"),
 			FooterHint("a", "auto-record"),
@@ -79,7 +79,7 @@ func FooterForTab(tab TabID, awaitingConfirm bool, sessionsMode SessionsFooterMo
 		)
 	case TabDoctor:
 		if doctorMode == DoctorFooterInstallingGPU {
-			return JoinFooter(
+			return FitFooter(width,
 				FooterHint("installing", "GPU…"),
 				FooterHint("PgUp/PgDn", "scroll log"),
 				FooterHint("R", "refresh"),
@@ -87,14 +87,15 @@ func FooterForTab(tab TabID, awaitingConfirm bool, sessionsMode SessionsFooterMo
 			)
 		}
 		if doctorMode == DoctorFooterInstalling {
-			return JoinFooter(
+			return FitFooter(width,
 				FooterHint("installing", "whisper…"),
+				FooterHint("PgUp/PgDn", "scroll log"),
 				FooterHint("R", "refresh"),
 				FooterHint("q", "quit…"),
 			)
 		}
 		if doctorMode == DoctorFooterCanInstallBoth {
-			return JoinFooter(
+			return FitFooter(width,
 				FooterHint("i", "install whisper"),
 				FooterHint("g", "install GPU"),
 				FooterHint("R", "refresh"),
@@ -102,20 +103,20 @@ func FooterForTab(tab TabID, awaitingConfirm bool, sessionsMode SessionsFooterMo
 			)
 		}
 		if doctorMode == DoctorFooterCanInstallGPU {
-			return JoinFooter(
+			return FitFooter(width,
 				FooterHint("g", "install GPU"),
 				FooterHint("R", "refresh"),
 				FooterHint("q", "quit"),
 			)
 		}
 		if doctorMode == DoctorFooterCanInstall {
-			return JoinFooter(
+			return FitFooter(width,
 				FooterHint("i", "install whisper"),
 				FooterHint("R", "refresh"),
 				FooterHint("q", "quit"),
 			)
 		}
-		return JoinFooter(
+		return FitFooter(width,
 			FooterHint("S", "setup"),
 			FooterHint("R", "refresh"),
 			FooterHint("q", "quit"),
@@ -123,7 +124,7 @@ func FooterForTab(tab TabID, awaitingConfirm bool, sessionsMode SessionsFooterMo
 	case TabConfig:
 		return FooterForConfig(configMode, configSaved, configErr, width)
 	default:
-		return JoinFooter(FooterHint("q", "quit"))
+		return FitFooter(width, FooterHint("q", "quit"))
 	}
 }
 

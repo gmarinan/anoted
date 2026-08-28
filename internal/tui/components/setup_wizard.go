@@ -18,6 +18,8 @@ type SetupWizardView struct {
 	Width      int
 	Height     int
 	Summary    []string
+	// InstallFrame drives the spinner while dependencies install.
+	InstallFrame uint64
 }
 
 func (v SetupWizardView) View(base string) string {
@@ -159,7 +161,7 @@ func (v SetupWizardView) renderTranscription() string {
 func (v SetupWizardView) renderInstalling() string {
 	logH := v.logViewHeight()
 	lines := []string{
-		warnStyle.Render("Installing dependencies…"),
+		warnStyle.Render(Spinner(v.InstallFrame) + " Installing dependencies…"),
 		"",
 		subtleStyle.Render("Install log (PgUp/PgDn to scroll):"),
 	}

@@ -69,9 +69,41 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleConfigKey(msg)
 	}
 
+	// The help overlay swallows everything while open so it behaves like the
+	// other modals.
+	if m.helpOpen {
+		switch key {
+		case "?", "esc", "q", "enter":
+			m.helpOpen = false
+		case "ctrl+c":
+			return m.requestQuit()
+		}
+		return m, nil
+	}
+
 	switch key {
 	case "q", "ctrl+c":
 		return m.requestQuit()
+	}
+
+	// Home's own overlays own esc, so only claim it when none is open.
+	if !m.homeAbsorbsKeys() {
+		switch key {
+		case "?":
+			m.helpOpen = true
+			return m, nil
+		case "esc":
+			// Esc was a dead key at the top level, though "go back" is what
+			// every terminal user expects it to do.
+			if m.screen != ScreenMain {
+				return m.switchTab(components.TabHome)
+			}
+			m.errMsg = ""
+			m.sessionsErr = ""
+			m.statusNote = ""
+			m.sessionsDesktopNote = ""
+			return m, nil
+		}
 	}
 
 	if m.screen == ScreenConfig {
@@ -111,25 +143,38 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	case "pgup":
 		if m.gpuInstallActive || len(m.gpuInstallLog) > 0 {
-			m.gpuInstallScroll -= 3
-			if m.gpuInstallScroll < 0 {
-				m.gpuInstallScroll = 0
-			}
+			m.gpuInstallScroll = clampScroll(m.gpuInstallScroll-3, m.maxGPUInstallScroll(installLogRows))
+			return m, nil
+		}
+		if m.whisperInstallActive || len(m.whisperInstallLog) > 0 {
+			m.whisperInstallScroll = clampScroll(m.whisperInstallScroll-3, m.maxWhisperInstallScroll(installLogRows))
 			return m, nil
 		}
 	case "pgdown":
 		if m.gpuInstallActive || len(m.gpuInstallLog) > 0 {
-			m.gpuInstallScroll += 3
-			max := m.maxGPUInstallScroll(8)
-			if m.gpuInstallScroll > max {
-				m.gpuInstallScroll = max
-			}
+			m.gpuInstallScroll = clampScroll(m.gpuInstallScroll+3, m.maxGPUInstallScroll(installLogRows))
+			return m, nil
+		}
+		if m.whisperInstallActive || len(m.whisperInstallLog) > 0 {
+			m.whisperInstallScroll = clampScroll(m.whisperInstallScroll+3, m.maxWhisperInstallScroll(installLogRows))
 			return m, nil
 		}
 	case "S":
 		return m.openSetupWizard(), nil
 	}
 	return m, nil
+}
+
+// homeAbsorbsKeys reports whether a Home overlay is claiming keys, mirroring
+// configAbsorbsKeys. Without it the global esc binding stole the key from the
+// delete-confirm and opener modals, which use it to cancel.
+func (m Model) homeAbsorbsKeys() bool {
+	if m.screen != ScreenMain {
+		return false
+	}
+	// awaitingRecordConfirm is here because esc dismisses the "start recording?"
+	// prompt, which is the one place esc already did something on Home.
+	return m.sessionsDeleteConfirm || m.sessionsOpenerPicker || m.awaitingRecordConfirm
 }
 
 func (m Model) handleHomeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
@@ -242,4 +287,18 @@ func (m Model) handleRefresh() (tea.Model, tea.Cmd) {
 	default:
 		return m, resolveDeviceLabelsCmd(m)
 	}
+}
+
+// installLogRows is the visible height of the Doctor install log panes. Both
+// panes use the same window so their scroll maths agree with the view.
+const installLogRows = 8
+
+func clampScroll(v, max int) int {
+	if v < 0 {
+		return 0
+	}
+	if v > max {
+		return max
+	}
+	return v
 }

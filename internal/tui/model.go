@@ -83,6 +83,7 @@ type Model struct {
 	autoRecordRetryAfter time.Time
 	autoRecordFailures   int
 	statusNote           string
+	statusExpiry         time.Time
 	recordStart          time.Time
 	sessionDir           string
 	sessionID            int64 // row id of the in-flight recording; 0 when not recording
@@ -95,6 +96,7 @@ type Model struct {
 	height               int
 	quitting             bool
 
+	helpOpen          bool
 	quitConfirmOpen   bool
 	quitConfirmCursor int
 
@@ -143,6 +145,7 @@ type Model struct {
 	whisperInstallActive bool
 	whisperInstallLog    []string
 	whisperInstallErr    string
+	whisperInstallScroll int
 	whisperInstallCancel context.CancelFunc
 
 	gpuInstallActive bool
@@ -150,6 +153,8 @@ type Model struct {
 	gpuInstallErr    string
 	gpuInstallScroll int
 	gpuInstallCancel context.CancelFunc
+
+	installFrame uint64 // drives the spinner while installs run
 
 	doctorWhisperCanInstall bool
 	doctorGPUCanInstall     bool
@@ -286,7 +291,6 @@ type configSavedMsg struct {
 }
 
 const sessionsListLimit = 500
-const sessionsPageSize = 6
 
 func loadSessionRecords(store session.Store) ([]session.Record, error) {
 	if store == nil {
@@ -307,3 +311,31 @@ func (m Model) recorderUnusable() string {
 	}
 	return m.deps.Recorder.Unusable()
 }
+
+// sessionsPageSize is how many session rows fit on screen.
+//
+// It was the constant 6 regardless of terminal size, so a tall terminal wasted
+// most of its height while a short one still tried to draw six rows plus the
+// details and preview panels, pushing the footer off the bottom.
+func (m Model) sessionsPageSize() int {
+	// Rows consumed by the header, tabs, status/audio boxes, the details and
+	// preview panels, borders and the footer.
+	const chrome = 26
+	n := m.height - chrome
+	switch {
+	case m.height <= 0:
+		return sessionsPageSizeDefault
+	case n < sessionsPageSizeMin:
+		return sessionsPageSizeMin
+	case n > sessionsPageSizeMax:
+		return sessionsPageSizeMax
+	default:
+		return n
+	}
+}
+
+const (
+	sessionsPageSizeMin     = 3
+	sessionsPageSizeMax     = 14
+	sessionsPageSizeDefault = 6
+)

@@ -191,13 +191,57 @@ func (v ConfigMenuView) renderSectionFields(focused bool, sec ConfigSectionPanel
 		return subtleStyle.Render("(no fields)")
 	}
 	var lines []string
+	cursorLine := 0
 	for _, f := range sec.Fields {
+		if f.Selected {
+			cursorLine = len(lines)
+		}
 		lines = append(lines, v.renderFieldLine(focused, f))
 		if f.Kind == "list" {
 			lines = append(lines, v.renderListItems(focused, f)...)
 		}
 	}
-	return strings.Join(lines, "\n")
+	return strings.Join(v.windowFieldLines(lines, cursorLine), "\n")
+}
+
+// windowFieldLines keeps the selected field on screen.
+//
+// Transcription has fourteen fields and two of them expand into a line per list
+// entry, so on a short terminal the cursor could move to a field that was not
+// being drawn — the user pressed Enter on something they could not see.
+func (v ConfigMenuView) windowFieldLines(lines []string, cursorLine int) []string {
+	maxRows := configFieldRows(v.Height)
+	if maxRows <= 0 || len(lines) <= maxRows {
+		return lines
+	}
+	start := cursorLine - maxRows/2
+	if start < 0 {
+		start = 0
+	}
+	if start+maxRows > len(lines) {
+		start = len(lines) - maxRows
+	}
+	out := make([]string, 0, maxRows+1)
+	out = append(out, lines[start:start+maxRows]...)
+	out = append(out, subtleStyle.Render(
+		fmt.Sprintf("  %d/%d  ↑↓ to scroll", cursorLine+1, len(lines))))
+	return out
+}
+
+// configFieldRows budgets vertical space for the field list.
+func configFieldRows(height int) int {
+	const chrome = 10
+	n := height - chrome
+	switch {
+	case height <= 0:
+		return 0 // unknown size: draw everything, as before
+	case n < 5:
+		return 5
+	case n > 30:
+		return 30
+	default:
+		return n
+	}
 }
 
 func (v ConfigMenuView) renderFieldLine(focused bool, f ConfigFieldRow) string {
@@ -285,6 +329,8 @@ func (v ConfigMenuView) renderDeviceModal() string {
 			Cursor:        v.DeviceCursor,
 			SystemMonitor: v.SystemMonitor,
 			Microphone:    v.Microphone,
+			// Leave room for the modal chrome, the title and the hint line.
+			MaxRows: deviceModalRows(v.Height),
 		}
 		lines = append(lines, panel.renderDeviceList())
 	}
@@ -373,4 +419,20 @@ func FooterForConfig(mode ConfigFooterMode, savedMsg, errMsg string, width int) 
 // FormatConfigBool displays a bool for the menu.
 func FormatConfigBool(b bool) string {
 	return fmt.Sprintf("%v", b)
+}
+
+// deviceModalRows bounds the device picker so it always fits on screen.
+func deviceModalRows(height int) int {
+	const chrome = 12
+	n := height - chrome
+	switch {
+	case height <= 0:
+		return 10
+	case n < 4:
+		return 4
+	case n > 18:
+		return 18
+	default:
+		return n
+	}
 }

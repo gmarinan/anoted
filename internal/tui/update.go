@@ -47,6 +47,7 @@ func (m Model) loadSessionsCmd() tea.Cmd {
 type windowSizePollTickMsg struct{}
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	m = m.expireStatusNotes(time.Now())
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
@@ -129,6 +130,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleTranscribeEnvelope(msg)
 	case transcribeBlinkMsg:
 		return m.handleTranscribeBlink()
+	case installSpinMsg:
+		return m.handleInstallSpin()
 	case whisperInstallEnvelopeMsg:
 		return m.handleWhisperInstallEnvelope(msg)
 	case whisperInstallSavedMsg:
@@ -314,6 +317,7 @@ func (m Model) handleRecordToggle(msg recordToggleResultMsg) (tea.Model, tea.Cmd
 			m.resumeForSessionKey = meetingSessionKey(m.detection)
 			m.autoRecordRetryAfter = time.Now().Add(autoRecordRetryDelay)
 			m.statusNote = "Record start failed — retrying…"
+			m.markStatusTransient()
 			m.appState = StateInMeeting
 			return m, m.scheduleAutoRecordRetry()
 		}
@@ -373,6 +377,7 @@ func (m Model) handleRecordToggle(msg recordToggleResultMsg) (tea.Model, tea.Cmd
 	m.micBands = nil
 	if msg.meetingEnded && msg.savedDir != "" {
 		m.statusNote = "Meeting ended — saved to " + msg.savedDir
+		m.markStatusTransient()
 	} else {
 		m.sessionDir = ""
 	}

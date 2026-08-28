@@ -38,6 +38,7 @@ func (m Model) View() tea.View {
 
 	body := components.PadView(content.String(), m.width, m.height)
 	body = m.setupWizardOverlay(body)
+	body = m.helpOverlay(body)
 	body = m.quitConfirmOverlay(body)
 	v := tea.NewView(body)
 	v.AltScreen = true
@@ -149,13 +150,14 @@ func (m Model) doctorView() components.DoctorView {
 		Width:                m.width,
 		Height:               m.height,
 		WhisperInstallActive: m.whisperInstallActive,
-		WhisperInstallLog:    append([]string(nil), m.whisperInstallLog...),
+		WhisperInstallLog:    m.visibleWhisperInstallLog(installLogRows),
 		WhisperInstallErr:    m.whisperInstallErr,
 		WhisperCanInstall:    m.doctorWhisperOffer(),
 		GPUInstallActive:     m.gpuInstallActive,
-		GPUInstallLog:        m.visibleGPUInstallLog(8),
+		GPUInstallLog:        m.visibleGPUInstallLog(installLogRows),
 		GPUInstallErr:        m.gpuInstallErr,
 		GPUCanInstall:        m.doctorGPUOffer(),
+		InstallFrame:         m.installFrame,
 	}
 }
 
@@ -327,4 +329,15 @@ func displayProvider(provider, title string) string {
 		return title
 	}
 	return "None detected"
+}
+
+func (m Model) helpOverlay(base string) string {
+	if !m.helpOpen {
+		return base
+	}
+	return components.HelpView{
+		Sections: components.GlobalHelp(),
+		Width:    m.width,
+		Height:   m.height,
+	}.Overlay(base)
 }
