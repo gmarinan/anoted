@@ -53,12 +53,12 @@ func (r *LinuxPipeWireRecorder) Start(_ context.Context, sess SessionConfig) err
 
 	devs, err := resolveFromSession(sess)
 	if err != nil {
-		return err
+		return fmt.Errorf("resolve audio devices: %w", err)
 	}
 
 	capture, err := startDualCapture(devs, sess, dir)
 	if err != nil {
-		return err
+		return fmt.Errorf("start pipewire capture: %w", err)
 	}
 	r.capture = capture
 

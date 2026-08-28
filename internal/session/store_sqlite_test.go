@@ -1,6 +1,7 @@
 package session
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -32,7 +33,7 @@ func TestSQLiteStoreCreateList(t *testing.T) {
 		},
 	}
 
-	id, err := store.Create(rec)
+	id, err := store.Create(context.Background(), rec)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +41,7 @@ func TestSQLiteStoreCreateList(t *testing.T) {
 		t.Fatal("expected non-zero id")
 	}
 
-	list, err := store.List(10)
+	list, err := store.List(context.Background(), 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +63,7 @@ func TestSQLiteStoreDelete(t *testing.T) {
 
 	dir := t.TempDir()
 	started := time.Now().UTC().Truncate(time.Second)
-	id, err := store.Create(Record{
+	id, err := store.Create(context.Background(), Record{
 		Dir:       dir,
 		Provider:  ProviderTeams,
 		Platform:  "linux",
@@ -80,17 +81,17 @@ func TestSQLiteStoreDelete(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rec, err := store.Get(id)
+	rec, err := store.Get(context.Background(), id)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := Remove(store, rec); err != nil {
+	if err := Remove(context.Background(), store, rec); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(dir); !os.IsNotExist(err) {
 		t.Fatalf("expected dir removed, stat err=%v", err)
 	}
-	list, err := store.List(10)
+	list, err := store.List(context.Background(), 10)
 	if err != nil {
 		t.Fatal(err)
 	}

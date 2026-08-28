@@ -1,6 +1,7 @@
 package session
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
@@ -29,13 +30,13 @@ type ReconcileResult struct {
 // Both are recoverable because every recording directory carries a
 // metadata.json written at start. Reconcile closes stale rows using the
 // recording's own timestamps and adopts orphaned directories.
-func Reconcile(store Store, outputDir string) (ReconcileResult, error) {
+func Reconcile(ctx context.Context, store Store, outputDir string) (ReconcileResult, error) {
 	var res ReconcileResult
 	if store == nil {
 		return res, nil
 	}
 
-	recs, err := store.List(reconcileScanLimit)
+	recs, err := store.List(ctx, reconcileScanLimit)
 	if err != nil {
 		return res, fmt.Errorf("list sessions: %w", err)
 	}
@@ -48,14 +49,14 @@ func Reconcile(store Store, outputDir string) (ReconcileResult, error) {
 		if rec.Status != StatusActive {
 			continue
 		}
-		if err := closeStaleRow(store, rec); err != nil {
+		if err := closeStaleRow(ctx, store, rec); err != nil {
 			slog.Warn("could not close stale session row", "session_id", rec.ID, "dir", rec.Dir, "err", err)
 			continue
 		}
 		res.Closed++
 	}
 
-	adopted, err := adoptOrphans(store, outputDir, known)
+	adopted, err := adoptOrphans(ctx, store, outputDir, known)
 	if err != nil {
 		// Adoption is best-effort: a missing or unreadable output directory must
 		// not stop anoted from starting.
@@ -70,7 +71,7 @@ func Reconcile(store Store, outputDir string) (ReconcileResult, error) {
 // count, but not unbounded.
 const reconcileScanLimit = 10000
 
-func closeStaleRow(store Store, rec Record) error {
+func closeStaleRow(ctx context.Context, store Store, rec Record) error {
 	// Prefer the recording's own metadata: it is written at start and updated at
 	// stop, so it knows more than the row does.
 	meta, err := ReadMetadataFile(rec.Dir)
@@ -93,14 +94,14 @@ func closeStaleRow(store Store, rec Record) error {
 		rec.Metadata.EndedAt = rec.EndedAt
 		rec.Metadata.Duration = rec.EndedAt.Sub(rec.StartedAt).Round(time.Second).String()
 	}
-	if err := store.Update(rec); err != nil {
+	if err := store.Update(ctx, rec); err != nil {
 		return fmt.Errorf("update session %d: %w", rec.ID, err)
 	}
 	slog.Info("closed stale session row", "session_id", rec.ID, "dir", rec.Dir, "status", rec.Status)
 	return nil
 }
 
-func adoptOrphans(store Store, outputDir string, known map[string]bool) (int, error) {
+func adoptOrphans(ctx context.Context, store Store, outputDir string, known map[string]bool) (int, error) {
 	if outputDir == "" {
 		return 0, nil
 	}
@@ -139,7 +140,7 @@ func adoptOrphans(store Store, outputDir string, known map[string]bool) (int, er
 		if meta.EndedAt.IsZero() {
 			rec.Status = StatusError
 		}
-		if _, err := store.Create(rec); err != nil {
+		if _, err := store.Create(ctx, rec); err != nil {
 			slog.Warn("could not adopt orphaned recording", "dir", dir, "err", err)
 			continue
 		}

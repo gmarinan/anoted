@@ -110,6 +110,7 @@ func (m Model) handleGPUInstallEnvelope(msg gpuInstallEnvelopeMsg) (tea.Model, t
 func (m Model) handleGPUInstallResult(msg gpuInstallResultMsg) (tea.Model, tea.Cmd) {
 	m.gpuInstallActive = false
 	if m.gpuInstallCancel != nil {
+		m.gpuInstallCancel()
 		m.gpuInstallCancel = nil
 	}
 

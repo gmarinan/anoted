@@ -389,9 +389,6 @@ func (m Model) handleRecordToggle(msg recordToggleResultMsg) (tea.Model, tea.Cmd
 	} else {
 		m.sessionDir = ""
 	}
-	if m.screen == ScreenMain {
-		m = m.refreshSessions()
-	}
 	if m.detection.InMeeting {
 		m.appState = StateInMeeting
 	} else {
@@ -400,6 +397,11 @@ func (m Model) handleRecordToggle(msg recordToggleResultMsg) (tea.Model, tea.Cmd
 	m.syncTrayState()
 
 	var cmds []tea.Cmd
+	if m.screen == ScreenMain {
+		// A finished recording adds a row; reload through a command so the store
+		// call stays off the Update loop.
+		cmds = append(cmds, m.loadSessionsCmd())
+	}
 	savedDir := msg.savedDir
 	if savedDir == "" {
 		savedDir = st.SessionDir
@@ -580,7 +582,8 @@ func startRecordingCmd(m Model) tea.Cmd {
 			// A dropped insert here used to be invisible: the audio and
 			// metadata.json existed on disk but the session never appeared in
 			// the Sessions tab and could not be opened or transcribed.
-			id, err := store.Create(session.Record{
+			storeCtx, cancelStore := storeContext()
+			id, err := store.Create(storeCtx, session.Record{
 				Dir:       st.SessionDir,
 				Provider:  p,
 				Platform:  platformName,
@@ -596,6 +599,7 @@ func startRecordingCmd(m Model) tea.Cmd {
 					Manual:     sessCfg.Manual,
 				},
 			})
+			cancelStore()
 			if err != nil {
 				slog.Error("failed to record session in store",
 					"session_dir", st.SessionDir, "err", err)
@@ -668,7 +672,9 @@ func closeSessionRow(store session.Store, id int64, dir string, status session.S
 		}
 		return
 	}
-	rec, err := store.Get(id)
+	ctx, cancel := storeContext()
+	defer cancel()
+	rec, err := store.Get(ctx, id)
 	if err != nil {
 		slog.Error("failed to load session for update", "session_id", id, "session_dir", dir, "err", err)
 		return
@@ -678,7 +684,7 @@ func closeSessionRow(store session.Store, id int64, dir string, status session.S
 	rec.Status = status
 	rec.Metadata.EndedAt = ended
 	rec.Metadata.Duration = ended.Sub(rec.StartedAt).Round(time.Second).String()
-	if err := store.Update(rec); err != nil {
+	if err := store.Update(ctx, rec); err != nil {
 		slog.Error("failed to mark session stopped", "session_id", id, "session_dir", dir, "err", err)
 	}
 }

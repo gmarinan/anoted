@@ -1,6 +1,7 @@
 package session
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -36,6 +37,11 @@ func (s *SQLiteStore) Open() error {
 	if err != nil {
 		return fmt.Errorf("open sqlite %s: %w", s.path, err)
 	}
+	// SQLite takes one writer at a time. Letting database/sql open a pool and
+	// relying on busy_timeout to sort out the contention means every writer
+	// waits up to five seconds; a single connection serialises them in-process
+	// instead, which is the standard configuration for an embedded SQLite.
+	db.SetMaxOpenConns(1)
 	s.db = db
 	return s.migrate()
 }
@@ -71,20 +77,20 @@ func (s *SQLiteStore) migrate() error {
 }
 
 // Count returns the number of recorded sessions.
-func (s *SQLiteStore) Count() (int, error) {
+func (s *SQLiteStore) Count(ctx context.Context) (int, error) {
 	var n int
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM sessions`).Scan(&n); err != nil {
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions`).Scan(&n); err != nil {
 		return 0, fmt.Errorf("count sessions: %w", err)
 	}
 	return n, nil
 }
 
-func (s *SQLiteStore) Create(rec Record) (int64, error) {
+func (s *SQLiteStore) Create(ctx context.Context, rec Record) (int64, error) {
 	meta, err := json.Marshal(rec.Metadata)
 	if err != nil {
 		return 0, fmt.Errorf("marshal metadata: %w", err)
 	}
-	res, err := s.db.Exec(
+	res, err := s.db.ExecContext(ctx,
 		`INSERT INTO sessions (dir, provider, platform, backend, started_at, ended_at, status, metadata_json)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		rec.Dir,
@@ -106,12 +112,12 @@ func (s *SQLiteStore) Create(rec Record) (int64, error) {
 	return id, nil
 }
 
-func (s *SQLiteStore) Update(rec Record) error {
+func (s *SQLiteStore) Update(ctx context.Context, rec Record) error {
 	meta, err := json.Marshal(rec.Metadata)
 	if err != nil {
 		return fmt.Errorf("marshal metadata: %w", err)
 	}
-	_, err = s.db.Exec(
+	_, err = s.db.ExecContext(ctx,
 		`UPDATE sessions SET ended_at = ?, status = ?, metadata_json = ? WHERE id = ?`,
 		formatTime(rec.EndedAt),
 		string(rec.Status),
@@ -124,19 +130,19 @@ func (s *SQLiteStore) Update(rec Record) error {
 	return nil
 }
 
-func (s *SQLiteStore) Get(id int64) (Record, error) {
-	row := s.db.QueryRow(
+func (s *SQLiteStore) Get(ctx context.Context, id int64) (Record, error) {
+	row := s.db.QueryRowContext(ctx,
 		`SELECT id, dir, provider, platform, backend, started_at, ended_at, status, metadata_json FROM sessions WHERE id = ?`,
 		id,
 	)
 	return scanRecord(row)
 }
 
-func (s *SQLiteStore) List(limit int) ([]Record, error) {
+func (s *SQLiteStore) List(ctx context.Context, limit int) ([]Record, error) {
 	if limit <= 0 {
 		limit = 50
 	}
-	rows, err := s.db.Query(
+	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, dir, provider, platform, backend, started_at, ended_at, status, metadata_json
 		 FROM sessions ORDER BY started_at DESC LIMIT ?`,
 		limit,
@@ -157,8 +163,8 @@ func (s *SQLiteStore) List(limit int) ([]Record, error) {
 	return out, rows.Err()
 }
 
-func (s *SQLiteStore) Delete(id int64) error {
-	res, err := s.db.Exec(`DELETE FROM sessions WHERE id = ?`, id)
+func (s *SQLiteStore) Delete(ctx context.Context, id int64) error {
+	res, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE id = ?`, id)
 	if err != nil {
 		return fmt.Errorf("delete session %d: %w", id, err)
 	}

@@ -65,7 +65,7 @@ func (r *WindowsWASAPIRecorder) Start(_ context.Context, sess SessionConfig) err
 
 	devs, err := resolveFromSession(sess)
 	if err != nil {
-		return err
+		return fmt.Errorf("resolve audio devices: %w", err)
 	}
 
 	loopID, err := wasapi.ParseLoopbackID(devs.system)

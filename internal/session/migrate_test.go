@@ -1,6 +1,7 @@
 package session
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -23,7 +24,7 @@ func TestMigrateLegacyIfEmpty(t *testing.T) {
 	if err := legacyStore.Open(); err != nil {
 		t.Fatal(err)
 	}
-	id, err := legacyStore.Create(Record{
+	id, err := legacyStore.Create(context.Background(), Record{
 		Dir:       "/tmp/session",
 		Provider:  ProviderGoogleMeet,
 		Platform:  "linux",
@@ -50,7 +51,7 @@ func TestMigrateLegacyIfEmpty(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer store.Close()
-	recs, err := store.List(10)
+	recs, err := store.List(context.Background(), 10)
 	if err != nil {
 		t.Fatal(err)
 	}

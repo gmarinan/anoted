@@ -1,6 +1,7 @@
 package session
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -61,7 +62,7 @@ func sessionCount(dbPath string) (int, error) {
 	// This runs before every subcommand, twice (current and legacy DB). It used
 	// to List(10000), which scans every row and JSON-unmarshals each one's
 	// metadata just to take len() of the slice.
-	return store.Count()
+	return store.Count(context.Background())
 }
 
 func copyFile(src, dst string) error {

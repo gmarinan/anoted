@@ -32,7 +32,7 @@ func (m *windowsMonitor) Available() bool {
 
 func (m *windowsMonitor) StartSystem(monitorID string) error {
 	if _, err := m.resolveSystem(monitorID); err != nil {
-		return err
+		return fmt.Errorf("resolve system monitor %q: %w", monitorID, err)
 	}
 	m.StopSystem()
 	// Opening a loopback client for idle level monitoring reconfigures the Windows
@@ -43,7 +43,7 @@ func (m *windowsMonitor) StartSystem(monitorID string) error {
 
 func (m *windowsMonitor) StartMic(sourceID string) error {
 	if _, err := m.resolveMic(sourceID); err != nil {
-		return err
+		return fmt.Errorf("resolve microphone %q: %w", sourceID, err)
 	}
 	m.StopMic()
 	// Mic levels while recording come from the recorder via FeedMicPCM.

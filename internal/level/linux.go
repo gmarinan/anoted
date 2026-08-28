@@ -74,7 +74,7 @@ func (m *linuxMonitor) Available() bool {
 func (m *linuxMonitor) StartSystem(monitorID string) error {
 	device, err := m.resolveSystem(monitorID)
 	if err != nil {
-		return err
+		return fmt.Errorf("resolve system monitor %q: %w", monitorID, err)
 	}
 	m.StopSystem()
 	cancel, err := m.startStream(device, func(buf []byte, peak float64, bands []float64, prev *[]float64) {
@@ -97,7 +97,7 @@ func (m *linuxMonitor) StartSystem(monitorID string) error {
 func (m *linuxMonitor) StartMic(sourceID string) error {
 	device, err := m.resolveMic(sourceID)
 	if err != nil {
-		return err
+		return fmt.Errorf("resolve microphone %q: %w", sourceID, err)
 	}
 	m.StopMic()
 	cancel, err := m.startStream(device, func(buf []byte, peak float64, bands []float64, prev *[]float64) {
@@ -219,11 +219,11 @@ func (m *linuxMonitor) startStream(device string, onChunk func(buf []byte, peak 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		cancel()
-		return nil, err
+		return nil, fmt.Errorf("parec stdout pipe: %w", err)
 	}
 	if err := cmd.Start(); err != nil {
 		cancel()
-		return nil, err
+		return nil, fmt.Errorf("start parec on %q: %w", device, err)
 	}
 
 	go func() {

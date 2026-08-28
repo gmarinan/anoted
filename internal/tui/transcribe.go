@@ -100,8 +100,11 @@ func (m *Model) appendTranscribeLog(line string) {
 	}
 }
 
+// clearTranscribeCancel releases the context after the job has finished on its
+// own. Dropping the reference without calling it leaks the context's resources.
 func (m *Model) clearTranscribeCancel() {
 	if m.transcribeCancel != nil {
+		m.transcribeCancel()
 		m.transcribeCancel = nil
 	}
 }
@@ -160,7 +163,7 @@ func (m Model) handleTranscribeResult(msg transcribeResultMsg) (tea.Model, tea.C
 	m.transcribePercent = 100
 	m.transcribeSessionDir = ""
 	if m.screen == ScreenMain {
-		m = m.refreshSessions()
+		return m, m.loadSessionsCmd()
 	}
 	return m, nil
 }

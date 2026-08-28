@@ -51,6 +51,9 @@ func (m Model) handleAudioCatalog(msg audioCatalogMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleDeviceLabels(msg deviceLabelsMsg) Model {
 	if msg.err != nil {
+		// Dropping this left the Home audio panel showing "(loading…)" forever
+		// with no explanation.
+		m.audioMonitorWarn = "device lookup failed: " + msg.err.Error()
 		return m
 	}
 	m.systemDevice = msg.system
@@ -60,6 +63,9 @@ func (m Model) handleDeviceLabels(msg deviceLabelsMsg) Model {
 
 func (m Model) handleConfigSaved(msg configSavedMsg) (tea.Model, tea.Cmd) {
 	if msg.err != nil {
+		// A failed write is exactly the error a user must not lose: their change
+		// did not persist.
+		m.configErr = msg.err.Error()
 		return m, nil
 	}
 	m = m.applyConfig(msg.cfg)

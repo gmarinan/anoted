@@ -317,7 +317,9 @@ func loadSessionRecords(store session.Store) ([]session.Record, error) {
 	if store == nil {
 		return nil, nil
 	}
-	return store.List(sessionsListLimit)
+	ctx, cancel := storeContext()
+	defer cancel()
+	return store.List(ctx, sessionsListLimit)
 }
 
 // recorderUnusable reports why the active backend cannot capture audio, or ""

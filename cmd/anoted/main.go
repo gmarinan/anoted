@@ -173,7 +173,7 @@ func runTUI(cmd *cobra.Command, args []string) error {
 	// list: rows stuck "active" because anoted was killed mid-recording, and
 	// recordings on disk that never made it into the database at all.
 	if outDir, dirErr := cfg.ResolvedOutputDir(); dirErr == nil {
-		if res, rErr := session.Reconcile(store, outDir); rErr != nil {
+		if res, rErr := session.Reconcile(cmd.Context(), store, outDir); rErr != nil {
 			logger.Warn("session reconciliation failed", "err", rErr)
 		} else if res.Closed > 0 || res.Adopted > 0 {
 			logger.Info("reconciled sessions", "closed", res.Closed, "adopted", res.Adopted)
@@ -281,7 +281,7 @@ func sessionsCmd() *cobra.Command {
 			}
 			defer store.Close()
 
-			recs, err := store.List(50)
+			recs, err := store.List(cmd.Context(), 50)
 			if err != nil {
 				return err
 			}

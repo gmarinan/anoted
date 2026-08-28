@@ -202,12 +202,17 @@ func (m Model) runSetupInstallCmd(ctx context.Context) tea.Cmd {
 		capture.flush(send)
 
 		cfg.SetupCompleted = true
-		if saveErr := config.Save(path, cfg); saveErr != nil && installErr == nil {
-			installErr = saveErr
+		// A failed save has to surface: a $HOME that is full or read-only
+		// otherwise produced a wizard that looked like it finished while the
+		// whole setup vanished on the next start.
+		if saveErr := config.Save(path, cfg); saveErr != nil {
+			send(fmt.Sprintf("error: could not save config: %v", saveErr))
+			if installErr == nil {
+				installErr = saveErr
+			}
 		}
 		if installErr != nil {
 			send(fmt.Sprintf("error: %v", installErr))
-			_ = config.Save(path, cfg)
 			sendSetupInstallMsg(ch, ctx, setupInstallResultMsg{cfg: cfg, err: installErr})
 			return
 		}
@@ -252,6 +257,9 @@ func (m Model) handleSetupInstallEnvelope(msg setupInstallEnvelopeMsg) (tea.Mode
 func (m Model) handleSetupInstallResult(msg setupInstallResultMsg) (tea.Model, tea.Cmd) {
 	m.setupWizard.Busy = false
 	if m.setupCancel != nil {
+		// Same lostcancel as whisperInstallCancel had: dropping the reference
+		// without calling it leaks the context.
+		m.setupCancel()
 		m.setupCancel = nil
 	}
 	m = m.applyConfig(msg.cfg)

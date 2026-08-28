@@ -104,19 +104,6 @@ func (m Model) sessionsPageJump(delta int) Model {
 	return m.clampSessionsCursor()
 }
 
-func (m Model) refreshSessions() Model {
-	recs, err := loadSessionRecords(m.deps.Store)
-	if err != nil {
-		m.sessionsErr = err.Error()
-		m.sessions = nil
-	} else {
-		m.sessionsErr = ""
-		m.sessions = recs
-		m.sessionArtifacts = gatherSessionFacts(recs, m.deps.Config.Transcription)
-	}
-	return m.clampSessionsCursor()
-}
-
 func (m Model) handleSessionsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 
@@ -205,7 +192,9 @@ func (m Model) deleteSelectedSessionCmd() tea.Cmd {
 	}
 	store := m.deps.Store
 	return func() tea.Msg {
-		if err := session.Remove(store, rec); err != nil {
+		ctx, cancel := storeContext()
+		defer cancel()
+		if err := session.Remove(ctx, store, rec); err != nil {
 			return sessionsDeletedMsg{err: err}
 		}
 		records, err := loadSessionRecords(store)

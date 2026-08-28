@@ -47,12 +47,12 @@ func (r *LinuxFFmpegRecorder) Start(_ context.Context, sess SessionConfig) error
 
 	devs, err := resolveFromSession(sess)
 	if err != nil {
-		return err
+		return fmt.Errorf("resolve audio devices: %w", err)
 	}
 
 	capture, err := startDualFFmpeg(devs, sess, dir)
 	if err != nil {
-		return err
+		return fmt.Errorf("start ffmpeg capture: %w", err)
 	}
 	r.capture = capture
 

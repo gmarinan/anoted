@@ -1,6 +1,7 @@
 package session
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -42,12 +43,12 @@ func TestReconcileClosesRowsLeftActiveByACrash(t *testing.T) {
 	started := time.Now().Add(-time.Hour)
 
 	dir := writeRecordingDir(t, root, "crashed", Metadata{StartedAt: started})
-	id, err := store.Create(Record{Dir: dir, StartedAt: started, Status: StatusActive})
+	id, err := store.Create(context.Background(), Record{Dir: dir, StartedAt: started, Status: StatusActive})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
 
-	res, err := Reconcile(store, root)
+	res, err := Reconcile(context.Background(), store, root)
 	if err != nil {
 		t.Fatalf("Reconcile: %v", err)
 	}
@@ -55,7 +56,7 @@ func TestReconcileClosesRowsLeftActiveByACrash(t *testing.T) {
 		t.Fatalf("Closed = %d, want 1", res.Closed)
 	}
 
-	got, err := store.Get(id)
+	got, err := store.Get(context.Background(), id)
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
@@ -77,15 +78,15 @@ func TestReconcileUsesMetadataEndTimeWhenPresent(t *testing.T) {
 	ended := started.Add(45 * time.Minute)
 
 	dir := writeRecordingDir(t, root, "finished", Metadata{StartedAt: started, EndedAt: ended})
-	id, err := store.Create(Record{Dir: dir, StartedAt: started, Status: StatusActive})
+	id, err := store.Create(context.Background(), Record{Dir: dir, StartedAt: started, Status: StatusActive})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
 
-	if _, err := Reconcile(store, root); err != nil {
+	if _, err := Reconcile(context.Background(), store, root); err != nil {
 		t.Fatalf("Reconcile: %v", err)
 	}
-	got, err := store.Get(id)
+	got, err := store.Get(context.Background(), id)
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
@@ -115,7 +116,7 @@ func TestReconcileAdoptsRecordingsWithNoRow(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 
-	res, err := Reconcile(store, root)
+	res, err := Reconcile(context.Background(), store, root)
 	if err != nil {
 		t.Fatalf("Reconcile: %v", err)
 	}
@@ -123,7 +124,7 @@ func TestReconcileAdoptsRecordingsWithNoRow(t *testing.T) {
 		t.Fatalf("Adopted = %d, want 1", res.Adopted)
 	}
 
-	recs, err := store.List(10)
+	recs, err := store.List(context.Background(), 10)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -132,7 +133,7 @@ func TestReconcileAdoptsRecordingsWithNoRow(t *testing.T) {
 	}
 
 	// Reconciling again must not create duplicates.
-	res, err = Reconcile(store, root)
+	res, err = Reconcile(context.Background(), store, root)
 	if err != nil {
 		t.Fatalf("second Reconcile: %v", err)
 	}
@@ -143,7 +144,7 @@ func TestReconcileAdoptsRecordingsWithNoRow(t *testing.T) {
 
 func TestReconcileToleratesMissingOutputDir(t *testing.T) {
 	store := newTestStore(t)
-	if _, err := Reconcile(store, filepath.Join(t.TempDir(), "does-not-exist")); err != nil {
+	if _, err := Reconcile(context.Background(), store, filepath.Join(t.TempDir(), "does-not-exist")); err != nil {
 		t.Fatalf("Reconcile should tolerate a missing output dir: %v", err)
 	}
 }

@@ -28,7 +28,10 @@ func (m Model) switchScreen(screen Screen) (tea.Model, tea.Cmd) {
 	case ScreenDoctor:
 		cmds = append(cmds, doctorReportCmd(m.deps.Config), refreshDoctorCapsCmd(m.deps.Config))
 	case ScreenMain:
-		m = m.refreshSessions()
+		// Loading through a command rather than inline: the store call can wait
+		// on a contended SQLite write, and doing that here blocked the whole
+		// Update loop.
+		cmds = append(cmds, m.loadSessionsCmd())
 		m.audioMonitorWarn = m.deps.Audio.MonitorWarning(m.deps.Config.Audio.SystemMonitor)
 		cmds = append(cmds, resolveDeviceLabelsCmd(m))
 		if enteringMain {
@@ -280,8 +283,7 @@ func (m Model) handleRefresh() (tea.Model, tea.Cmd) {
 	case ScreenDoctor:
 		return m, tea.Batch(doctorReportCmd(m.deps.Config), refreshDoctorCapsCmd(m.deps.Config))
 	case ScreenMain:
-		m = m.refreshSessions()
-		return m, tea.Batch(resolveDeviceLabelsCmd(m), m.startSystemLevelCmd())
+		return m, tea.Batch(m.loadSessionsCmd(), resolveDeviceLabelsCmd(m), m.startSystemLevelCmd())
 	case ScreenConfig:
 		return m.reloadConfigFromDisk(), resolveDeviceLabelsCmd(m)
 	default:

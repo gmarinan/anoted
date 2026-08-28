@@ -1,6 +1,7 @@
 package session
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -58,25 +59,31 @@ type Record struct {
 }
 
 // Store persists session metadata.
+// Store persists recorded sessions.
+//
+// Every method takes a context. Without one, a query could block for the full
+// five-second busy timeout with no way to cancel it — and these were being
+// called straight from the Bubble Tea Update loop, so that blocked the UI too.
 type Store interface {
 	Open() error
 	Close() error
-	Create(rec Record) (int64, error)
-	Update(rec Record) error
-	Get(id int64) (Record, error)
-	List(limit int) ([]Record, error)
-	Delete(id int64) error
+	Create(ctx context.Context, rec Record) (int64, error)
+	Update(ctx context.Context, rec Record) error
+	Get(ctx context.Context, id int64) (Record, error)
+	List(ctx context.Context, limit int) ([]Record, error)
+	Delete(ctx context.Context, id int64) error
+	Count(ctx context.Context) (int, error)
 }
 
 // Remove deletes the session directory and database row.
-func Remove(store Store, rec Record) error {
+func Remove(ctx context.Context, store Store, rec Record) error {
 	if rec.Dir != "" {
 		if err := os.RemoveAll(rec.Dir); err != nil {
 			return fmt.Errorf("remove session dir %s: %w", rec.Dir, err)
 		}
 	}
 	if store != nil {
-		if err := store.Delete(rec.ID); err != nil {
+		if err := store.Delete(ctx, rec.ID); err != nil {
 			return fmt.Errorf("delete session row: %w", err)
 		}
 	}
