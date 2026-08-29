@@ -2,6 +2,7 @@ package recorder
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"time"
@@ -60,4 +61,17 @@ func createSessionDir(sess SessionConfig) (string, error) {
 
 func dirFile(dir, name string) string {
 	return filepath.Join(dir, name)
+}
+
+// secureCaptureOutput restricts the recording file to the owner.
+//
+// On Linux the WAV is written by ffmpeg, not by WAVWriter, so it is created
+// with ffmpeg's umask — typically 0644 — and none of this package's file mode
+// constants apply to it. Without this the audio of every meeting was readable
+// by any local user even though its directory was not.
+func secureCaptureOutput(dir string) {
+	path := dirFile(dir, SessionAudioFile)
+	if err := session.SecureFile(path); err != nil {
+		slog.Warn("could not restrict recording permissions", "path", path, "err", err)
+	}
 }

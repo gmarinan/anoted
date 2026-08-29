@@ -173,19 +173,59 @@ func secureExistingRecordings(outputDir string) int {
 		if !e.IsDir() {
 			continue
 		}
+		// Check the contents even when the directory itself is already private:
+		// on Linux the WAV is written by ffmpeg, which uses its own umask, so a
+		// 0700 directory can still hold a 0644 recording.
 		dir := filepath.Join(outputDir, e.Name())
-		info, err := e.Info()
-		if err != nil || info.Mode().Perm()&0o077 == 0 {
-			continue
-		}
-		if err := SecureExisting(dir); err != nil {
+		tightened, err := secureDirContents(dir)
+		if err != nil {
 			slog.Warn("could not restrict recording permissions", "dir", dir, "err", err)
 			continue
 		}
-		secured++
+		if tightened {
+			secured++
+		}
 	}
 	if secured > 0 {
 		slog.Info("restricted recording permissions to owner-only", "count", secured)
 	}
 	return secured
+}
+
+// secureDirContents restricts a session directory and its files, reporting
+// whether anything actually had to change.
+func secureDirContents(dir string) (bool, error) {
+	before, err := looseEntries(dir)
+	if err != nil {
+		return false, err
+	}
+	if before == 0 {
+		return false, nil
+	}
+	return true, SecureExisting(dir)
+}
+
+func looseEntries(dir string) (int, error) {
+	info, err := os.Stat(dir)
+	if err != nil {
+		return 0, fmt.Errorf("stat %s: %w", dir, err)
+	}
+	loose := 0
+	if info.Mode().Perm()&0o077 != 0 {
+		loose++
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return 0, fmt.Errorf("read %s: %w", dir, err)
+	}
+	for _, e := range entries {
+		fi, err := e.Info()
+		if err != nil {
+			continue
+		}
+		if fi.Mode().Perm()&0o077 != 0 {
+			loose++
+		}
+	}
+	return loose, nil
 }

@@ -55,6 +55,8 @@ func (r *LinuxFFmpegRecorder) Start(_ context.Context, sess SessionConfig) error
 		return fmt.Errorf("start ffmpeg capture: %w", err)
 	}
 	r.capture = capture
+	// ffmpeg creates the WAV itself, under its own umask.
+	secureCaptureOutput(dir)
 
 	started := time.Now()
 	_ = session.WriteMetadataFile(dir, session.Metadata{
@@ -83,6 +85,11 @@ func (r *LinuxFFmpegRecorder) Stop(_ context.Context) error {
 	stopErr := r.capture.Stop()
 	r.capture = nil
 	if r.status.Status == StatusRecording {
+		if r.status.SessionDir != "" {
+			// Belt and braces: the chmod at start races ffmpeg creating the
+			// file, so repeat it now that it certainly exists.
+			secureCaptureOutput(r.status.SessionDir)
+		}
 		if r.status.SessionDir != "" && !r.status.StartedAt.IsZero() {
 			_ = session.UpdateMetadataEnded(r.status.SessionDir, r.status.StartedAt, time.Now())
 		}

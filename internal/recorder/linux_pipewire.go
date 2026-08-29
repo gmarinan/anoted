@@ -61,6 +61,8 @@ func (r *LinuxPipeWireRecorder) Start(_ context.Context, sess SessionConfig) err
 		return fmt.Errorf("start pipewire capture: %w", err)
 	}
 	r.capture = capture
+	// ffmpeg creates the WAV itself, under its own umask.
+	secureCaptureOutput(dir)
 
 	started := time.Now()
 	_ = session.WriteMetadataFile(dir, session.Metadata{
@@ -102,6 +104,11 @@ func (r *LinuxPipeWireRecorder) Stop(_ context.Context) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.status.Status == StatusStopping {
+		if r.status.SessionDir != "" {
+			// Belt and braces: the chmod at start races ffmpeg creating the
+			// file, so repeat it now that it certainly exists.
+			secureCaptureOutput(r.status.SessionDir)
+		}
 		if r.status.SessionDir != "" && !r.status.StartedAt.IsZero() {
 			_ = session.UpdateMetadataEnded(r.status.SessionDir, r.status.StartedAt, time.Now())
 		}
