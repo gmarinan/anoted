@@ -5,18 +5,21 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"anoted/internal/session"
 )
 
 // SessionAudioFile is the mixed system + microphone recording filename.
 const SessionAudioFile = "recording.wav"
 
-// SessionDirMode keeps recordings readable only by the user who made them.
-// anoted's privacy promise covers the people in the room, not just the operator,
-// so meeting audio must not be world-readable on a shared machine.
-const SessionDirMode os.FileMode = 0o700
-
-// SessionFileMode is SessionDirMode's counterpart for files.
-const SessionFileMode os.FileMode = 0o600
+// Recordings are readable only by the user who made them: anoted's privacy
+// promise covers the people in the room, not just the operator, so meeting
+// audio must not be world-readable on a shared machine. Defined in
+// internal/session so there is one definition rather than two that can drift.
+const (
+	SessionDirMode  = session.SessionDirMode
+	SessionFileMode = session.SessionFileMode
+)
 
 // maxSessionDirAttempts bounds the collision retry loop. Hitting it means
 // something is badly wrong with the output directory, not that a user recorded

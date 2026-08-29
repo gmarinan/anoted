@@ -13,6 +13,7 @@ import (
 type ReconcileResult struct {
 	Closed  int // rows left "active" by a crash, now closed
 	Adopted int // recordings on disk that had no row at all
+	Secured int // recordings whose permissions were tightened
 }
 
 // Reconcile makes the database agree with what is actually on disk.
@@ -55,6 +56,8 @@ func Reconcile(ctx context.Context, store Store, outputDir string) (ReconcileRes
 		}
 		res.Closed++
 	}
+
+	res.Secured = secureExistingRecordings(outputDir)
 
 	adopted, err := adoptOrphans(ctx, store, outputDir, known)
 	if err != nil {
@@ -148,4 +151,41 @@ func adoptOrphans(ctx context.Context, store Store, outputDir string, known map[
 		slog.Info("adopted orphaned recording", "dir", dir, "status", rec.Status)
 	}
 	return adopted, nil
+}
+
+// secureExistingRecordings restricts recordings written before anoted started
+// creating them owner-only.
+//
+// Creating new files with 0600 does nothing for the ones already on disk:
+// O_CREATE and MkdirAll both leave an existing path's mode alone. Without this
+// an upgrade leaves the user's entire meeting history world-readable, which is
+// the exact thing the permission change was meant to prevent.
+func secureExistingRecordings(outputDir string) int {
+	if outputDir == "" {
+		return 0
+	}
+	entries, err := os.ReadDir(outputDir)
+	if err != nil {
+		return 0
+	}
+	secured := 0
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		dir := filepath.Join(outputDir, e.Name())
+		info, err := e.Info()
+		if err != nil || info.Mode().Perm()&0o077 == 0 {
+			continue
+		}
+		if err := SecureExisting(dir); err != nil {
+			slog.Warn("could not restrict recording permissions", "dir", dir, "err", err)
+			continue
+		}
+		secured++
+	}
+	if secured > 0 {
+		slog.Info("restricted recording permissions to owner-only", "count", secured)
+	}
+	return secured
 }

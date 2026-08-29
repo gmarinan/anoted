@@ -175,9 +175,26 @@ func runTUI(cmd *cobra.Command, args []string) error {
 	if outDir, dirErr := cfg.ResolvedOutputDir(); dirErr == nil {
 		if res, rErr := session.Reconcile(cmd.Context(), store, outDir); rErr != nil {
 			logger.Warn("session reconciliation failed", "err", rErr)
-		} else if res.Closed > 0 || res.Adopted > 0 {
-			logger.Info("reconciled sessions", "closed", res.Closed, "adopted", res.Adopted)
+		} else if res.Closed > 0 || res.Adopted > 0 || res.Secured > 0 {
+			logger.Info("reconciled sessions",
+				"closed", res.Closed, "adopted", res.Adopted, "secured", res.Secured)
 		}
+	}
+
+	// The database and log predate the permission change on most installs, and
+	// an existing file keeps its old mode however it is opened.
+	if dbPath, pErr := storePath(); pErr == nil {
+		if err := session.SecureFile(dbPath); err != nil {
+			logger.Warn("could not restrict database permissions", "err", err)
+		}
+	}
+	if logPath, pErr := logging.Path(); pErr == nil {
+		if err := session.SecureFile(logPath); err != nil {
+			logger.Warn("could not restrict log permissions", "err", err)
+		}
+	}
+	if err := session.SecureFile(path); err != nil {
+		logger.Warn("could not restrict config permissions", "err", err)
 	}
 
 	audioProvider := audio.NewProvider()
@@ -520,12 +537,19 @@ func loadConfig() (config.Config, string, error) {
 	return config.LoadDefault()
 }
 
-func openStore() (session.Store, error) {
+func storePath() (string, error) {
 	cfgDir, err := config.ConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(cfgDir, "sessions.db"), nil
+}
+
+func openStore() (session.Store, error) {
+	dbPath, err := storePath()
 	if err != nil {
 		return nil, err
 	}
-	dbPath := filepath.Join(cfgDir, "sessions.db")
 	store := session.NewSQLiteStore(dbPath)
 	if err := store.Open(); err != nil {
 		return nil, err
