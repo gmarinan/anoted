@@ -41,6 +41,10 @@ func (m Model) View() tea.View {
 	v := tea.NewView(body)
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
+	// Ask the terminal to report focus (DECSET 1004). Terminals that do not
+	// support it simply never send the messages, so the app keeps its current
+	// behaviour rather than degrading.
+	v.ReportFocus = true
 	v.WindowTitle = "anoted"
 	if m.deps.Config.Privacy.ShowRecordingIndicator && m.recording {
 		v.WindowTitle = "anoted ● RECORDING"

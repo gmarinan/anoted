@@ -53,6 +53,21 @@ func (m Model) switchTab(tab components.TabID) (tea.Model, tea.Cmd) {
 func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 
+	// Safety net for the focus tracking: a keystroke means someone is looking,
+	// whatever the terminal did or did not report. Multiplexers in particular
+	// are inconsistent about forwarding focus events, and a meter stuck off
+	// while the user watches it would be a worse bug than the CPU it saves.
+	if m.blurred {
+		model, cmd := m.handleTerminalFocus(true)
+		next := model.(Model)
+		next2, cmd2 := next.dispatchKey(msg, key)
+		return next2, tea.Batch(cmd, cmd2)
+	}
+	return m.dispatchKey(msg, key)
+}
+
+func (m Model) dispatchKey(msg tea.KeyPressMsg, key string) (tea.Model, tea.Cmd) {
+
 	if m.setupOpen {
 		if key == "q" || key == "ctrl+c" {
 			return m.requestQuit()

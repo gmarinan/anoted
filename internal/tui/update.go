@@ -74,6 +74,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.ClearScreen
 		}
 		return m, nil
+	case tea.FocusMsg:
+		return m.handleTerminalFocus(true)
+	case tea.BlurMsg:
+		return m.handleTerminalFocus(false)
 	case TrayQuitMsg:
 		// The tray user asked to quit and may not be looking at the TUI, so
 		// take the safe path directly instead of popping a confirm dialog:

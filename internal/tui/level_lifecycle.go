@@ -5,6 +5,7 @@ import (
 
 	"anoted/internal/config"
 	"anoted/internal/level"
+	"anoted/internal/tui/components"
 	tea "charm.land/bubbletea/v2"
 )
 
@@ -18,6 +19,11 @@ func (m Model) scheduleLevelTick(gen int) tea.Cmd {
 
 func (m Model) scheduleLevelTickAfter(gen int, d time.Duration) tea.Cmd {
 	if m.screen != ScreenMain || !m.levelMeterEnabled() || m.deps.LevelMonitor == nil || !m.deps.LevelMonitor.Available() {
+		return nil
+	}
+	// Nobody is looking at an unfocused terminal. Recording keeps ticking so
+	// the indicator and duration stay live for whoever does bring it forward.
+	if m.blurred && !m.recording {
 		return nil
 	}
 	// On backends fed only by the recorder (Windows), Read returns nil bands
@@ -119,10 +125,10 @@ func (m Model) handleLevelTick(msg levelTickMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	snap := m.deps.LevelMonitor.Read()
-	changed := !bandsEqual(m.systemBands, snap.SystemBands)
+	changed := !components.BandsRenderIdentically(m.systemBands, snap.SystemBands)
 	m.systemBands = snap.SystemBands
 	if m.recording {
-		if !bandsEqual(m.micBands, snap.MicBands) {
+		if !components.BandsRenderIdentically(m.micBands, snap.MicBands) {
 			changed = true
 		}
 		m.micBands = snap.MicBands
@@ -143,19 +149,6 @@ func (m Model) handleLevelTick(msg levelTickMsg) (tea.Model, tea.Cmd) {
 		interval = levelQuietInterval
 	}
 	return m, m.scheduleLevelTickAfter(msg.gen, interval)
-}
-
-// bandsEqual reports whether two spectrum snapshots would render identically.
-func bandsEqual(a, b []float64) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }
 
 // enterHomeLevels starts a single level-tick generation for the Home screen.

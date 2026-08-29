@@ -125,6 +125,7 @@ type Model struct {
 	levelGen    int
 	levelFrame  uint64 // bumps each level tick; purely informational
 	levelQuiet  int    // consecutive unchanged level reads, drives tick backoff
+	blurred     bool   // terminal reported focus loss; nobody is watching the meter
 	idlePolls   int    // consecutive detection polls with no meeting, drives poll backoff
 
 	// Config interactive menu

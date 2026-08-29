@@ -326,3 +326,33 @@ func scaleLevel(v float64) float64 {
 	}
 	return (db - minDB) / (-minDB)
 }
+
+// bandRenderSteps is how finely cellAt quantizes the fill inside one row.
+// Comparing at this granularity is exactly "would the drawn character differ".
+const bandRenderSteps = 7 // len(partialRunes) - 1
+
+// BandsRenderIdentically reports whether two spectrum snapshots would draw the
+// same frame.
+//
+// Comparing the raw float64s does not work. smoothBands applies an exponential
+// release (prev*0.55), so with a live parec stream the values differ by a hair
+// on every 20ms chunk and exact equality essentially never holds — which meant
+// the quiet-backoff added to the level tick never actually engaged. What matters
+// is not whether the numbers changed but whether the picture would, and the
+// renderer gates anything below waveNoiseGate to zero and then quantizes to
+// bandRenderLevels steps.
+func BandsRenderIdentically(a, b []float64) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if renderLevel(a[i]) != renderLevel(b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func renderLevel(v float64) int {
+	return int(bandHeight(v, 0, 0) * bandRenderSteps) // 0..eqRows*bandRenderSteps
+}
