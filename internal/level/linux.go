@@ -229,6 +229,7 @@ func (m *linuxMonitor) startStream(device string, onChunk func(buf []byte, peak 
 	go func() {
 		defer cancel()
 		buf := make([]byte, chunkBytes)
+		scratch := &spectrumScratch{}
 		var smoothed float64
 		for {
 			n, err := io.ReadFull(stdout, buf)
@@ -239,7 +240,7 @@ func (m *linuxMonitor) startStream(device string, onChunk func(buf []byte, peak 
 			chunk := buf[:n]
 			sample := peakS16LE(chunk)
 			smoothed = smoothPeak(smoothed, sample)
-			bands := bandsFromPCM(chunk)
+			bands := scratch.bandsFromPCM(chunk)
 			onChunk(chunk, smoothed, bands, prev)
 		}
 	}()

@@ -20,13 +20,27 @@ const (
 // bandsFromPCM derives log-spaced frequency band levels from a mono s16le chunk.
 // Levels are absolute (not re-normalized to the loudest band each frame) so bars
 // keep moving under steady audio instead of freezing for seconds.
-func bandsFromPCM(buf []byte) []float64 {
-	samples := pcmWindow(buf, fftSize)
-	if len(samples) < fftSize {
-		return make([]float64, BandCount)
-	}
-	mags := fftMagnitudes(samples)
-	raw := groupBands(mags, BandCount, levelMeterSampleRate, fftSize)
+// spectrumScratch holds the working buffers for one audio stream.
+//
+// Each parec reader owns one. They cannot be package-level: system and
+// microphone capture run concurrently while recording, and sharing the buffers
+// between them would be a data race.
+type spectrumScratch struct {
+	samples [fftSize]float64
+	complex [fftSize]complex128
+	mags    [fftSize/2 + 1]float64
+	bands   [BandCount]float64
+	out     [BandCount]float64
+}
+
+func (s *spectrumScratch) bandsFromPCM(buf []byte) []float64 {
+	samples := pcmWindow(s.samples[:], buf)
+	mags := fftMagnitudes(s.complex[:], s.mags[:], samples)
+	raw := groupBands(s.bands[:], mags)
+
+	// The result is handed to the caller, which stores it on the monitor and
+	// later copies it out under lock, so it must not alias the scratch that the
+	// next chunk overwrites.
 	out := make([]float64, BandCount)
 	const bandGain = 18.0
 	for i, b := range raw {
@@ -56,11 +70,13 @@ func emphasizeTransients(prev, cur []float64) []float64 {
 	return out
 }
 
-func pcmWindow(buf []byte, n int) []float64 {
-	out := make([]float64, 0, n)
+// pcmWindow fills dst with the windowed tail of buf. dst is reused across
+// chunks; the window itself is precomputed (see spectrum_tables.go).
+func pcmWindow(dst []float64, buf []byte) []float64 {
+	dst = dst[:fftSize]
 	count := len(buf) / 2
-	if count > n {
-		count = n
+	if count > fftSize {
+		count = fftSize
 	}
 	start := len(buf)/2 - count
 	if start < 0 {
@@ -69,67 +85,57 @@ func pcmWindow(buf []byte, n int) []float64 {
 	for i := 0; i < count; i++ {
 		off := start*2 + i*2
 		if off+1 >= len(buf) {
+			count = i
 			break
 		}
 		sample := int16(buf[off]) | int16(buf[off+1])<<8
-		w := 1.0
-		if count > 1 {
-			t := float64(i) / float64(count-1)
-			w = 0.5 - 0.5*math.Cos(2*math.Pi*t)
-		}
-		out = append(out, float64(sample)/32768.0*w)
+		dst[i] = float64(sample) / 32768.0 * hannWindow[i]
 	}
-	for len(out) < n {
-		out = append(out, 0)
+	for i := count; i < fftSize; i++ {
+		dst[i] = 0
 	}
-	return out[:n]
+	return dst
 }
 
-func fftMagnitudes(samples []float64) []float64 {
-	n := len(samples)
-	re := make([]complex128, n)
+// fftMagnitudes writes the magnitude spectrum of samples into mags, reusing the
+// caller's complex scratch buffer.
+func fftMagnitudes(scratch []complex128, mags []float64, samples []float64) []float64 {
+	scratch = scratch[:fftSize]
 	for i, v := range samples {
-		re[i] = complex(v, 0)
+		scratch[i] = complex(v, 0)
 	}
-	fftInPlace(re)
-	mags := make([]float64, n/2+1)
+	fftInPlace(scratch)
+	mags = mags[:fftSize/2+1]
 	for i := range mags {
-		mags[i] = cmplx.Abs(re[i]) / float64(n)
+		mags[i] = cmplx.Abs(scratch[i]) / float64(fftSize)
 	}
 	return mags
 }
 
-func groupBands(mags []float64, numBands, sampleRate, n int) []float64 {
-	maxFreq := float64(sampleRate) / maxBandDiv
-	bands := make([]float64, numBands)
-	for b := 0; b < numBands; b++ {
-		fLow := minBandHz * math.Pow(maxFreq/minBandHz, float64(b)/float64(numBands))
-		fHigh := minBandHz * math.Pow(maxFreq/minBandHz, float64(b+1)/float64(numBands))
-		binLow := int(fLow * float64(n) / float64(sampleRate))
-		binHigh := int(fHigh * float64(n) / float64(sampleRate))
-		if binLow < 1 {
-			binLow = 1
-		}
-		if binHigh <= binLow {
-			binHigh = binLow + 1
-		}
-		if binHigh > len(mags) {
-			binHigh = len(mags)
+// groupBands collapses the magnitude spectrum into the display bands using the
+// precomputed bin boundaries.
+func groupBands(dst []float64, mags []float64) []float64 {
+	dst = dst[:BandCount]
+	for b, r := range bandBins {
+		low, high := r[0], r[1]
+		if high > len(mags) {
+			high = len(mags)
 		}
 		var sum float64
 		cnt := 0
-		for i := binLow; i < binHigh; i++ {
+		for i := low; i < high; i++ {
 			sum += mags[i] * mags[i]
 			cnt++
 		}
 		if cnt > 0 {
-			bands[b] = math.Sqrt(sum / float64(cnt))
+			dst[b] = math.Sqrt(sum / float64(cnt))
+		} else {
+			dst[b] = 0
 		}
 	}
-	return bands
+	return dst
 }
 
-// fftInPlace is an in-place radix-2 Cooley–Tukey FFT (n must be power of 2).
 func fftInPlace(x []complex128) {
 	n := len(x)
 	if n <= 1 {
@@ -148,9 +154,8 @@ func fftInPlace(x []complex128) {
 			x[i], x[j] = x[j], x[i]
 		}
 	}
-	for length := 2; length <= n; length <<= 1 {
-		ang := -2 * math.Pi / float64(length)
-		wlen := cmplx.Exp(complex(0, ang))
+	for stage, length := 1, 2; length <= n; stage, length = stage+1, length<<1 {
+		wlen := twiddles[stage-1]
 		for i := 0; i < n; i += length {
 			w := complex(1, 0)
 			half := length / 2

@@ -7,7 +7,7 @@ import (
 
 func TestBandsFromPCMSilence(t *testing.T) {
 	buf := make([]byte, chunkBytes)
-	bands := bandsFromPCM(buf)
+	bands := (&spectrumScratch{}).bandsFromPCM(buf)
 	for i, b := range bands {
 		if b != 0 {
 			t.Fatalf("band %d should be silent, got %v", i, b)
@@ -23,7 +23,7 @@ func TestBandsFromPCMNotFlatOnTone(t *testing.T) {
 		buf[i*2] = byte(v)
 		buf[i*2+1] = byte(v >> 8)
 	}
-	bands := bandsFromPCM(buf)
+	bands := (&spectrumScratch{}).bandsFromPCM(buf)
 	peakIdx := 0
 	peakVal := bands[0]
 	for i, b := range bands {
