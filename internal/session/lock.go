@@ -51,8 +51,12 @@ func AcquireInstanceLock(dir string) (*InstanceLock, error) {
 		}
 
 		// A pid file left by a crash must not lock the user out forever.
+		// Being alive is not enough: a pid file surviving a reboot collides
+		// with whatever number the new boot gave to another process — even a
+		// kernel thread answers the liveness probe — and only a live anoted
+		// process may hold the lock.
 		pid, readErr := readPID(path)
-		if readErr == nil && processAlive(pid) {
+		if readErr == nil && processAlive(pid) && processIsAnoted(pid) {
 			return nil, fmt.Errorf("%w (pid %d)", ErrAlreadyRunning, pid)
 		}
 		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {

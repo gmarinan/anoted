@@ -57,6 +57,43 @@ func TestInstanceLockReclaimsAGarbagePidFile(t *testing.T) {
 	_ = lock.Release()
 }
 
+// The reboot-collision case: the pid file names a number that a live,
+// unrelated process now owns. PID 1 is alive on every system and is never
+// anoted.
+func TestInstanceLockIgnoresPidFileNamingAnotherProcess(t *testing.T) {
+	if _, err := os.Stat("/proc/self/cmdline"); err != nil {
+		t.Skip("no /proc on this system")
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "anoted.pid"), []byte("1\n"), 0o600); err != nil {
+		t.Fatalf("seed pid file: %v", err)
+	}
+	lock, err := AcquireInstanceLock(dir)
+	if err != nil {
+		t.Fatalf("a pid file naming another process must be reclaimed, got: %v", err)
+	}
+	_ = lock.Release()
+}
+
+func TestIsAnotedCmdline(t *testing.T) {
+	cases := []struct {
+		name string
+		cmd  string
+		want bool
+	}{
+		{"deployed path", "/home/x/.local/bin/anoted\x00watch", true},
+		{"bare name", "anoted\x00watch", true},
+		{"dev build", "/tmp/anoted-fix\x00watch", true},
+		{"another process", "/usr/bin/docker-proxy\x00-proto\x00tcp", false},
+		{"kernel thread (empty)", "", false},
+	}
+	for _, c := range cases {
+		if got := isAnotedCmdline([]byte(c.cmd)); got != c.want {
+			t.Errorf("%s: isAnotedCmdline(%q) = %v, want %v", c.name, c.cmd, got, c.want)
+		}
+	}
+}
+
 func TestInstanceLockPidFileIsOwnerOnly(t *testing.T) {
 	dir := t.TempDir()
 	lock, err := AcquireInstanceLock(dir)

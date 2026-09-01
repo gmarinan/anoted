@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -159,6 +160,16 @@ func runTUI(cmd *cobra.Command, args []string) error {
 	lock, err := session.AcquireInstanceLock(cfgDir)
 	if err != nil {
 		cmd.SilenceUsage = true
+		logger.Warn("could not acquire instance lock", "err", err)
+		if errors.Is(err, session.ErrAlreadyRunning) {
+			// Launcher windows (login autostart, Super+D) close the instant this
+			// process exits, which turns the error into a flash of a frame. Print
+			// it here and hold on a few seconds so it is readable where the user
+			// actually launched from.
+			fmt.Fprintln(os.Stderr, "anoted:", err)
+			cmd.SilenceErrors = true
+			time.Sleep(5 * time.Second)
+		}
 		return err
 	}
 	defer func() { _ = lock.Release() }()
@@ -251,6 +262,7 @@ func runTUI(cmd *cobra.Command, args []string) error {
 	// event loop on QuitMsg without dispatching it to Update, which skipped
 	// performQuit and left an active recording running after the app exited.
 	tr.OnQuit(func() { p.Send(tui.TrayQuitMsg{}) })
+	forwardHangup(p)
 	if _, err := p.Run(); err != nil {
 		return fmt.Errorf("tui: %w", err)
 	}

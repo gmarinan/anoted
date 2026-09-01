@@ -26,3 +26,9 @@ func processAlive(pid int) bool {
 	_ = proc.Release()
 	return true
 }
+
+// processIsAnoted has no /proc to consult on Windows; the OpenProcess check
+// in processAlive is all there is.
+func processIsAnoted(pid int) bool {
+	return true
+}
