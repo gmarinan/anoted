@@ -32,7 +32,12 @@ func (s *SQLiteStore) Open() error {
 	// SQLITE_BUSY — the session row was never inserted and the recording became
 	// invisible in the UI despite existing on disk. WAL plus a busy timeout lets
 	// the two connections database/sql opens wait for each other instead.
-	dsn := s.path + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)"
+	// synchronous(NORMAL) skips the per-commit fsync that FULL forces, keeping
+	// row updates from stalling the recorder shutdown path on a slow disk.
+	// Under WAL this never corrupts the database; a power cut can drop the very
+	// last commits, but the startup reconcile (adoptOrphans) re-creates any row
+	// whose recording exists on disk, so no session becomes invisible.
+	dsn := s.path + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)"
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return fmt.Errorf("open sqlite %s: %w", s.path, err)

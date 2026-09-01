@@ -6,10 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"anoted/internal/config"
 	"anoted/internal/doctor"
 	"anoted/internal/session"
-	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -127,12 +125,20 @@ func (v DoctorView) summaryBox(width int) string {
 		default:
 			okCount++
 		}
-		maxDetail := width - 26
+		// icon(1) + gap + name(22) + gap = 25 cells, inside a box whose content
+		// area is width-4; anything longer than width-29 wraps and breaks the
+		// column alignment.
+		maxDetail := width - 29
 		if maxDetail < 12 {
 			maxDetail = 12
 		}
 		detail := truncate(c.Detail, maxDetail)
-		lines = append(lines, style.Render(fmt.Sprintf("%s %-22s %s", icon, c.Name, detail)))
+		// Only the icon carries the status color; a whole line painted red or
+		// yellow turns the summary into colored stripes instead of a scannable
+		// icon / name / detail table.
+		lines = append(lines, style.Render(icon)+" "+
+			valueStyle.Render(fmt.Sprintf("%-22s", c.Name))+" "+
+			subtleStyle.Render(detail))
 	}
 	header := fmt.Sprintf("%s / %d checks OK", Badge("OK", "ok"), okCount)
 	body := header + "\n" + strings.Join(lines, "\n")
@@ -145,8 +151,9 @@ func (v DoctorView) environmentBox(width int) string {
 		row("Platform", v.Platform),
 		row("Backend", v.Backend),
 		row("Meeting", v.Provider),
-		row("System audio", truncate(v.SystemDevice, width-14)),
-		row("Microphone", truncate(v.MicDevice, width-14)),
+		// "System audio: " is 14 cells and the box content area is width-4.
+		row("System audio", truncate(v.SystemDevice, width-18)),
+		row("Microphone", truncate(v.MicDevice, width-18)),
 	}
 	return Box("Environment", strings.Join(lines, "\n"), width)
 }
@@ -207,7 +214,6 @@ type SessionsView struct {
 	TranscribeLog        []string
 	TranscribeErr        string
 	TranscribeErrDir     string
-	Transcription        config.TranscriptionConfig
 	PreviewText          string
 	// Artifacts is keyed by session directory. Gathered once per session load
 	// so rendering does not stat the filesystem per row, per frame.
@@ -224,33 +230,9 @@ func (v SessionsView) artifacts(dir string) SessionArtifacts {
 	return v.Artifacts[dir]
 }
 
-func (v SessionsView) View() string {
-	if v.DeleteConfirm {
-		base := v.renderMainContent()
-		h := v.overlayHeight()
-		return FloatCenter(base, v.renderDeleteModal(), v.Width, h)
-	}
-	if v.OpenerPicker {
-		base := v.renderMainContent()
-		h := v.overlayHeight()
-		return FloatCenter(base, v.renderOpenerModal(), v.Width, h)
-	}
-	return v.renderMainContent()
-}
-
-func (v SessionsView) overlayHeight() int {
-	h := v.Height - 8
-	if h < 12 {
-		h = 12
-	}
-	baseH := lipgloss.Height(v.renderMainContent())
-	if baseH > h {
-		h = baseH
-	}
-	return h
-}
-
-func (v SessionsView) renderMainContent() string {
+// The delete/opener overlays are composited by HomeView, which owns the full
+// Home screen; SessionsView only renders the main content block.
+func (v SessionsView) RenderMainContent() string {
 	layout := NewPanelLayout(v.Width)
 	var b strings.Builder
 
@@ -403,7 +385,11 @@ func (v SessionsView) tableBox(width int) string {
 		return Box("Sessions", errStyle.Render(v.ErrMsg), width)
 	}
 	if v.TotalCount == 0 {
-		return Box("Sessions", subtleStyle.Render("No recordings yet."), width)
+		empty := subtleStyle.Render("No recordings yet.") + "\n\n" +
+			subtleStyle.Render("Press ") + keyStyle.Render("r") +
+			subtleStyle.Render(" to start your first recording — or enable auto-record with ") +
+			keyStyle.Render("a") + subtleStyle.Render(".")
+		return Box("Sessions", empty, width)
 	}
 
 	title := fmt.Sprintf("Sessions (%d/%d · %d total)", v.Page, v.PageCount, v.TotalCount)
@@ -415,12 +401,11 @@ func (v SessionsView) tableBox(width int) string {
 			// Strip the row's own escapes first: Style.Render only wraps the
 			// string, so the first internal reset cancelled the highlight and
 			// left the right half of the selected row unhighlighted. The marker
-			// carries the selection where colour is unavailable.
-			line = clampStyledWidth(ansi.Strip(line), width-6)
-			line = lipgloss.NewStyle().
-				Background(lipgloss.Color("63")).
-				Foreground(lipgloss.Color("229")).
-				Render("▸ " + line)
+			// carries the selection where colour is unavailable, and padCell
+			// extends the bar across the full row instead of stopping at the
+			// last character.
+			line = padCell("▸ "+ansi.Strip(line), width-4)
+			line = selRowStyle.Render(line)
 		} else {
 			line = "  " + clampStyledWidth(line, width-6)
 		}

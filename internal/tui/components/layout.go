@@ -3,64 +3,15 @@ package components
 import (
 	"fmt"
 	"strings"
+	"time"
+	"unicode/utf8"
 
 	"anoted/internal/buildinfo"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 )
 
-var (
-	headerStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("86"))
-	subtleStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	labelStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
-	valueStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
-	warnStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
-	errStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("203"))
-	okStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
-	recStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("203")).Background(lipgloss.Color("52"))
-	boxStyle    = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("63")).
-			Padding(0, 1)
-	dimBoxStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("238")).
-			Padding(0, 1)
-	boxTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("86"))
-	modalBoxStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("63")).
-			Background(lipgloss.Color("235")).
-			Padding(0, 2)
-	magentaStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("213"))
-	subTabActiveStyle = lipgloss.NewStyle().
-				Bold(true).
-				Foreground(lipgloss.Color("229")).
-				Background(lipgloss.Color("63")).
-				Padding(0, 1)
-	subTabInactiveStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("244")).
-				Padding(0, 1)
-	tabActiveStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("229")).
-			Background(lipgloss.Color("63")).
-			Padding(0, 1)
-	tabInactiveStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("244")).
-				Padding(0, 1)
-	keyStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("86"))
-	// TX status colors
-	txDoneStyle      = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("42"))
-	txPendingStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	txActiveStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("214"))
-	txActiveAltStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("220"))
-	txErrorStyle     = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("203"))
-	footerBarStyle   = lipgloss.NewStyle().
-				Border(lipgloss.NormalBorder(), false, false, true, false).
-				BorderForeground(lipgloss.Color("238")).
-				Padding(0, 0)
-)
+// All styles live in theme.go so the light/dark palettes swap in one place.
 
 // TabID identifies the active main screen (switch with 1–3, not Tab).
 type TabID int
@@ -80,15 +31,34 @@ var tabLabels = []string{"Home", "Doctor", "Config"}
 // make an active recording obvious at all times, and the old indicator only
 // existed on Home, so recording while sitting in Config or Doctor showed nothing
 // at all.
-func Header(subtitle string, recording bool) string {
+func Header(subtitle string, recording bool, elapsed time.Duration, pulse bool) string {
 	out := headerStyle.Render("anoted") + subtleStyle.Render(" "+buildinfo.Version())
 	if subtitle != "" {
 		out += subtleStyle.Render(" · " + subtitle)
 	}
 	if recording {
-		out += "  " + recStyle.Render(" "+LabelRecording+" ")
+		// The dot alternates on the 1s duration tick so the badge visibly
+		// pulses, and the elapsed clock makes the badge informative rather than
+		// merely present — this is the privacy-critical indicator.
+		dot := "●"
+		if pulse {
+			dot = "○"
+		}
+		out += "  " + recStyle.Render(" "+dot+" "+LabelRecording+" "+formatClock(elapsed)+" ")
 	}
 	return out
+}
+
+// formatClock renders elapsed recording time as m:ss, or h:mm:ss past an hour.
+func formatClock(d time.Duration) string {
+	d = d.Round(time.Second)
+	h := int(d / time.Hour)
+	m := int(d/time.Minute) % 60
+	s := int(d/time.Second) % 60
+	if h > 0 {
+		return fmt.Sprintf("%d:%02d:%02d", h, m, s)
+	}
+	return fmt.Sprintf("%d:%02d", m, s)
 }
 
 // TabBar renders the top main navigation tabs (visual only; use 1–3 to switch).
@@ -98,13 +68,9 @@ func TabBar(active TabID) string {
 		// The marker carries the selection on its own. Styling the active tab
 		// only with a background colour left NO_COLOR and monochrome terminals
 		// with no way to tell which tab was focused.
-		marker := "  "
+		text := fmt.Sprintf("  %d %s", i+1, label)
 		if TabID(i) == active {
-			marker = "▸ "
-		}
-		text := marker + fmt.Sprintf("[%d]", i+1) + "[" + label + "]"
-		if TabID(i) == active {
-			parts = append(parts, tabActiveStyle.Render(text))
+			parts = append(parts, tabActiveStyle.Render("▸ "+text[2:]))
 		} else {
 			parts = append(parts, tabInactiveStyle.Render(text))
 		}
@@ -171,26 +137,40 @@ func (p PanelLayout) FullWidth() int {
 }
 
 // JoinColumns places panels side-by-side or stacked vertically based on width.
+// The horizontal join is done by hand with the fast width path: lipgloss's
+// JoinHorizontal re-measures every line of both blocks with a grapheme scan.
+// It does not right-pad the result: every screen flows through PadView, which
+// pads each line once.
 func (p PanelLayout) JoinColumns(left, right string) string {
 	if !p.TwoColumn() {
-		return PadLineBlock(JoinBlocksVertical(left, right), p.Width)
+		return JoinBlocksVertical(left, right)
 	}
-	left, right = EqualizeBoxHeights(left, right)
-	gap := strings.Repeat(" ", panelColumnGap)
-	joined := lipgloss.JoinHorizontal(lipgloss.Top, left, gap, right)
-	return PadLineBlock(joined, p.Width)
-}
-
-// PadLineBlock pads every line in a block to the target width.
-func PadLineBlock(block string, width int) string {
-	if width <= 0 || strings.TrimSpace(block) == "" {
-		return block
+	ll := strings.Split(left, "\n")
+	rl := strings.Split(right, "\n")
+	leftW := 0
+	for _, l := range ll {
+		if w := displayWidth(l); w > leftW {
+			leftW = w
+		}
 	}
-	lines := strings.Split(strings.TrimRight(block, "\n"), "\n")
-	for i, line := range lines {
-		lines[i] = padLineWidth(line, width)
+	rows := max(len(ll), len(rl))
+	var b strings.Builder
+	b.Grow(len(left) + len(right) + rows*(panelColumnGap+2))
+	for i := 0; i < rows; i++ {
+		if i > 0 {
+			b.WriteByte('\n')
+		}
+		if i < len(ll) {
+			b.WriteString(padLineWidth(ll[i], leftW))
+		} else {
+			b.WriteString(padSpaces(leftW))
+		}
+		b.WriteString(padSpaces(panelColumnGap))
+		if i < len(rl) {
+			b.WriteString(rl[i])
+		}
 	}
-	return strings.Join(lines, "\n")
+	return b.String()
 }
 
 // JoinBlocksVertical stacks rendered panels with blank lines between them.
@@ -219,40 +199,96 @@ func EqualizeBoxHeights(left, right string) (string, string) {
 
 // Box renders a titled bordered panel.
 func Box(title, content string, width int) string {
-	return renderBox(title, content, width, boxStyle, boxTitleStyle)
+	return renderBox(title, content, width, borderStyle)
 }
 
 // DimBox renders a titled panel with a dim border for unfocused sections.
 func DimBox(title, content string, width int) string {
-	return renderBox(title, content, width, dimBoxStyle, boxTitleStyle)
+	return renderBox(title, content, width, dimStyle)
 }
 
-func renderBox(title, content string, width int, style, titleStyle lipgloss.Style) string {
+// renderBox draws the panel by hand: a top border with the title spliced in —
+// "╭─ TITLE ────╮" — then side borders around padded content lines. Going
+// through lipgloss's border machinery re-measured every line with a full
+// grapheme scan; boxes are most of every frame, and displayWidth's fast path
+// makes this the difference between ~500µs and ~200µs a frame.
+func renderBox(title, content string, width int, lineStyle lipgloss.Style) string {
 	if width < MinPanelWidth {
 		width = MinPanelWidth
 	}
-	titleLine := titleStyle.Render(strings.ToUpper(title))
-	body := content
-	if body == "" {
-		body = subtleStyle.Render("(empty)")
+	if content == "" {
+		content = subtleStyle.Render("(empty)")
 	}
-	inner := titleLine + "\n" + body
-	return style.Width(width).Render(inner)
+	// lipgloss v2 counts borders inside Width(), and every caller sizes panels
+	// on that assumption: the box spans exactly width cells in total.
+	inner := width - 4 // borders and one cell of padding on each side
+	total := width
+
+	var b strings.Builder
+	b.Grow(len(content) + total*3)
+	label := strings.ToUpper(title)
+	lw := displayWidth(label)
+	if lw+5 <= total {
+		b.WriteString(lineStyle.Render("╭─"))
+		b.WriteString(" ")
+		b.WriteString(boxTitleStyle.Render(label))
+		b.WriteString(" ")
+		b.WriteString(lineStyle.Render(boxDashes(total-5-lw) + "╮"))
+	} else {
+		b.WriteString(lineStyle.Render("╭" + boxDashes(total-2) + "╮"))
+	}
+	side := lineStyle.Render("│")
+	for line := range strings.SplitSeq(content, "\n") {
+		if displayWidth(line) > inner {
+			// Long lines wrap, as the lipgloss-rendered box wrapped them.
+			for wrapped := range strings.SplitSeq(ansi.Wrap(line, inner, ""), "\n") {
+				writeBoxLine(&b, side, wrapped, inner)
+			}
+			continue
+		}
+		writeBoxLine(&b, side, line, inner)
+	}
+	b.WriteString("\n")
+	b.WriteString(lineStyle.Render("╰" + boxDashes(total-2) + "╯"))
+	return b.String()
 }
 
-// Badge renders a small status pill.
+func writeBoxLine(b *strings.Builder, side, line string, inner int) {
+	b.WriteString("\n")
+	b.WriteString(side)
+	b.WriteString(" ")
+	b.WriteString(padLineWidth(line, inner))
+	b.WriteString(" ")
+	b.WriteString(side)
+}
+
+var dashesPool = strings.Repeat("─", 256)
+
+func boxDashes(n int) string {
+	if n <= 0 {
+		return ""
+	}
+	// A rune is 3 bytes here, so index by bytes.
+	if n*3 <= len(dashesPool) {
+		return dashesPool[:n*3]
+	}
+	return strings.Repeat("─", n)
+}
+
+// Badge renders a small status pill with a real background, so DEFAULT /
+// RUNNING / N-A read like the REC badge instead of plain colored text.
 func Badge(text string, kind string) string {
 	switch kind {
 	case "ok", "running", "ready":
-		return okStyle.Render(" " + text + " ")
+		return badgeOKStyle.Render(" " + text + " ")
 	case "warn", "default":
-		return warnStyle.Render(" " + text + " ")
+		return badgeWarnStyle.Render(" " + text + " ")
 	case "rec":
 		return recStyle.Render(" " + text + " ")
 	case "meet":
-		return magentaStyle.Render(" " + text + " ")
+		return badgeMeetStyle.Render(" " + text + " ")
 	default:
-		return labelStyle.Render(" " + text + " ")
+		return badgeNeutralStyle.Render(" " + text + " ")
 	}
 }
 
@@ -280,12 +316,12 @@ func FitFooter(width int, hints ...string) string {
 		return JoinFooter(hints...)
 	}
 	helpHint := FooterHint("?", "help")
-	helpWidth := lipgloss.Width(helpHint) + footerSeparatorWidth
+	helpWidth := displayWidth(helpHint) + footerSeparatorWidth
 
 	fitted := make([]string, 0, len(hints))
 	used := 0
 	for i, h := range hints {
-		w := lipgloss.Width(h)
+		w := displayWidth(h)
 		if i > 0 {
 			w += footerSeparatorWidth
 		}
@@ -323,11 +359,11 @@ func FooterWithTrailingStatus(hints, status string, width int) string {
 	if width <= 0 {
 		return JoinFooter(hints, status)
 	}
-	gap := width - lipgloss.Width(hints) - lipgloss.Width(status)
+	gap := width - displayWidth(hints) - displayWidth(status)
 	if gap < 2 {
 		return JoinFooter(hints, status)
 	}
-	return hints + strings.Repeat(" ", gap) + status
+	return hints + padSpaces(gap) + status
 }
 
 // PadView expands content to fill the terminal, avoiding uncleared cells
@@ -360,7 +396,7 @@ func PadView(content string, width, height int) string {
 	for _, line := range lines {
 		out = append(out, padLineWidth(line, width))
 	}
-	blank := strings.Repeat(" ", width)
+	blank := padSpaces(width)
 	for height > 0 && len(out) < height {
 		out = append(out, blank)
 	}
@@ -372,16 +408,93 @@ func overflowNotice(hidden int) string {
 }
 
 func padLineWidth(line string, width int) string {
-	gap := width - lipgloss.Width(line)
+	gap := width - displayWidth(line)
 	if gap <= 0 {
 		return line
 	}
-	return line + strings.Repeat(" ", gap)
+	return line + padSpaces(gap)
+}
+
+// spacesPool backs padSpaces; slicing it is allocation-free.
+var spacesPool = strings.Repeat(" ", 512)
+
+func padSpaces(n int) string {
+	if n <= 0 {
+		return ""
+	}
+	if n <= len(spacesPool) {
+		return spacesPool[:n]
+	}
+	return strings.Repeat(" ", n)
+}
+
+// displayWidth measures a styled line in terminal cells. It short-circuits the
+// common case — ASCII text, SGR color sequences and the single-width drawing
+// runes this package emits — and falls back to lipgloss.Width (a full ANSI +
+// grapheme scan, the hottest call in the frame profile) the moment it sees
+// anything it cannot prove is one cell wide.
+func displayWidth(s string) int {
+	w := 0
+	for i := 0; i < len(s); {
+		c := s[i]
+		switch {
+		case c == 0x1b: // ESC: skip a CSI sequence (SGR colors)
+			j := i + 1
+			if j < len(s) && s[j] == '[' {
+				j++
+				for j < len(s) {
+					b := s[j]
+					j++
+					if b >= 0x40 && b <= 0x7e { // final byte
+						break
+					}
+				}
+				i = j
+				continue
+			}
+			return lipgloss.Width(s) // OSC or bare ESC: bail
+		case c >= 0x20 && c < 0x7f: // printable ASCII
+			w++
+			i++
+		case c < 0x20 || c == 0x7f: // other control bytes
+			return lipgloss.Width(s)
+		default:
+			r, size := utf8.DecodeRuneInString(s[i:])
+			if !oneCellRune(r) {
+				return lipgloss.Width(s)
+			}
+			w++
+			i += size
+		}
+	}
+	return w
+}
+
+// oneCellRune reports runes this package knows render one cell wide, matching
+// what lipgloss.Width would answer for them. Anything else — CJK, emoji,
+// combining marks, ambiguous codepoints not listed — makes displayWidth fall
+// back to the full measurement, so unknown runes are never mis-measured.
+func oneCellRune(r rune) bool {
+	switch {
+	case r >= 0x2500 && r <= 0x259f: // box drawing + block elements: ─ │ ╭ █ ░ ▏
+		return true
+	case r >= 0x25a0 && r <= 0x25ff: // geometric shapes: ● ○ ▸ (ambiguous → narrow, as lipgloss counts them)
+		// Except U+25FD/U+25FE (medium small squares): East-Asian Wide, the
+		// only two runes in this block lipgloss measures as 2 cells.
+		return r != 0x25fd && r != 0x25fe
+	case r >= 0x2800 && r <= 0x28ff: // braille spinner frames
+		return true
+	}
+	switch r {
+	case '·', '…', '—', '↑', '↓', '✓', '✗':
+		return true
+	}
+	return false
 }
 
 // clampStyledWidth shortens a styled string to fit a panel without wrapping.
 func clampStyledWidth(s string, maxW int) string {
-	if maxW <= 0 || lipgloss.Width(s) <= maxW {
+	if maxW <= 0 || displayWidth(s) <= maxW {
 		return s
 	}
 	return ansi.Truncate(s, maxW, "…")
@@ -412,8 +525,8 @@ func padCell(s string, w int) string {
 		return s
 	}
 	s = clampStyledWidth(s, w)
-	if gap := w - lipgloss.Width(s); gap > 0 {
-		s += strings.Repeat(" ", gap)
+	if gap := w - displayWidth(s); gap > 0 {
+		s += padSpaces(gap)
 	}
 	return s
 }
@@ -475,7 +588,6 @@ func FloatCenter(background, overlay string, width, height int) string {
 	// background restored its original colour and only the unstyled prefix of
 	// each line actually dimmed — modals ended up floating over a
 	// full-brightness screen with no visual focus.
-	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("238"))
 	dimmedLines := make([]string, height)
 	for y := 0; y < height; y++ {
 		if y < len(bgLines) {

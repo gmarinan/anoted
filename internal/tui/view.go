@@ -16,6 +16,8 @@ func (m Model) View() tea.View {
 	content.WriteString(components.Header(
 		m.deps.Platform.Subtitle(),
 		m.recording && m.deps.Config.Privacy.ShowRecordingIndicator,
+		m.recordElapsed,
+		m.recBlink,
 	))
 	content.WriteString("\n")
 	content.WriteString(components.TabBar(tab))
@@ -31,8 +33,7 @@ func (m Model) View() tea.View {
 	}
 
 	content.WriteString("\n")
-	footer := m.appFooter(tab)
-	content.WriteString(components.FooterBar(footer, m.width))
+	content.WriteString(m.cachedFooter(tab))
 
 	body := components.PadView(content.String(), m.width, m.height)
 	body = m.setupWizardOverlay(body)
@@ -60,11 +61,13 @@ func (m Model) appFooter(tab components.TabID) string {
 }
 
 func (m Model) homeView() components.HomeView {
+	// recordElapsed is maintained by the duration tick, so View stays a pure
+	// function of the Model instead of reading the clock per frame.
 	duration := time.Duration(0)
-	if m.recording && !m.recordStart.IsZero() {
-		duration = time.Since(m.recordStart)
+	if m.recording {
+		duration = m.recordElapsed
 	}
-	return components.HomeView{
+	v := components.HomeView{
 		AppState:        string(m.appState),
 		SystemDevice:    m.systemDevice,
 		MicDevice:       m.micDevice,
@@ -88,8 +91,11 @@ func (m Model) homeView() components.HomeView {
 		MonitorWarn:    m.audioMonitorWarn,
 		LevelFrame:     m.levelFrame,
 
-		Sessions: m.sessionsPanel(),
+		Sessions:      m.sessionsPanel(),
+		SessionsBlock: m.cachedSessionsBlock(),
 	}
+	v.StatusBlock = m.cachedStatusBox(v)
+	return v
 }
 
 func (m Model) sessionsPanel() components.SessionsView {
@@ -116,12 +122,13 @@ func (m Model) sessionsPanel() components.SessionsView {
 		TranscribePercent:    m.transcribePercent,
 		TranscribeETA:        m.transcribeETA,
 		TranscribeBlink:      m.transcribeBlink,
-		TranscribeLog:        append([]string(nil), m.transcribeLog...),
-		TranscribeErr:        m.transcribeErr,
-		TranscribeErrDir:     m.transcribeSessionDir,
-		Transcription:        m.deps.Config.Transcription,
-		PreviewText:          m.previewText,
-		Artifacts:            m.sessionArtifacts,
+		// Shared, not copied: Update appends via a fresh slice header, so a
+		// slice handed to a past render never observes later writes.
+		TranscribeLog:    m.transcribeLog,
+		TranscribeErr:    m.transcribeErr,
+		TranscribeErrDir: m.transcribeSessionDir,
+		PreviewText:      m.previewText,
+		Artifacts:        m.sessionArtifacts,
 	}
 	if m.sessionsDeleteConfirm {
 		v.DeleteID = rec.ID

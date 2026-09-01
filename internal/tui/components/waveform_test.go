@@ -16,14 +16,14 @@ func TestScaleLevel(t *testing.T) {
 }
 
 func TestBandHeight(t *testing.T) {
-	if bandHeight(0, 0, 0) != 0 {
+	if bandHeight(0) != 0 {
 		t.Fatal("silence")
 	}
-	h := bandHeight(0.3, 1, 0)
+	h := bandHeight(0.3)
 	if h < 2 || h > 6 {
 		t.Fatalf("mid level should be mid-height, got %v", h)
 	}
-	if bandHeight(0.5, 1, 0) < bandHeight(0.1, 1, 0) {
+	if bandHeight(0.5) < bandHeight(0.1) {
 		t.Fatal("louder should be taller")
 	}
 }
@@ -38,7 +38,7 @@ func TestFitBands(t *testing.T) {
 
 func TestRenderEqualizer(t *testing.T) {
 	heights := []float64{2, 5, 8, 3, 6, 1, 4, 7}
-	out := renderEqualizer(heights, systemEQColors)
+	out := renderEqualizer(heights, &systemEQStyles)
 	lines := strings.Split(stripANSI(out), "\n")
 	if len(lines) != eqRows {
 		t.Fatalf("expected %d rows, got %d", eqRows, len(lines))

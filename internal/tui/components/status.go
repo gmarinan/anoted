@@ -1,9 +1,5 @@
 package components
 
-import (
-	"strings"
-)
-
 // SessionsFooterMode selects footer shortcuts on the Sessions screen.
 type SessionsFooterMode int
 
@@ -169,23 +165,4 @@ func PrevScreen(current TabID) TabID {
 // Legacy helpers kept for tests.
 func row(label, value string) string {
 	return labelStyle.Render(label+":") + " " + valueStyle.Render(value)
-}
-
-// StatusBadge returns a styled status string.
-func StatusBadge(status string) string {
-	switch status {
-	case "ok":
-		return okStyle.Render(status)
-	case "warn":
-		return warnStyle.Render(status)
-	case "fail":
-		return errStyle.Render(status)
-	default:
-		return valueStyle.Render(status)
-	}
-}
-
-// FormatDoctorLine formats a single doctor check for plain-text output.
-func FormatDoctorLine(status, name, detail string) string {
-	return strings.Join([]string{"[" + StatusBadge(status) + "]", name + ":", detail}, " ")
 }

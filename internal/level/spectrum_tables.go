@@ -58,6 +58,16 @@ var twiddles = func() [fftStages]complex128 {
 	return t
 }()
 
+// rfftTwiddles[k] = e^(-2πik/fftSize), used to untangle the half-size complex
+// FFT of packed real input back into the real signal's spectrum bins.
+var rfftTwiddles = func() [fftSize / 2]complex128 {
+	var t [fftSize / 2]complex128
+	for k := range t {
+		t[k] = cmplx.Exp(complex(0, -2*math.Pi*float64(k)/float64(fftSize)))
+	}
+	return t
+}()
+
 // fftStages is log2(fftSize).
 const fftStages = 8
 

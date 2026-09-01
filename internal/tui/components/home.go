@@ -1,7 +1,6 @@
 package components
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
@@ -34,6 +33,21 @@ type HomeView struct {
 	MonitorWarn    string
 
 	Sessions SessionsView
+	// SessionsBlock and StatusBlock, when set, are the pre-rendered (typically
+	// memoized) outputs of RenderMainContent / StatusBox; empty means render
+	// them here.
+	SessionsBlock string
+	StatusBlock   string
+}
+
+// StatusPanelWidth returns the width the Home status box renders at for the
+// given terminal width — the memoizing caller must match View's layout branch.
+func StatusPanelWidth(width int) int {
+	layout := NewPanelLayout(width)
+	if layout.Width >= HomeTopRowMinWidth {
+		return layout.ColumnWidth()
+	}
+	return layout.FullWidth()
 }
 
 func (v HomeView) View() string {
@@ -43,14 +57,20 @@ func (v HomeView) View() string {
 	sess := v.Sessions
 	sess.Height = v.Height
 	sess.Width = fullW
-	sessionsBlock := sess.renderMainContent()
+	sessionsBlock := v.SessionsBlock
+	if sessionsBlock == "" {
+		sessionsBlock = sess.RenderMainContent()
+	}
 
+	status := v.StatusBlock
+	if status == "" {
+		status = v.StatusBox(StatusPanelWidth(v.Width))
+	}
 	var topRow string
 	if layout.Width >= HomeTopRowMinWidth {
-		colW := layout.ColumnWidth()
-		topRow = layout.JoinColumns(v.statusBox(colW), v.audioBox(colW, true))
+		topRow = layout.JoinColumns(status, v.audioBox(layout.ColumnWidth(), true))
 	} else {
-		topRow = JoinBlocksVertical(v.statusBox(fullW), v.audioBox(fullW, layout.Width < SessionsCompactWidth))
+		topRow = JoinBlocksVertical(status, v.audioBox(fullW, layout.Width < SessionsCompactWidth))
 	}
 	content := JoinBlocksVertical(topRow, sessionsBlock)
 
@@ -77,17 +97,24 @@ func (v HomeView) overlayHeight(base string) int {
 	return h
 }
 
-func (v HomeView) statusBox(width int) string {
+// StatusBox renders the Home status panel; exported so the TUI can memoize it
+// (its inputs change at 1Hz while the meter repaints at up to 30Hz).
+func (v HomeView) StatusBox(width int) string {
 	var lines []string
 	if v.Recording {
-		lines = append(lines, recStyle.Render(LabelRecording+" RECORDING"))
+		lines = append(lines, recStyle.Render(" ● RECORDING "))
 	}
 	lines = append(lines, row("State", displayState(v.AppState)))
 	lines = append(lines, row("Meeting", v.Provider))
-	lines = append(lines, row("Auto-record", fmt.Sprintf("%v", v.AutoRecord)))
+	auto := okStyle.Render("on")
+	if !v.AutoRecord {
+		auto = subtleStyle.Render("off")
+	}
+	lines = append(lines, labelStyle.Render("Auto-record:")+" "+auto)
 	if v.Recording {
 		lines = append(lines, row("Duration", v.Duration.Round(time.Second).String()))
-		lines = append(lines, row("Output", truncate(v.SessionDir, width-8)))
+		// "Output: " is 8 cells and the box content area is width-4.
+		lines = append(lines, row("Output", truncate(v.SessionDir, width-12)))
 	}
 	if v.AwaitingConfirm {
 		lines = append(lines, warnStyle.Render(LabelWarn+" "+v.ConfirmPrompt))

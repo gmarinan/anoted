@@ -19,6 +19,9 @@ func (m Model) Init() tea.Cmd {
 	m.syncTrayState()
 	cmds := []tea.Cmd{
 		readWindowSizeCmd(),
+		// Ask the terminal for its background so the palette can adapt to
+		// light themes; terminals that never answer keep the dark default.
+		tea.RequestBackgroundColor,
 		m.schedulePoll(),
 		m.scheduleDurationTick(),
 		resolveDeviceLabelsCmd(m),
@@ -61,7 +64,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case sessionScrollTickMsg:
 		return m.handleSessionScrollTick()
 	case windowSizePollTickMsg:
-		return m, tea.Batch(readWindowSizeCmd(), m.scheduleWindowSizePoll())
+		return m, tea.Batch(readWindowSizeIfChangedCmd(m.width, m.height), m.scheduleWindowSizePoll())
 	case tea.WindowSizeMsg:
 		resized := m.width != msg.Width || m.height != msg.Height
 		if msg.Width > 0 {
@@ -73,6 +76,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if resized && m.deps.Platform.ClearScreenOnResize() {
 			return m, tea.ClearScreen
 		}
+		return m, nil
+	case tea.BackgroundColorMsg:
+		components.ApplyTheme(components.DefaultTheme(msg.IsDark()))
 		return m, nil
 	case tea.FocusMsg:
 		return m.handleTerminalFocus(true)
@@ -88,6 +94,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(m.pollDetection(), m.schedulePoll())
 	case durationTickMsg:
 		if m.recording {
+			if !m.recordStart.IsZero() {
+				m.recordElapsed = time.Since(m.recordStart)
+			}
+			m.recBlink = !m.recBlink
 			return m, m.scheduleDurationTick()
 		}
 		return m, nil
@@ -101,6 +111,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case sessionsLoadedMsg:
+		m.viewGen++ // records/artifacts replaced: invalidate the sessions block cache
 		if msg.err != nil {
 			m.sessionsErr = msg.err.Error()
 			m.sessions = nil
@@ -342,6 +353,8 @@ func (m Model) handleRecordToggle(msg recordToggleResultMsg) (tea.Model, tea.Cmd
 	if msg.recording {
 		m.recording = true
 		m.recordStart = st.StartedAt
+		m.recordElapsed = 0
+		m.recBlink = false
 		m.sessionDir = st.SessionDir
 		m.sessionID = msg.sessionID
 		m.awaitingRecordConfirm = false
@@ -458,6 +471,9 @@ func (m Model) reconcileRecordingState() Model {
 			"session_dir", st.SessionDir, "backend", st.Backend)
 		m.recording = true
 		m.recordStart = st.StartedAt
+		if !st.StartedAt.IsZero() {
+			m.recordElapsed = time.Since(st.StartedAt)
+		}
 		m.sessionDir = st.SessionDir
 		m.appState = StateRecording
 		m.syncTrayState()
@@ -708,6 +724,19 @@ func readWindowSizeCmd() tea.Cmd {
 		}
 		if h <= 0 {
 			h = 24
+		}
+		return tea.WindowSizeMsg{Width: w, Height: h}
+	}
+}
+
+// readWindowSizeIfChangedCmd is the polling variant (Windows, every 200ms): it
+// stays silent when the size is unchanged, since every message costs a full
+// Update+View round trip — the unconditional poll doubled the idle frame rate.
+func readWindowSizeIfChangedCmd(prevW, prevH int) tea.Cmd {
+	return func() tea.Msg {
+		w, h, err := term.GetSize(os.Stdout.Fd())
+		if err != nil || w <= 0 || h <= 0 || (w == prevW && h == prevH) {
+			return nil
 		}
 		return tea.WindowSizeMsg{Width: w, Height: h}
 	}

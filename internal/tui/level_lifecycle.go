@@ -32,9 +32,22 @@ func (m Model) scheduleLevelTickAfter(gen int, d time.Duration) tea.Cmd {
 	if !m.recording && !m.deps.LevelMonitor.LiveWhenIdle() {
 		return nil
 	}
+	// Behind a full-screen overlay the meter is stripped to a dim monochrome
+	// backdrop, so fast repaints buy nothing; slow the chain down rather than
+	// stopping it, and the next tick after the overlay closes snaps back to
+	// the fast rate on its own — no restart bookkeeping, gen counter intact.
+	if m.overlayOpen() && d < levelQuietInterval {
+		d = levelQuietInterval
+	}
 	return tea.Tick(d, func(time.Time) tea.Msg {
 		return levelTickMsg{gen: gen}
 	})
+}
+
+// overlayOpen reports whether a modal fully or partially covers the meter.
+func (m Model) overlayOpen() bool {
+	return m.helpOpen || m.setupOpen || m.quitConfirmOpen ||
+		m.sessionsDeleteConfirm || m.sessionsOpenerPicker
 }
 
 const (

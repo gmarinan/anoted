@@ -1,38 +1,29 @@
 package wasapi
 
 import (
+	"encoding/binary"
 	"time"
 )
 
-// MixS16 averages two s16le PCM buffers frame-by-frame into dst.
-// Shorter input is treated as silence. dst must be large enough for the longest input.
+// MixS16 averages two s16le PCM buffers sample-by-sample into dst.
+// Shorter input is treated as silence. The average of two s16 values always
+// fits in s16, so no clipping guard is needed.
 func MixS16(dst, a, b []byte) []byte {
-	n := len(a)
-	if len(b) > n {
-		n = len(b)
-	}
+	n := max(len(a), len(b))
 	if cap(dst) < n {
 		dst = make([]byte, n)
 	} else {
 		dst = dst[:n]
 	}
-	for i := 0; i < n; i += 2 {
+	for i := 0; i+1 < n; i += 2 {
 		var av, bv int32
 		if i+1 < len(a) {
-			av = int32(int16(int(a[i]) | int(a[i+1])<<8))
+			av = int32(int16(binary.LittleEndian.Uint16(a[i:])))
 		}
 		if i+1 < len(b) {
-			bv = int32(int16(int(b[i]) | int(b[i+1])<<8))
+			bv = int32(int16(binary.LittleEndian.Uint16(b[i:])))
 		}
-		mixed := (av + bv) / 2
-		if mixed > 32767 {
-			mixed = 32767
-		}
-		if mixed < -32768 {
-			mixed = -32768
-		}
-		dst[i] = byte(mixed)
-		dst[i+1] = byte(mixed >> 8)
+		binary.LittleEndian.PutUint16(dst[i:], uint16((av+bv)/2))
 	}
 	return dst
 }
@@ -70,17 +61,16 @@ const (
 
 // MasterClockMixer mixes loopback and microphone PCM on a steady real-time clock.
 type MasterClockMixer struct {
-	sampleRate      int
-	channels        int
-	frameBytes      int
-	maxMicFIFO      int
-	maxLoopFIFO     int
-	pendingLoop     []byte
-	micFIFO         []byte
-	silentLoopFrame []byte
-	mixBuf          []byte
-	onPCM           func([]byte)
-	outputFrames    int
+	sampleRate   int
+	channels     int
+	frameBytes   int
+	maxMicFIFO   int
+	maxLoopFIFO  int
+	pendingLoop  []byte
+	micFIFO      []byte
+	mixBuf       []byte
+	onPCM        func([]byte)
+	outputFrames int
 
 	// now is injectable so tests can drive the clock; lastEmit tracks how much
 	// audio time has already been written.
@@ -102,14 +92,13 @@ func NewMasterClockMixer(sampleRate, channels int, onPCM func([]byte)) *MasterCl
 		maxFrames = 1
 	}
 	return &MasterClockMixer{
-		sampleRate:      sampleRate,
-		channels:        channels,
-		frameBytes:      frameBytes,
-		maxMicFIFO:      maxFrames * frameBytes,
-		maxLoopFIFO:     maxFrames * frameBytes,
-		silentLoopFrame: make([]byte, frameBytes),
-		onPCM:           onPCM,
-		now:             time.Now,
+		sampleRate:  sampleRate,
+		channels:    channels,
+		frameBytes:  frameBytes,
+		maxMicFIFO:  maxFrames * frameBytes,
+		maxLoopFIFO: maxFrames * frameBytes,
+		onPCM:       onPCM,
+		now:         time.Now,
 	}
 }
 
@@ -179,10 +168,41 @@ func (m *MasterClockMixer) EmitTicks() {
 	m.emitFrames(frames)
 }
 
+// emitFrames mixes n frames in one pass and hands them downstream as a single
+// callback. It used to emit one frame at a time, which at 48kHz meant 48,000
+// MixS16 calls, onPCM callbacks and downstream mutex acquisitions per second —
+// the hottest loop in the recorder. Frames beyond what the FIFOs hold are
+// silence, exactly as the per-frame version padded them.
 func (m *MasterClockMixer) emitFrames(n int) {
-	for i := 0; i < n; i++ {
-		m.emitTick()
+	if n <= 0 {
+		return
 	}
+	need := n * m.frameBytes
+
+	loopBytes := min(len(m.pendingLoop), need)
+	loopBytes -= loopBytes % m.frameBytes
+	micBytes := min(len(m.micFIFO), need)
+	micBytes -= micBytes % m.frameBytes
+
+	m.mixBuf = MixS16(m.mixBuf[:0], m.pendingLoop[:loopBytes], m.micFIFO[:micBytes])
+	m.pendingLoop = m.pendingLoop[loopBytes:]
+	m.micFIFO = m.micFIFO[micBytes:]
+
+	if mixed := len(m.mixBuf); mixed < need {
+		if cap(m.mixBuf) < need {
+			grown := make([]byte, need) // zeroed: the tail is already silence
+			copy(grown, m.mixBuf)
+			m.mixBuf = grown
+		} else {
+			m.mixBuf = m.mixBuf[:need]
+			clear(m.mixBuf[mixed:])
+		}
+	}
+
+	if m.onPCM != nil {
+		m.onPCM(m.mixBuf)
+	}
+	m.outputFrames += n
 }
 
 // OutputFrames returns the number of mixed frames emitted.
@@ -204,23 +224,4 @@ func (m *MasterClockMixer) trimLoopFIFO() {
 	}
 	drop := len(m.pendingLoop) - m.maxLoopFIFO
 	m.pendingLoop = m.pendingLoop[drop:]
-}
-
-func (m *MasterClockMixer) emitTick() {
-	var loopFrame, micFrame []byte
-	if len(m.pendingLoop) >= m.frameBytes {
-		loopFrame = m.pendingLoop[:m.frameBytes]
-		m.pendingLoop = m.pendingLoop[m.frameBytes:]
-	} else {
-		loopFrame = m.silentLoopFrame
-	}
-	if len(m.micFIFO) >= m.frameBytes {
-		micFrame = m.micFIFO[:m.frameBytes]
-		m.micFIFO = m.micFIFO[m.frameBytes:]
-	}
-	m.mixBuf = MixS16(m.mixBuf[:0], loopFrame, micFrame)
-	if m.onPCM != nil {
-		m.onPCM(m.mixBuf)
-	}
-	m.outputFrames++
 }

@@ -6,6 +6,15 @@ import (
 	"context"
 	"os/exec"
 	"strings"
+	"sync"
+)
+
+// The tool paths cannot change while anoted runs, and LookPath walks $PATH on
+// every call — this runs on every detection poll, so resolve once (same
+// pattern as pactlPath in linux_mic.go).
+var (
+	xdotoolPath = sync.OnceValues(func() (string, error) { return exec.LookPath("xdotool") })
+	wmctrlPath  = sync.OnceValues(func() (string, error) { return exec.LookPath("wmctrl") })
 )
 
 func (d *linuxDetector) windowTitles(ctx context.Context) []string {
@@ -18,7 +27,7 @@ func (d *linuxDetector) windowTitles(ctx context.Context) []string {
 		return titlesFromWmctrl(ctx)
 	default: // auto
 		// wmctrl first: one exec returns every window title, while the xdotool
-		// path needs one exec per window. Both see the same X11 information.
+		// path needs two. Both see the same X11 information.
 		if t := titlesFromWmctrl(ctx); len(t) > 0 {
 			return t
 		}
@@ -34,7 +43,7 @@ func (d *linuxDetector) windowTitles(ctx context.Context) []string {
 // meeting", and the end-of-meeting grace timer stopped the recording partway
 // through the call.
 func titlesFromXdotool(ctx context.Context) []string {
-	path, err := exec.LookPath("xdotool")
+	path, err := xdotoolPath()
 	if err != nil {
 		return nil
 	}
@@ -50,34 +59,27 @@ func titlesFromXdotool(ctx context.Context) []string {
 		titles = append(titles, title)
 	}
 
-	nameOf := func(id string) string {
-		out, err := exec.CommandContext(ctx, path, "getwindowname", id).Output()
-		if err != nil {
-			return ""
-		}
-		return string(out)
+	// The active window is the most likely match, so resolve it first; chaining
+	// getwindowname after getactivewindow does it in one exec.
+	if out, err := exec.CommandContext(ctx, path, "getactivewindow", "getwindowname").Output(); err == nil {
+		add(string(out))
 	}
 
-	// The active window is the most likely match, so resolve it first and let
-	// the sweep below fill in the rest.
-	if winOut, err := exec.CommandContext(ctx, path, "getactivewindow").Output(); err == nil {
-		if winID := strings.TrimSpace(string(winOut)); winID != "" {
-			add(nameOf(winID))
-		}
-	}
-
-	out, err := exec.CommandContext(ctx, path, "search", "--name", ".*").Output()
+	// Chaining getwindowname %@ resolves every matched window's name inside
+	// this single exec. This used to fork one xdotool per window on the
+	// desktop, on every poll.
+	out, err := exec.CommandContext(ctx, path, "search", "--name", ".*", "getwindowname", "%@").Output()
 	if err != nil {
 		return titles
 	}
-	for _, id := range strings.Fields(string(out)) {
-		add(nameOf(id))
+	for _, line := range strings.Split(string(out), "\n") {
+		add(line)
 	}
 	return titles
 }
 
 func titlesFromWmctrl(ctx context.Context) []string {
-	path, err := exec.LookPath("wmctrl")
+	path, err := wmctrlPath()
 	if err != nil {
 		return nil
 	}

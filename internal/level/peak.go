@@ -1,6 +1,9 @@
 package level
 
-import "math"
+import (
+	"encoding/binary"
+	"math"
+)
 
 const decayRate = 0.85
 
@@ -11,7 +14,7 @@ func peakS16LE(buf []byte) float64 {
 	}
 	var peak int32
 	for i := 0; i+1 < len(buf); i += 2 {
-		sample := int32(int16(buf[i]) | int16(buf[i+1])<<8)
+		sample := int32(int16(binary.LittleEndian.Uint16(buf[i:])))
 		if sample < 0 {
 			sample = -sample
 		}
@@ -30,11 +33,23 @@ func smoothPeak(prev, sample float64) float64 {
 	return math.Max(sample, prev*decayRate)
 }
 
-// peakBands builds a flat spectrum from a peak for lightweight recording feeds.
+// peakBands folds a flat peak level into the smoothed band state for
+// lightweight recording feeds, reusing prev so the steady state allocates
+// nothing. Same instant-attack/exponential-release ballistics as updateBands.
 func peakBands(prev []float64, peak float64) []float64 {
-	target := make([]float64, BandCount)
-	for i := range target {
-		target[i] = peak
+	if len(prev) != BandCount {
+		out := make([]float64, BandCount)
+		for i := range out {
+			out[i] = peak
+		}
+		return out
 	}
-	return smoothBands(prev, target)
+	for i, p := range prev {
+		if peak > p {
+			prev[i] = peak
+		} else {
+			prev[i] = math.Max(peak, p*bandRelease)
+		}
+	}
+	return prev
 }

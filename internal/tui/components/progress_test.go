@@ -19,19 +19,23 @@ func TestTranscribeProgressBar(t *testing.T) {
 	}
 }
 
+// The boundary cell renders an eighth-block partial so the bar moves smoothly
+// between whole cells.
+func TestTranscribeProgressBarPartialCell(t *testing.T) {
+	out := TranscribeProgressBar(65, 10, 0, false)
+	// 65% of 10 cells = 6.5 cells: 6 full blocks then a half block.
+	if !strings.Contains(out, "██████▌") {
+		t.Fatalf("expected partial boundary cell: %q", out)
+	}
+}
+
 func TestTXStatusLabel(t *testing.T) {
 	yes := TXStatusLabel("yes")
-	if !strings.Contains(yes, "yes") {
+	if !strings.Contains(yes, "done") {
 		t.Fatalf("yes label: %q", yes)
 	}
-	if !strings.Contains(yes, LabelTranscribed) {
-		t.Fatalf("yes label missing txt prefix: %q", yes)
-	}
 	no := TXStatusLabel("no")
-	if !strings.Contains(no, "no") {
+	if !strings.Contains(no, "none") {
 		t.Fatalf("no label: %q", no)
-	}
-	if !strings.Contains(no, LabelAudioSaved) {
-		t.Fatalf("no label missing aud prefix: %q", no)
 	}
 }

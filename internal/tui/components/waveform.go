@@ -42,14 +42,14 @@ func (v WaveformViz) Render() string {
 	b.WriteString("\n")
 	b.WriteString(subtleStyle.Render(truncate(v.SystemLabel, v.barWidth())))
 	b.WriteString("\n")
-	b.WriteString(v.renderMeter(v.SystemBands, systemEQColors))
+	b.WriteString(v.renderMeter(v.SystemBands, &systemEQStyles))
 	b.WriteString("\n\n")
 	b.WriteString(labelStyle.Render("Microphone"))
 	b.WriteString("\n")
 	b.WriteString(subtleStyle.Render(truncate(v.MicLabel, v.barWidth())))
 	b.WriteString("\n")
 	if v.Recording {
-		b.WriteString(v.renderMeter(v.MicBands, micEQColors))
+		b.WriteString(v.renderMeter(v.MicBands, &micEQStyles))
 	} else {
 		b.WriteString(v.renderIdleMeter())
 		b.WriteString("\n")
@@ -149,25 +149,25 @@ func (v WaveformViz) renderUltraCompact() string {
 	b.WriteString(labelStyle.Render("Sys"))
 	b.WriteString(subtleStyle.Render(" " + truncate(v.SystemLabel, max(6, v.Width/4))))
 	b.WriteString("\n")
-	b.WriteString(v.renderSparkline(v.SystemBands, systemEQColors))
+	b.WriteString(v.renderSparkline(v.SystemBands, &systemEQStyles))
 	b.WriteString("\n")
 	b.WriteString(labelStyle.Render("Mic"))
 	if v.Recording {
 		b.WriteString("\n")
-		b.WriteString(v.renderSparkline(v.MicBands, micEQColors))
+		b.WriteString(v.renderSparkline(v.MicBands, &micEQStyles))
 	} else {
 		b.WriteString(subtleStyle.Render(" —"))
 	}
 	return b.String()
 }
 
-func (v WaveformViz) renderSparkline(bands []float64, colors [eqRows]string) string {
+func (v WaveformViz) renderSparkline(bands []float64, styles *[eqRows]lipgloss.Style) string {
 	n := v.barWidth()
 	cols := fitBands(bands, n)
 	var chars strings.Builder
 	chars.Grow(n)
-	for i, lv := range cols {
-		h := bandHeight(lv, v.LevelFrame, i)
+	for _, lv := range cols {
+		h := bandHeight(lv)
 		idx := int(h * float64(len(partialRunes)-1) / float64(eqRows))
 		if idx < 0 {
 			idx = 0
@@ -177,8 +177,7 @@ func (v WaveformViz) renderSparkline(bands []float64, colors [eqRows]string) str
 		}
 		chars.WriteRune(partialRunes[idx])
 	}
-	colorIdx := eqRows - 1
-	return lipgloss.NewStyle().Foreground(lipgloss.Color(colors[colorIdx])).Render(chars.String())
+	return styles[eqRows-1].Render(chars.String())
 }
 
 func (v WaveformViz) renderCompact() string {
@@ -187,14 +186,14 @@ func (v WaveformViz) renderCompact() string {
 	b.WriteString(" ")
 	b.WriteString(subtleStyle.Render(truncate(v.SystemLabel, max(8, v.Width/3))))
 	b.WriteString("\n")
-	b.WriteString(v.renderMeterRows(v.SystemBands, systemEQColors))
+	b.WriteString(v.renderMeterRows(v.SystemBands, &systemEQStyles))
 	b.WriteString("\n")
 	b.WriteString(labelStyle.Render("Mic"))
 	b.WriteString(" ")
 	b.WriteString(subtleStyle.Render(truncate(v.MicLabel, max(8, v.Width/3))))
 	b.WriteString("\n")
 	if v.Recording {
-		b.WriteString(v.renderMeterRows(v.MicBands, micEQColors))
+		b.WriteString(v.renderMeterRows(v.MicBands, &micEQStyles))
 	} else {
 		b.WriteString(subtleStyle.Render("— while recording"))
 	}
@@ -205,37 +204,33 @@ func (v WaveformViz) renderCompact() string {
 	return b.String()
 }
 
-func (v WaveformViz) renderMeterRows(bands []float64, colors [eqRows]string) string {
+func (v WaveformViz) renderMeterRows(bands []float64, styles *[eqRows]lipgloss.Style) string {
 	width := v.barWidth()
 	cols := fitBands(bands, width)
 	rows := v.eqRowCount()
 	heights := make([]float64, width)
 	for i, lv := range cols {
-		heights[i] = bandHeight(lv, v.LevelFrame, i)
+		heights[i] = bandHeight(lv)
 	}
 	// Scale heights to compact row count
 	maxH := float64(rows)
 	for i := range heights {
 		heights[i] = heights[i] * maxH / float64(eqRows)
 	}
-	return renderEqualizerRows(heights, colors, rows, v.compact())
+	return renderEqualizerRows(heights, styles, rows, v.compact())
 }
 
 func (v WaveformViz) renderIdleMeter() string {
-	return renderEqualizerRows(make([]float64, v.barWidth()), systemEQColors, v.eqRowCount(), v.compact())
+	return renderEqualizerRows(make([]float64, v.barWidth()), &systemEQStyles, v.eqRowCount(), v.compact())
 }
 
-var (
-	systemEQColors = [eqRows]string{"99", "99", "135", "135", "212", "212", "214", "228"}
-	micEQColors    = [eqRows]string{"168", "168", "170", "170", "212", "212", "218", "225"}
-	partialRunes   = []rune{'░', '▁', '▂', '▃', '▄', '▅', '▆', '▇'}
-)
+var partialRunes = []rune{'▁', '▁', '▂', '▃', '▄', '▅', '▆', '▇'}
 
-func (v WaveformViz) renderMeter(bands []float64, colors [eqRows]string) string {
-	return v.renderMeterRows(bands, colors)
+func (v WaveformViz) renderMeter(bands []float64, styles *[eqRows]lipgloss.Style) string {
+	return v.renderMeterRows(bands, styles)
 }
 
-func bandHeight(raw float64, frame uint64, col int) float64 {
+func bandHeight(raw float64) float64 {
 	if raw <= waveNoiseGate {
 		return 0
 	}
@@ -262,17 +257,17 @@ func fitBands(bands []float64, width int) []float64 {
 	return out
 }
 
-func renderEqualizer(heights []float64, colors [eqRows]string) string {
-	return renderEqualizerRows(heights, colors, eqRows, false)
+func renderEqualizer(heights []float64, styles *[eqRows]lipgloss.Style) string {
+	return renderEqualizerRows(heights, styles, eqRows, false)
 }
 
-func renderEqualizerRows(heights []float64, colors [eqRows]string, rows int, tight bool) string {
+func renderEqualizerRows(heights []float64, styles *[eqRows]lipgloss.Style, rows int, tight bool) string {
 	width := len(heights)
 	if width == 0 || rows <= 0 {
 		return ""
 	}
 
-	var lines []string
+	lines := make([]string, 0, rows)
 	for row := rows - 1; row >= 0; row-- {
 		fullRow := row
 		if rows > 1 {
@@ -286,8 +281,7 @@ func renderEqualizerRows(heights []float64, colors [eqRows]string, rows int, tig
 			}
 			rowChars.WriteRune(cellAt(heights[col], fullRow))
 		}
-		style := lipgloss.NewStyle().Foreground(lipgloss.Color(colors[fullRow]))
-		lines = append(lines, style.Render(rowChars.String()))
+		lines = append(lines, styles[fullRow].Render(rowChars.String()))
 	}
 	return strings.Join(lines, "\n")
 }
@@ -298,7 +292,13 @@ func cellAt(height float64, row int) rune {
 	case fill >= 1:
 		return '█'
 	case fill <= 0:
-		return '░'
+		// Empty cells used to render '░', which drowned the bars in an 8-row
+		// rectangle of static. Blank above, a faint baseline dot on row 0 so a
+		// silent meter still reads as a meter and not as missing content.
+		if row == 0 {
+			return '·'
+		}
+		return ' '
 	default:
 		idx := int(fill * float64(len(partialRunes)-1))
 		if idx < 0 {
@@ -354,5 +354,5 @@ func BandsRenderIdentically(a, b []float64) bool {
 }
 
 func renderLevel(v float64) int {
-	return int(bandHeight(v, 0, 0) * bandRenderSteps) // 0..eqRows*bandRenderSteps
+	return int(bandHeight(v) * bandRenderSteps) // 0..eqRows*bandRenderSteps
 }

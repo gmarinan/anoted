@@ -1,9 +1,6 @@
 package level
 
-import (
-	"math"
-	"math/cmplx"
-)
+import "math"
 
 // BandCount is the number of fixed frequency bars in the equalizer display.
 const BandCount = 32
@@ -15,11 +12,12 @@ const (
 	levelMeterSampleRate = 16000
 	chunkSamples         = 320
 	chunkBytes           = chunkSamples * 2
+
+	// bandRelease is the per-chunk exponential fall applied when a band gets
+	// quieter (~20 ms parec chunks); attack is instant.
+	bandRelease = 0.55
 )
 
-// bandsFromPCM derives log-spaced frequency band levels from a mono s16le chunk.
-// Levels are absolute (not re-normalized to the loudest band each frame) so bars
-// keep moving under steady audio instead of freezing for seconds.
 // spectrumScratch holds the working buffers for one audio stream.
 //
 // Each parec reader owns one. They cannot be package-level: system and
@@ -27,23 +25,23 @@ const (
 // between them would be a data race.
 type spectrumScratch struct {
 	samples [fftSize]float64
-	complex [fftSize]complex128
-	mags    [fftSize/2 + 1]float64
-	bands   [BandCount]float64
+	packed  [fftSize / 2]complex128
+	magsSq  [fftSize/2 + 1]float64
 	out     [BandCount]float64
 }
 
+// bandsFromPCM derives log-spaced frequency band levels from a mono s16le chunk.
+// Levels are absolute (not re-normalized to the loudest band each frame) so bars
+// keep moving under steady audio instead of freezing for seconds.
+//
+// The returned slice aliases the scratch and is overwritten by the next chunk;
+// callers must consume or copy it before then (foldBands copies under lock).
 func (s *spectrumScratch) bandsFromPCM(buf []byte) []float64 {
 	samples := pcmWindow(s.samples[:], buf)
-	mags := fftMagnitudes(s.complex[:], s.mags[:], samples)
-	raw := groupBands(s.bands[:], mags)
-
-	// The result is handed to the caller, which stores it on the monitor and
-	// later copies it out under lock, so it must not alias the scratch that the
-	// next chunk overwrites.
-	out := make([]float64, BandCount)
+	msq := realFFTMagSq(s.packed[:], s.magsSq[:], samples)
+	out := groupBands(s.out[:], msq)
 	const bandGain = 18.0
-	for i, b := range raw {
+	for i, b := range out {
 		v := b * bandGain
 		if v > 1 {
 			v = 1
@@ -53,21 +51,42 @@ func (s *spectrumScratch) bandsFromPCM(buf []byte) []float64 {
 	return out
 }
 
-// emphasizeTransients boosts bands that changed since the last chunk so the EQ reacts faster.
-func emphasizeTransients(prev, cur []float64) []float64 {
-	out := make([]float64, len(cur))
+// updateBands folds one chunk of band levels into monitor-owned display state:
+// transient emphasis against prev, then instant-attack/exponential-release
+// smoothing into smoothed. All slices must be the same length; prev is
+// advanced to cur. Fused into one pass so the chunk path allocates nothing.
+func updateBands(smoothed, prev, cur []float64) {
 	for i, c := range cur {
-		delta := 0.0
-		if i < len(prev) {
-			delta = math.Abs(c - prev[i])
+		// Boost bands that changed since the last chunk so the EQ reacts faster.
+		e := c + math.Abs(c-prev[i])*4
+		if e > 1 {
+			e = 1
 		}
-		v := c + delta*4
-		if v > 1 {
-			v = 1
+		if e > smoothed[i] {
+			smoothed[i] = e
+		} else {
+			smoothed[i] = math.Max(e, smoothed[i]*bandRelease)
 		}
-		out[i] = v
+		prev[i] = c
 	}
-	return out
+}
+
+// foldBands merges one chunk into the monitor's smoothed/prev band state,
+// allocating only on the first chunk after a (re)start. cur may alias scratch;
+// only its values are retained.
+func foldBands(smoothed, prev, cur []float64) (s, p []float64) {
+	if len(prev) != len(cur) {
+		prev = make([]float64, len(cur))
+	}
+	if len(smoothed) != len(cur) {
+		// First chunk: no previous state, so no transient boost and nothing to
+		// release — the display simply starts at this chunk's levels.
+		smoothed = append([]float64(nil), cur...)
+		copy(prev, cur)
+		return smoothed, prev
+	}
+	updateBands(smoothed, prev, cur)
+	return smoothed, prev
 }
 
 // pcmWindow fills dst with the windowed tail of buf. dst is reused across
@@ -97,37 +116,52 @@ func pcmWindow(dst []float64, buf []byte) []float64 {
 	return dst
 }
 
-// fftMagnitudes writes the magnitude spectrum of samples into mags, reusing the
-// caller's complex scratch buffer.
-func fftMagnitudes(scratch []complex128, mags []float64, samples []float64) []float64 {
-	scratch = scratch[:fftSize]
-	for i, v := range samples {
-		scratch[i] = complex(v, 0)
+// realFFTMagSq computes the squared, normalized magnitude spectrum of fftSize
+// real samples using a half-size complex FFT: the even/odd samples are packed
+// into fftSize/2 complex values, transformed, then untangled bin by bin. That
+// halves the FFT work versus transforming a zero-imaginary complex input, and
+// squared magnitudes let groupBands skip a hypot per bin (it averages powers
+// anyway).
+func realFFTMagSq(packed []complex128, msq []float64, samples []float64) []float64 {
+	const n = fftSize / 2
+	packed = packed[:n]
+	for k := 0; k < n; k++ {
+		packed[k] = complex(samples[2*k], samples[2*k+1])
 	}
-	fftInPlace(scratch)
-	mags = mags[:fftSize/2+1]
-	for i := range mags {
-		mags[i] = cmplx.Abs(scratch[i]) / float64(fftSize)
+	fftInPlace(packed)
+
+	msq = msq[:n+1]
+	const invN2 = 1.0 / float64(fftSize) / float64(fftSize)
+	// DC and Nyquist bins are real-valued combinations of the first packed bin.
+	re0, im0 := real(packed[0]), imag(packed[0])
+	msq[0] = (re0 + im0) * (re0 + im0) * invN2
+	msq[n] = (re0 - im0) * (re0 - im0) * invN2
+	for k := 1; k < n; k++ {
+		zk := packed[k]
+		znk := packed[n-k]
+		// Even/odd untangling: X[k] = Fe[k] + W^k·Fo[k] with W = e^(-2πi/fftSize).
+		fe := complex((real(zk)+real(znk))/2, (imag(zk)-imag(znk))/2)
+		fo := complex((imag(zk)+imag(znk))/2, (real(znk)-real(zk))/2)
+		x := fe + rfftTwiddles[k]*fo
+		msq[k] = (real(x)*real(x) + imag(x)*imag(x)) * invN2
 	}
-	return mags
+	return msq
 }
 
-// groupBands collapses the magnitude spectrum into the display bands using the
-// precomputed bin boundaries.
-func groupBands(dst []float64, mags []float64) []float64 {
+// groupBands collapses the power spectrum into the display bands using the
+// precomputed bin boundaries: RMS magnitude per band.
+func groupBands(dst []float64, msq []float64) []float64 {
 	dst = dst[:BandCount]
 	for b, r := range bandBins {
 		low, high := r[0], r[1]
-		if high > len(mags) {
-			high = len(mags)
+		if high > len(msq) {
+			high = len(msq)
 		}
 		var sum float64
-		cnt := 0
 		for i := low; i < high; i++ {
-			sum += mags[i] * mags[i]
-			cnt++
+			sum += msq[i]
 		}
-		if cnt > 0 {
+		if cnt := high - low; cnt > 0 {
 			dst[b] = math.Sqrt(sum / float64(cnt))
 		} else {
 			dst[b] = 0
@@ -168,22 +202,4 @@ func fftInPlace(x []complex128) {
 			}
 		}
 	}
-}
-
-func smoothBands(prev, sample []float64) []float64 {
-	if len(prev) != len(sample) {
-		out := make([]float64, len(sample))
-		copy(out, sample)
-		return out
-	}
-	const release = 0.55 // faster fall (~20 ms parec chunks) for responsive bars
-	out := make([]float64, len(sample))
-	for i := range sample {
-		if sample[i] > prev[i] {
-			out[i] = sample[i]
-		} else {
-			out[i] = math.Max(sample[i], prev[i]*release)
-		}
-	}
-	return out
 }

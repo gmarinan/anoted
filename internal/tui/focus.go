@@ -29,13 +29,17 @@ func (m Model) handleTerminalFocus(focused bool) (tea.Model, tea.Cmd) {
 	// Keeping the stream open also prevents PipeWire from suspending the sink,
 	// which matters more on a laptop than the CPU time does.
 	if m.blurred {
-		// The in-flight tick chain dies with the generation bump.
-		m.levelGen++
 		if m.recording {
 			// Still recording: the meter is the only feedback that audio is
-			// arriving, so leave it running for whoever brings the window back.
+			// arriving, so leave the existing tick chain running (the
+			// scheduler's blurred check explicitly allows this case). Bumping
+			// the generation here used to kill the chain with nothing to
+			// restart it, freezing the meter for the whole blurred stretch of
+			// a recording.
 			return m, nil
 		}
+		// The in-flight tick chain dies with the generation bump.
+		m.levelGen++
 		return m, m.stopSystemLevelCmd()
 	}
 

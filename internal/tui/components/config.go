@@ -14,19 +14,7 @@ const (
 	configSidebarLayoutMin = 72
 )
 
-var (
-	configSidebarActiveStyle = lipgloss.NewStyle().
-					Border(lipgloss.RoundedBorder()).
-					BorderForeground(lipgloss.Color("63")).
-					Bold(true).
-					Foreground(lipgloss.Color("229")).
-					Padding(0, 1)
-	configSidebarInactiveStyle = lipgloss.NewStyle().
-					Border(lipgloss.RoundedBorder()).
-					BorderForeground(lipgloss.Color("238")).
-					Foreground(lipgloss.Color("244")).
-					Padding(0, 1)
-)
+// Sidebar styles live in theme.go with the rest of the palette.
 
 // ConfigFieldRow is one row in the config menu.
 type ConfigFieldRow struct {
@@ -76,13 +64,13 @@ type ConfigMenuView struct {
 func (v ConfigMenuView) View() string {
 	base := v.renderBase()
 	if v.DevicePickerOpen {
-		h := v.overlayHeight()
+		h := v.overlayHeight(base)
 		return FloatCenter(base, v.renderDeviceModal(), v.Width, h)
 	}
 	if !v.ModalOpen {
 		return base
 	}
-	h := v.overlayHeight()
+	h := v.overlayHeight(base)
 	return FloatCenter(base, v.renderModal(), v.Width, h)
 }
 
@@ -94,12 +82,14 @@ func (v ConfigMenuView) renderBase() string {
 	return b.String()
 }
 
-func (v ConfigMenuView) overlayHeight() int {
+// overlayHeight takes the already-rendered base so opening a modal does not
+// render the whole screen twice (HomeView does the same).
+func (v ConfigMenuView) overlayHeight(base string) int {
 	h := v.Height - 8
 	if h < 12 {
 		h = 12
 	}
-	baseH := lipgloss.Height(v.renderBase())
+	baseH := lipgloss.Height(base)
 	if baseH > h {
 		h = baseH
 	}
@@ -122,9 +112,8 @@ func (v ConfigMenuView) renderAllSections() string {
 	sidebar := v.renderSidebar(sidebarW)
 	content := v.renderContentPanel(v.activeSection(), contentW)
 	left, right := EqualizeBoxHeights(sidebar, content)
-	gap := strings.Repeat(" ", panelColumnGap)
-	joined := lipgloss.JoinHorizontal(lipgloss.Top, left, gap, right)
-	return PadLineBlock(joined, v.Width)
+	// No right-padding here: PadView pads every line of the final frame once.
+	return lipgloss.JoinHorizontal(lipgloss.Top, left, padSpaces(panelColumnGap), right)
 }
 
 func configSidebarWidth(total int) int {
@@ -182,11 +171,11 @@ func (v ConfigMenuView) renderSidebarItem(sec ConfigSectionPanel, width int) str
 }
 
 func (v ConfigMenuView) renderContentPanel(sec ConfigSectionPanel, width int) string {
-	body := v.renderSectionFields(true, sec)
+	body := v.renderSectionFields(true, sec, width-4)
 	return Box(strings.ToUpper(sec.Label), body, width)
 }
 
-func (v ConfigMenuView) renderSectionFields(focused bool, sec ConfigSectionPanel) string {
+func (v ConfigMenuView) renderSectionFields(focused bool, sec ConfigSectionPanel, innerW int) string {
 	if len(sec.Fields) == 0 {
 		return subtleStyle.Render("(no fields)")
 	}
@@ -196,7 +185,7 @@ func (v ConfigMenuView) renderSectionFields(focused bool, sec ConfigSectionPanel
 		if f.Selected {
 			cursorLine = len(lines)
 		}
-		lines = append(lines, v.renderFieldLine(focused, f))
+		lines = append(lines, v.renderFieldLine(focused, f, innerW))
 		if f.Kind == "list" {
 			lines = append(lines, v.renderListItems(focused, f)...)
 		}
@@ -244,24 +233,27 @@ func configFieldRows(height int) int {
 	}
 }
 
-func (v ConfigMenuView) renderFieldLine(focused bool, f ConfigFieldRow) string {
-	marker := "  "
+func (v ConfigMenuView) renderFieldLine(focused bool, f ConfigFieldRow, innerW int) string {
 	if focused && f.Selected {
-		marker = "> "
+		// Full-width selection bar, matching the sessions table. Plain text
+		// only: the bar's own colors carry the row, and any inner escapes
+		// would cut the background short at their first reset.
+		val := f.Value
+		if v.Editing && f.Kind != "list" {
+			if v.InputValue != "" {
+				val = v.InputValue + "_"
+			} else {
+				val = f.Value + "_"
+			}
+		}
+		return selRowStyle.Render(padCell("▸ "+f.Label+": "+val, innerW))
 	}
 	label := labelStyle.Render(f.Label + ":")
 	val := valueStyle.Render(f.Value)
 	if f.Kind == "readonly" || f.Kind == "device" || f.Kind == "path" {
 		val = subtleStyle.Render(f.Value)
 	}
-	if focused && f.Selected && v.Editing && f.Kind != "list" {
-		if v.InputValue != "" {
-			val = valueStyle.Render(v.InputValue + "_")
-		} else {
-			val = valueStyle.Render(f.Value + "_")
-		}
-	}
-	return marker + label + " " + val
+	return "  " + label + " " + val
 }
 
 func (v ConfigMenuView) renderListItems(focused bool, f ConfigFieldRow) []string {

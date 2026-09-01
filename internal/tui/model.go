@@ -91,16 +91,21 @@ type Model struct {
 	statusNote           string
 	statusExpiry         time.Time
 	recordStart          time.Time
-	sessionDir           string
-	sessionID            int64 // row id of the in-flight recording; 0 when not recording
-	errMsg               string
-	doctorReport         doctor.Report
-	sessions             []session.Record
-	sessionCursor        int
-	sessionsErr          string
-	width                int
-	height               int
-	quitting             bool
+	// recordElapsed is advanced by the 1s duration tick instead of calling
+	// time.Since from View, which kept View from being a pure function of the
+	// Model. recBlink pulses the REC badge on the same tick.
+	recordElapsed time.Duration
+	recBlink      bool
+	sessionDir    string
+	sessionID     int64 // row id of the in-flight recording; 0 when not recording
+	errMsg        string
+	doctorReport  doctor.Report
+	sessions      []session.Record
+	sessionCursor int
+	sessionsErr   string
+	width         int
+	height        int
+	quitting      bool
 
 	helpOpen          bool
 	quitConfirmOpen   bool
@@ -174,6 +179,12 @@ type Model struct {
 	// it is a pointer.
 	scroll *sessionScrollAccumulator
 
+	// cache memoizes expensive frame pieces across renders; see view_cache.go.
+	// viewGen bumps whenever slice/map contents it fingerprints are replaced
+	// (session records, artifacts, config-derived facts).
+	cache   *viewCache
+	viewGen uint64
+
 	// Cached environment facts. View must be a pure function of the Model, and
 	// these were all being probed from inside it: exec.LookPath sweeps across
 	// several file managers, stat calls per session row, a transcript read, and
@@ -198,6 +209,7 @@ func NewModel(deps Deps) Model {
 		provider:   "none",
 		autoRecord: deps.Config.AutoRecord,
 		scroll:     newSessionScroll(),
+		cache:      &viewCache{},
 		recStatus:  deps.Recorder.Status(),
 	}
 	m = m.refreshEnvironment()
@@ -264,6 +276,7 @@ func (m Model) tickDuration() time.Duration {
 func (m Model) applyConfig(cfg config.Config) Model {
 	m.deps.Config = cfg
 	m.deps.Transcriber = transcribe.New(cfg)
+	m.viewGen++
 	// The opener and autostart facts are derived from this config, so they have
 	// to be re-resolved here rather than from View.
 	return m.refreshEnvironment()
@@ -342,8 +355,9 @@ func (m Model) recorderUnusable() string {
 // details and preview panels, pushing the footer off the bottom.
 func (m Model) sessionsPageSize() int {
 	// Rows consumed by the header, tabs, status/audio boxes, the details and
-	// preview panels, borders and the footer.
-	const chrome = 26
+	// preview panels, borders and the footer. Box titles moved into the top
+	// border, saving one row in each of the three stacked panel bands.
+	const chrome = 23
 	n := m.height - chrome
 	switch {
 	case m.height <= 0:

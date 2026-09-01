@@ -3,6 +3,7 @@
 package level
 
 import (
+	"fmt"
 	"sync"
 
 	"anoted/internal/wasapi"
@@ -17,6 +18,10 @@ type windowsMonitor struct {
 	micBands    []float64
 
 	feedChannels int
+
+	// Reusable downmix scratch, one per direction, guarded by mu like the rest.
+	monoSys []byte
+	monoMic []byte
 }
 
 func newMonitor(resolver DeviceResolver) Monitor {
@@ -71,18 +76,23 @@ func (m *windowsMonitor) feedPCM(pcm []byte, system bool) {
 	if len(pcm) < 2 {
 		return
 	}
+	// One lock for the whole call: feedChannels used to be read outside it,
+	// racing SetFeedChannels/StopSystem, and the nil downmix destination
+	// allocated a fresh buffer per chunk.
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	channels := m.feedChannels
 	if channels <= 0 {
 		channels = 2
 	}
-	mono := wasapi.DownmixToMono(nil, pcm, channels)
-	sample := peakS16LE(mono)
-	m.mu.Lock()
-	defer m.mu.Unlock()
 	if system {
+		m.monoSys = wasapi.DownmixToMono(m.monoSys, pcm, channels)
+		sample := peakS16LE(m.monoSys)
 		m.system = smoothPeak(m.system, sample)
 		m.systemBands = peakBands(m.systemBands, sample)
 	} else {
+		m.monoMic = wasapi.DownmixToMono(m.monoMic, pcm, channels)
+		sample := peakS16LE(m.monoMic)
 		m.mic = smoothPeak(m.mic, sample)
 		m.micBands = peakBands(m.micBands, sample)
 	}

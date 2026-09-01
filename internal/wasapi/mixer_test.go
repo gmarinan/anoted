@@ -29,8 +29,8 @@ func TestMasterClockMixerLoopDriven(t *testing.T) {
 	loop[2], loop[3] = 20, 0
 	loop[6], loop[7] = 40, 0
 	mixer.PushLoop(loop)
-	mixer.emitTick()
-	mixer.emitTick()
+	mixer.emitFrames(1)
+	mixer.emitFrames(1)
 
 	if got := mixer.OutputFrames(); got != 2 {
 		t.Fatalf("output frames: got %d want 2", got)
@@ -51,7 +51,7 @@ func TestMasterClockMixerLoopUnderrunPadsSilence(t *testing.T) {
 
 	loop := []byte{0, 0, 100, 0}
 	mixer.PushLoop(loop)
-	mixer.emitTick()
+	mixer.emitFrames(1)
 
 	if len(out) != 4 {
 		t.Fatalf("len %d", len(out))
@@ -69,8 +69,8 @@ func TestMasterClockMixerMicOnlyEmits(t *testing.T) {
 
 	mic := []byte{0, 0, 20, 0, 0, 0, 40, 0}
 	mixer.PushMic(mic)
-	mixer.emitTick()
-	mixer.emitTick()
+	mixer.emitFrames(1)
+	mixer.emitFrames(1)
 
 	if got := mixer.OutputFrames(); got != 2 {
 		t.Fatalf("output frames: got %d want 2", got)
@@ -138,5 +138,37 @@ func TestMasterClockMixerMakesUpDroppedTicks(t *testing.T) {
 	want := mixer.FramesPerTick() + CanonicalSampleRate
 	if got := mixer.OutputFrames(); got != want {
 		t.Fatalf("dropped ticks were not made up: got %d frames, want %d", got, want)
+	}
+}
+
+func TestMasterClockMixerBatchMixesAndPadsInOneCall(t *testing.T) {
+	var calls [][]byte
+	mixer := NewMasterClockMixer(CanonicalSampleRate, CanonicalChannels, func(pcm []byte) {
+		calls = append(calls, append([]byte(nil), pcm...))
+	})
+
+	loop := make([]byte, 8) // 2 stereo frames
+	loop[2] = 20
+	loop[6] = 40
+	mixer.PushLoop(loop)
+	mixer.emitFrames(3) // one more frame than buffered: the tail must be silence
+
+	if len(calls) != 1 {
+		t.Fatalf("a batch should reach onPCM once, got %d calls", len(calls))
+	}
+	out := calls[0]
+	if len(out) != 12 {
+		t.Fatalf("len %d want 12", len(out))
+	}
+	if out[2] != 10 || out[6] != 20 {
+		t.Fatalf("mixed frames: %v", out)
+	}
+	for i, b := range out[8:] {
+		if b != 0 {
+			t.Fatalf("tail byte %d should be silence: %v", i, out[8:])
+		}
+	}
+	if got := mixer.OutputFrames(); got != 3 {
+		t.Fatalf("output frames: got %d want 3", got)
 	}
 }

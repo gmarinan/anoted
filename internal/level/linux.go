@@ -77,14 +77,12 @@ func (m *linuxMonitor) StartSystem(monitorID string) error {
 		return fmt.Errorf("resolve system monitor %q: %w", monitorID, err)
 	}
 	m.StopSystem()
-	cancel, err := m.startStream(device, func(buf []byte, peak float64, bands []float64, prev *[]float64) {
+	cancel, err := m.startStream(device, func(peak float64, bands []float64) {
 		m.mu.Lock()
 		m.system = peak
-		emph := emphasizeTransients(*prev, bands)
-		*prev = bands
-		m.systemBands = smoothBands(m.systemBands, emph)
+		m.systemBands, m.systemPrev = foldBands(m.systemBands, m.systemPrev, bands)
 		m.mu.Unlock()
-	}, &m.systemPrev)
+	})
 	if err != nil {
 		return fmt.Errorf("start system level monitor: %w", err)
 	}
@@ -100,14 +98,12 @@ func (m *linuxMonitor) StartMic(sourceID string) error {
 		return fmt.Errorf("resolve microphone %q: %w", sourceID, err)
 	}
 	m.StopMic()
-	cancel, err := m.startStream(device, func(buf []byte, peak float64, bands []float64, prev *[]float64) {
+	cancel, err := m.startStream(device, func(peak float64, bands []float64) {
 		m.mu.Lock()
 		m.mic = peak
-		emph := emphasizeTransients(*prev, bands)
-		*prev = bands
-		m.micBands = smoothBands(m.micBands, emph)
+		m.micBands, m.micPrev = foldBands(m.micBands, m.micPrev, bands)
 		m.mu.Unlock()
-	}, &m.micPrev)
+	})
 	if err != nil {
 		return fmt.Errorf("start mic level monitor: %w", err)
 	}
@@ -197,7 +193,7 @@ func (m *linuxMonitor) resolveMic(sourceID string) (string, error) {
 	return mic, nil
 }
 
-func (m *linuxMonitor) startStream(device string, onChunk func(buf []byte, peak float64, bands []float64, prev *[]float64), prev *[]float64) (context.CancelFunc, error) {
+func (m *linuxMonitor) startStream(device string, onChunk func(peak float64, bands []float64)) (context.CancelFunc, error) {
 	path, err := exec.LookPath("parec")
 	if err != nil {
 		return nil, fmt.Errorf("parec not found: %w", err)
@@ -228,7 +224,26 @@ func (m *linuxMonitor) startStream(device string, onChunk func(buf []byte, peak 
 
 	go func() {
 		defer cancel()
-		buf := make([]byte, chunkBytes)
+		// Read parec in process-time-sized chunks so the economy/balanced
+		// presets actually reduce the FFT rate. With a fixed 20ms read every
+		// preset ran 50 FFTs a second per stream and only the UI tick changed —
+		// the documented CPU savings never materialized. The FFT still analyzes
+		// the tail of each read (pcmWindow), and the display could not show the
+		// skipped chunks anyway: its tick is at least as coarse as the read.
+		//
+		// Accepted tradeoff: peak decay and band release apply per read, so on
+		// the coarse presets bars fall slower in wall time and a transient in
+		// the middle of a read only registers on the peak meter (which scans
+		// the whole read), not the EQ. At 3–12 fps the smoothing is barely
+		// observable, which is exactly what those presets opt into.
+		chunks := process / 20
+		if chunks < 1 {
+			chunks = 1
+		}
+		if chunks > 25 {
+			chunks = 25 // cap one read at 500ms so cancellation stays prompt
+		}
+		buf := make([]byte, chunkBytes*chunks)
 		scratch := &spectrumScratch{}
 		var smoothed float64
 		for {
@@ -240,8 +255,7 @@ func (m *linuxMonitor) startStream(device string, onChunk func(buf []byte, peak 
 			chunk := buf[:n]
 			sample := peakS16LE(chunk)
 			smoothed = smoothPeak(smoothed, sample)
-			bands := scratch.bandsFromPCM(chunk)
-			onChunk(chunk, smoothed, bands, prev)
+			onChunk(smoothed, scratch.bandsFromPCM(chunk))
 		}
 	}()
 
