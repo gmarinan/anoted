@@ -157,7 +157,7 @@ The next gift after transcripts is **meeting minutes**: feed a finished transcri
 Tracked as ideas, not promises:
 
 - [ ] Minutes / summary via Ollama from a finished transcript
-- [ ] First-class Windows installer (and signed `anoted.exe` on Releases)
+- [ ] First-class Windows installer
 - [ ] Smoother WSL2 helper protocol for people who live in the Linux TUI on Windows
 
 Issues and PRs are welcome. This is a community project.
@@ -192,6 +192,17 @@ Regenerate the README screenshots (needs [`freeze`](https://github.com/charmbrac
 go install github.com/charmbracelet/freeze@latest
 make readme-shots
 ```
+
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+
+- **Committers and reviewers:** [@gmarinan](https://github.com/gmarinan)
+- **Approvers:** [@gmarinan](https://github.com/gmarinan)
+
+**Privacy policy:** This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it. Recordings and transcripts stay on the local machine. Whisper and (planned) Ollama run locally; anoted does not upload audio.
+
+Windows binaries from GitHub Actions may be submitted to SignPath for Authenticode signing. Each signing request is approved manually. Unsigned Nightly builds can still appear while that request is pending.
 
 ## License
 
