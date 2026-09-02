@@ -1,4 +1,4 @@
-.PHONY: build test test-race lint lint-windows run clean build-windows build-windows-helper
+.PHONY: build test test-race lint lint-windows run clean build-windows build-windows-helper readme-shots shot
 
 BINARY=anoted
 # Derived from git so every build identifies its commit; override with
@@ -44,6 +44,32 @@ test-race:
 
 run: build
 	./bin/$(BINARY) watch
+
+# Render README screenshots from the real TUI components (requires `freeze`).
+# Install once: go install github.com/charmbracelet/freeze@latest
+#
+# Pipe the frame into freeze. A freeze JSON config with width/height 0 captures
+# empty window chrome; flags here are the working path.
+readme-shots:
+	@command -v freeze >/dev/null 2>&1 || { echo "install freeze: go install github.com/charmbracelet/freeze@latest"; exit 1; }
+	mkdir -p docs/assets
+	go build -trimpath -ldflags "-s -w -X anoted/internal/buildinfo.version=v0.1.0" -o bin/readme-shots ./tools/readme-shots
+	$(MAKE) -s shot SCENE=recording OUT=docs/assets/home-recording.png
+	$(MAKE) -s shot SCENE=transcribe OUT=docs/assets/home-transcribe.png
+	$(MAKE) -s shot SCENE=doctor OUT=docs/assets/doctor.png
+	$(MAKE) -s shot SCENE=config OUT=docs/assets/config.png
+
+shot:
+	COLORTERM=truecolor TERM=xterm-256color ./bin/readme-shots $(SCENE) | freeze \
+		--window \
+		--background "#16141F" \
+		-p 24 \
+		--border.radius 12 \
+		--border.width 1 \
+		--border.color "#544C8C" \
+		--font.family "JetBrainsMono Nerd Font" \
+		--font.size 14 \
+		-o $(OUT)
 
 clean:
 	rm -rf bin/

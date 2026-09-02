@@ -1,0 +1,68 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+      - name: Build
+        run: make build VERSION=${{ github.ref_name }}
+      - name: Package
+        run: |
+          mkdir -p dist
+          tar -C bin -czf dist/anoted-linux-amd64.tar.gz anoted
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: dist/anoted-linux-amd64.tar.gz
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache: true
+      - name: Build
+        shell: bash
+        run: |
+          go build -trimpath -ldflags "-s -w -X anoted/internal/buildinfo.version=${GITHUB_REF_NAME}" -o anoted.exe ./cmd/anoted
+      - name: Package
+        shell: bash
+        run: |
+          mkdir -p dist
+          powershell -Command "Compress-Archive -Path anoted.exe -DestinationPath dist/anoted-windows-amd64.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/anoted-windows-amd64.zip
+
+  publish:
+    needs: [linux, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" dist/* \
+            --title "${{ github.ref_name }}" \
+            --generate-notes \
+            --repo "${{ github.repository }}"

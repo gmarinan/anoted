@@ -1,240 +1,172 @@
-# anoted
+<p align="center">
+  <img src="docs/assets/anoted-banner.jpg" alt="anoted — local meeting recorder" width="920">
+</p>
 
-Cross-platform TUI for meeting detection and local audio recording.
+<p align="center">
+  <strong>Record meetings. Transcribe them on your machine. Keep the files.</strong><br>
+  A terminal app for Linux and Windows — no cloud, no account, no hidden capture.
+</p>
 
-**Privacy notice:** You are responsible for complying with applicable laws, company policies, and obtaining consent from meeting participants before recording. anoted never uploads audio to the cloud and does not record secretly — recording state is always visible in the TUI.
+<p align="center">
+  <img alt="Go 1.24" src="https://img.shields.io/badge/Go-1.24-00ADD8?logo=go&logoColor=white">
+  <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-9D8CFF">
+  <img alt="Linux and Windows" src="https://img.shields.io/badge/platform-Linux%20%7C%20Windows-3DDC97">
+  <img alt="Runs locally" src="https://img.shields.io/badge/audio-stays%20on%20your%20PC-FF6B81">
+</p>
 
-## Features (MVP)
+---
 
-- Bubble Tea v2 terminal UI
-- Meeting detection (mock, Linux, Windows)
-- Local audio recording with pluggable backends
-- SQLite session store
-- YAML configuration
-- `anoted doctor` for dependency checks
+anoted is a gift to anyone who wants meeting notes without uploading voices to a stranger's GPU. It watches for Google Meet or Microsoft Teams, records system audio plus your microphone, and can run [Whisper](https://github.com/openai/whisper) locally when you press `t`.
 
-## Requirements
+You always see when it is recording. Auto-record is off until you turn it on.
 
-- Go 1.22+
-- Linux: optional `pw-cat`, `ffmpeg`, `pactl`, `xdotool`, `wmctrl`
-- Windows 10+: native WASAPI capture (single `anoted.exe`; build on Windows or cross-compile with MinGW + `CGO_ENABLED=1`)
-- WSL2: TUI runs in Linux; real Windows audio via `windows-recorder.exe` (future)
+<p align="center">
+  <img src="docs/assets/home-recording.png" alt="anoted Home tab while recording a Google Meet call" width="920">
+</p>
+
+## What it does today
+
+- **Captures a meeting** from system loopback and the microphone, side by side, into a WAV you own
+- **Detects Meet and Teams** from window titles (and from the microphone being in use)
+- **Transcribes on-device** with Whisper (`turbo` by default) — txt, srt, vtt, json, or an Obsidian-friendly markdown note
+- **Shows a live equalizer** so you can tell the capture is actually alive
+- **Keeps a session library** in the same TUI: open the folder, play the file, delete, re-transcribe
+- **Runs a Doctor tab** that checks tools, devices, GPU, and Whisper instead of dumping you into a wiki
+- **Stays honest about privacy** — visible recording badge, optional tray icon, no uploads
+
+<p align="center">
+  <img src="docs/assets/home-transcribe.png" alt="anoted transcribing a Teams recording with Whisper" width="920">
+</p>
 
 ## Install
 
-### Linux (native)
+Pick your OS. Pre-built binaries will show up on the [Releases](https://github.com/gmarinan/anoted/releases) page once a `v*` tag is pushed. Building from source works today.
+
+### Linux
+
+You need [Go 1.24+](https://go.dev/dl/) and a working PipeWire (or PulseAudio) session.
 
 ```bash
-git clone <repo-url> anoted
+git clone https://github.com/gmarinan/anoted.git
 cd anoted
 make build
-sudo mv bin/anoted /usr/local/bin/   # optional
-anoted doctor
-anoted watch
+sudo install -m 755 bin/anoted /usr/local/bin/anoted
+
+anoted setup          # pick detection, install Whisper if you want it
+anoted doctor         # fail here, not in a meeting
+anoted watch          # the TUI
 ```
 
-### Windows (native)
+Useful extras: `pw-cat` / `ffmpeg` for capture, `xdotool` or `wmctrl` if you want window-title detection, `snixembed` on GNOME or i3 for the tray icon.
 
-Single executable with in-process WASAPI (system loopback + microphone). Config: `%AppData%\anoted\config.yaml`. Recordings default to `~\Music\anoted\`.
+Full walkthrough: [docs/linux.md](docs/linux.md)
+
+### Windows 10 / 11
+
+Build on Windows (WASAPI capture uses cgo — GitHub Actions does this for releases):
 
 ```powershell
+git clone https://github.com/gmarinan/anoted.git
+cd anoted
 go build -o anoted.exe ./cmd/anoted
+
 .\anoted.exe setup
 .\anoted.exe doctor
 .\anoted.exe watch
 ```
 
-Or cross-compile from Linux (requires MinGW-w64 for CGO):
+Allow microphone access in Windows Settings if Windows asks. Loopback follows the same OS privacy rules as any other recorder — anoted does not try to bypass them.
 
-```bash
-CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc make build-windows
-```
+Config lives in `%AppData%\anoted\config.yaml`. Recordings default to `%USERPROFILE%\Music\anoted\`.
 
-**Limitations:** loopback capture follows Windows privacy policies; meeting detection uses window titles (`MainWindowTitle`) and process names.
+Full walkthrough, including WSL2: [docs/windows.md](docs/windows.md)
 
-### WSL2
+## First ten minutes
 
-1. Build and run the TUI inside WSL2:
-
-```bash
-make build
-./bin/anoted watch
-```
-
-2. Build the Windows helper on Windows (or cross-compile):
-
-```bash
-make build-windows-helper
-# Copy bin/windows-recorder.exe to e.g. C:\Program Files\anoted\
-```
-
-anoted detects WSL2 and will use the helper for real Windows audio when the protocol is implemented.
-
-## Commands
-
-| Command | Description |
-|---------|-------------|
-| `anoted setup` | Guided setup (pick xdotool/wmctrl, install, save config) |
-| `anoted` / `anoted watch` | Start the TUI |
-| `anoted status` | Print detection and recorder status |
-| `anoted sessions` | List recorded sessions |
-| `anoted config` | Show config file |
-| `anoted transcribe <dir>` | Transcribe a session and report elapsed time |
-| `anoted doctor` | Check OS, tools, output path |
-| `anoted autostart enable --record` | Start at login and enable auto-record |
-
-## Hands-free recording (Linux)
-
-To start anoted when you log in and record meetings automatically:
-
-```bash
-anoted autostart enable --record
-```
-
-This creates `~/.config/autostart/anoted.desktop` and sets `auto_record: true` in your config. The TUI opens in a terminal at login; a visible recording indicator is shown while capturing.
-
-You can also toggle **launch_at_login** and **auto_record** in Config → General. You are responsible for participant consent and local recording laws.
-
-### System tray icon
-
-When `privacy.tray_indicator` is true (default), anoted shows an icon in the system tray:
-
-- **Watching** — app is running in the background
-- **Recording** — red dot while a meeting is being captured
-
-Right-click the icon for **Open recordings folder** or **Quit**. The tray complements the TUI; recording state is also shown in the terminal title and Home screen.
-
-On GNOME, if the icon does not appear, install `snixembed`. On **i3/i3bar**, `snixembed` is **required** (Flameshot/Sunshine use the older XEmbed tray directly):
-
-```bash
-sudo pacman -S snixembed
-snixembed --fork    # add to i3 config before anoted, or let anoted start it
-anoted watch
-```
-
-Add to your i3 config (`~/.config/i3/config`):
-
-```
-exec --no-startup-id snixembed --fork
-exec --no-startup-id anoted watch
-```
-
-### Workspace rules (Hyprland / Sway)
-
-anoted runs inside your terminal. To pin it to a workspace, set `desktop.autostart_terminal` and `desktop.wm_class` in config, then re-run `anoted autostart enable`:
-
-```yaml
-desktop:
-  wm_class: anoted
-  autostart_terminal: ["alacritty", "--class", "anoted", "-e"]
-```
-
-Hyprland example:
-
-```
-windowrulev2 = workspace 3 silent, class:^(anoted)$
-```
-
-Other terminals: `kitty --class=anoted`, `foot --app-id=anoted`.
-
-## TUI keys
-
-Sessions live inside the Home tab; there is no separate Sessions screen.
-
-| Key | Action |
-|-----|--------|
-| `1`–`3` | Switch tabs: Home, Doctor, Config |
-| `q` | Quit (ignored while editing a Config text field — use `Esc` first) |
-| `Ctrl+C` | Quit from anywhere |
-| `r` | Start/stop manual recording |
-| `a` | Toggle auto-record |
-| `y` / `n` | Confirm or dismiss the auto-record prompt |
-| `↑`/`↓` | Navigate the sessions list, config fields or device picker |
-| `[` / `]` | Previous / next page of sessions |
-| `t` | Transcribe the selected session (`s` stops a running transcription) |
-| `o` / `p` | Open the session folder / play the recording |
-| `f` | Choose which file manager `o` uses |
-| `d` | Delete the selected session |
-| `Enter` | Apply the focused field, device or modal choice |
-| `Esc` | Close a modal or cancel an edit |
-| `R` | Refresh the current tab |
-| `S` | Open the setup wizard |
-| `i` / `g` | Install Whisper / GPU support (Doctor) |
-| `PgUp`/`PgDn` | Scroll an install log (Doctor) |
-
-Config is saved automatically; there is no explicit save key.
-
-## Configuration
-
-Default config is created at:
-
-- Linux: `~/.config/anoted/config.yaml`
-- Windows: `%AppData%\anoted\config.yaml`
-
-Recordings are saved under `~/Music/anoted/` by default:
+1. Run `anoted setup`, then `anoted watch`.
+2. Press `r` to start a manual recording. The header turns into a pulsing **RECORDING** badge — that is the point.
+3. Talk for a few seconds, press `r` again to stop.
+4. Highlight the session, press `t` to transcribe (first run may download a Whisper model into a local venv — no sudo).
+5. Press `o` to open the folder. You should see `recording.wav` and, after Whisper, `transcript.txt`.
 
 ```
 ~/Music/anoted/YYYY-MM-DD_HH-mm-ss_<provider>/
 ├── recording.wav
-├── transcript.txt    # after Whisper (if enabled in output_formats)
+├── transcript.txt      # if Whisper ran
 ├── transcript.srt
-├── transcript.md     # optional Obsidian note with meeting frontmatter
+├── transcript.md       # optional Obsidian note
 └── metadata.json
 ```
 
-### Transcription (Whisper)
+<p align="center">
+  <img src="docs/assets/doctor.png" alt="anoted Doctor tab after a healthy Linux setup" width="920">
+</p>
+
+## Keyboard
+
+Press `?` inside the app for this list. Sessions live on the Home tab.
+
+| Key | Action |
+|-----|--------|
+| `1` `2` `3` | Home, Doctor, Config |
+| `r` | Start / stop recording |
+| `a` | Toggle auto-record |
+| `y` / `n` | Confirm or dismiss the auto-record prompt |
+| `t` | Transcribe the selected session (`s` stops it) |
+| `o` / `p` | Open the folder / play the recording |
+| `d` | Delete the selected session |
+| `S` | Setup wizard |
+| `i` / `g` | Install Whisper / GPU support (Doctor) |
+| `q` | Quit (`Ctrl+C` from anywhere) |
+
+Config saves as you edit. There is no extra save key.
+
+## Privacy, on purpose
+
+anoted is designed so a passer-by can tell it is recording. That protects the people in the call, not just the person running the app.
+
+- Auto-record defaults to **off**. Turning it on can still require a `y` confirmation.
+- The TUI, the terminal title, and (optionally) the tray all show recording state.
+- Nothing is uploaded. There is no account, no telemetry, no transcription API.
+- If the OS hides window titles (Wayland) or blocks loopback, anoted degrades — it does not jailbreak the compositor.
+
+**You** are responsible for local law and for asking the other people on the call. The software's job is to make capture obvious.
+
+## Configuration
+
+| | Linux | Windows |
+|---|--------|---------|
+| Config | `~/.config/anoted/config.yaml` | `%AppData%\anoted\config.yaml` |
+| Recordings | `~/Music/anoted/` | `~\Music\anoted\` |
+
+Whisper is local. `faster-whisper` is the speed pick when you have a GPU; `auto` stays on the conservative backends so a first run does not surprise you with a multi-gigabyte download.
 
 ```yaml
 transcription:
-  auto_after_recording: false   # transcribe when recording stops
+  auto_after_recording: false
   backend: auto                 # auto, openai-whisper, faster-whisper, whisper-cpp
-  model: turbo                  # tiny, base, small, medium, large, turbo (recommended)
+  model: turbo
   device: auto                  # cpu, cuda, auto
-  gpu_layers: 0                 # whisper.cpp only (99 = full GPU)
-  model_path: ""                # path to ggml model for whisper.cpp
   language: ""                  # empty = auto-detect
-  output_formats: [txt, srt]    # txt, srt, vtt, json, md
-  output_dir: ""                # empty = same folder as recording; or e.g. ~/vault/meetings
-  markdown:
-    filename: transcript.md
-    tags: [meeting]
-    cssclasses: [meeting]
-    weekday_class: true         # add monday, tuesday, … to cssclasses
+  output_formats: [txt, srt]
 ```
 
-`transcript.md` includes YAML frontmatter (start/end time, duration, provider, platform, tags) and the full transcript text below. Enable `md` in `output_formats` to generate it. Set `transcription.output_dir` to write transcripts to a shared folder (e.g. your Obsidian vault); each meeting gets a unique filename derived from the recording session folder name.
+<p align="center">
+  <img src="docs/assets/config.png" alt="anoted Config tab" width="920">
+</p>
 
-#### Backends
+## Roadmap
 
-`faster-whisper` runs the same Whisper weights on CTranslate2 instead of PyTorch.
-Measured on an RTX 4070 SUPER with `large-v3` over 5 minutes of real meeting audio:
+The next gift after transcripts is **meeting minutes**: a local summary (decisions, owners, next steps) written next to the recording, still without a cloud.
 
-| Backend | Elapsed | Speed |
-|---------|---------|-------|
-| openai-whisper | 46.4s | 6.5x realtime |
-| faster-whisper | 15.8s | 19.0x realtime |
+Tracked as ideas, not promises:
 
-Same model, so accuracy is equivalent — and because faster-whisper applies a VAD
-filter, it emitted far fewer of Whisper's looping hallucinations on silence
-(4 of 94 segments repeated the previous one, versus 22 of 111).
+- [ ] Generate a minutes / summary file from a finished transcript
+- [ ] First-class Windows installer (and signed `anoted.exe` on Releases)
+- [ ] macOS capture, if someone who owns a Mac wants to own that backend
+- [ ] Smoother WSL2 helper protocol for people who live in the Linux TUI on Windows
 
-It is opt-in rather than part of `auto`, because it needs the model in
-CTranslate2 format and would otherwise trigger a multi-gigabyte download
-unannounced. Set `transcription.backend: faster-whisper`, or compare for
-yourself on one of your own recordings:
-
-```bash
-anoted transcribe ~/Music/anoted/<session> --backend openai-whisper
-anoted transcribe ~/Music/anoted/<session> --backend faster-whisper
-```
-
-Install: run `anoted setup` (installs a local venv at `~/.local/share/anoted/whisper-venv`, no sudo). Optional: `sudo pacman -S python-openai-whisper` or `yay -S whisper.cpp` for GPU.
-
-### Desktop (open folder / play file)
-
-In **Sessions**, press **`f`** to choose how folders open (auto-detect, Dolphin, Thunar, xdg-open, etc.). Skips disk-usage apps like Baobab when using auto.
-
-Play recording (`p`) uses `xdg-open`.
+Issues and PRs are welcome. This is a community project.
 
 ## Development
 
@@ -243,24 +175,32 @@ make test
 make lint
 make run
 
-# Mock detector + dummy recorder (no real audio):
+# No real audio, useful in CI or on a plane:
 ./bin/anoted watch --mock-detector --dummy-recorder
 ```
 
-## Architecture
+Architecture sketch:
 
 ```
-cmd/anoted          CLI entrypoint
-internal/tui         Bubble Tea UI (platform-agnostic)
-internal/detector    Meeting detection (build tags)
-internal/recorder    Audio backends (build tags)
-internal/session     SQLite + metadata
-internal/config      YAML config
-internal/platform    OS / WSL2 detection
-internal/doctor      Dependency checks
-tools/windows-recorder   Windows WASAPI helper (WSL2; optional)
+cmd/anoted               CLI + TUI entrypoint
+internal/tui             Bubble Tea UI (no OS-specific code)
+internal/detector        Meeting detection (build tags)
+internal/recorder        Audio backends (build tags)
+internal/transcribe      Local Whisper wrappers
+internal/session         SQLite + metadata
+internal/config          YAML config
+tools/windows-recorder   Optional WASAPI helper for WSL2
+```
+
+Regenerate the README screenshots (needs [`freeze`](https://github.com/charmbracelet/freeze)):
+
+```bash
+go install github.com/charmbracelet/freeze@latest
+make readme-shots
 ```
 
 ## License
 
-TBD
+[MIT](LICENSE). Use it, fork it, ship it in your company laptop image. If it saves you from one more cloud recorder, that is the whole point.
+
+Record kindly. Ask first.
