@@ -1,9 +1,16 @@
 name: Release
 
+# Every merge to main replaces the Nightly pre-release (Linux + Windows).
+# A tag v* creates a versioned release and leaves Nightly alone.
 on:
   push:
-    tags:
-      - "v*"
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: write
@@ -18,7 +25,13 @@ jobs:
           go-version: "1.24"
           cache: true
       - name: Build
-        run: make build VERSION=${{ github.ref_name }}
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = tag ]; then
+            VERSION="${GITHUB_REF_NAME}"
+          else
+            VERSION="nightly-${GITHUB_SHA::7}"
+          fi
+          make build VERSION="${VERSION}"
       - name: Package
         run: |
           mkdir -p dist
@@ -36,15 +49,37 @@ jobs:
         with:
           go-version: "1.24"
           cache: true
+      # malgo / WASAPI need a gcc. The runner does not always have one on PATH.
+      - name: Install MinGW
+        shell: pwsh
+        run: |
+          choco install mingw -y --no-progress
+          foreach ($p in @(
+            "C:\ProgramData\mingw64\mingw64\bin",
+            "C:\mingw64\bin"
+          )) {
+            if (Test-Path $p) {
+              "$p" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+              break
+            }
+          }
       - name: Build
         shell: bash
+        env:
+          CGO_ENABLED: "1"
         run: |
-          go build -trimpath -ldflags "-s -w -X anoted/internal/buildinfo.version=${GITHUB_REF_NAME}" -o anoted.exe ./cmd/anoted
+          if [ "${GITHUB_REF_TYPE}" = tag ]; then
+            VERSION="${GITHUB_REF_NAME}"
+          else
+            VERSION="nightly-${GITHUB_SHA::7}"
+          fi
+          gcc --version
+          go build -trimpath -ldflags "-s -w -X anoted/internal/buildinfo.version=${VERSION}" -o anoted.exe ./cmd/anoted
       - name: Package
         shell: bash
         run: |
           mkdir -p dist
-          powershell -Command "Compress-Archive -Path anoted.exe -DestinationPath dist/anoted-windows-amd64.zip"
+          powershell.exe -NoProfile -Command "Compress-Archive -Force -Path anoted.exe -DestinationPath dist/anoted-windows-amd64.zip"
       - uses: actions/upload-artifact@v4
         with:
           name: windows
@@ -58,11 +93,32 @@ jobs:
         with:
           path: dist
           merge-multiple: true
-      - name: Create GitHub release
+      - name: Checksums
+        run: |
+          cd dist
+          sha256sum anoted-linux-amd64.tar.gz anoted-windows-amd64.zip > SHA256SUMS
+      - name: Publish nightly (main)
+        if: github.event_name != 'push' || github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view nightly --repo "${{ github.repository }}" >/dev/null 2>&1 \
+            && gh release delete nightly --yes --cleanup-tag --repo "${{ github.repository }}" \
+            || true
+          gh release create nightly dist/* \
+            --repo "${{ github.repository }}" \
+            --target "${{ github.sha }}" \
+            --prerelease \
+            --latest=false \
+            --title "Nightly ${GITHUB_SHA::7}" \
+            --notes "Latest build from main (${GITHUB_SHA}). Replaced on every merge. Windows exe is unsigned — SmartScreen may warn until Authenticode signing is set up."
+      - name: Publish tagged release
+        if: github.ref_type == 'tag'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "${{ github.ref_name }}" dist/* \
+            --repo "${{ github.repository }}" \
             --title "${{ github.ref_name }}" \
             --generate-notes \
-            --repo "${{ github.repository }}"
+            --latest

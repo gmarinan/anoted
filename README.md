@@ -40,44 +40,39 @@ You always see when it is recording. Auto-record is off until you turn it on.
 
 ## Install
 
-Pick your OS. Pre-built binaries will show up on the [Releases](https://github.com/gmarinan/anoted/releases) page once a `v*` tag is pushed. Building from source works today.
+Pick your OS. Every merge to `main` publishes a **Nightly** pre-release with Linux and Windows binaries. Version tags (`v0.1.0`, …) create a named release.
 
 ### Linux
 
-You need [Go 1.24+](https://go.dev/dl/) and a working PipeWire (or PulseAudio) session.
+Download `anoted-linux-amd64.tar.gz` from [Releases](https://github.com/gmarinan/anoted/releases) (use **Nightly** unless you want a tagged version):
 
 ```bash
-git clone https://github.com/gmarinan/anoted.git
-cd anoted
-make build
-sudo install -m 755 bin/anoted /usr/local/bin/anoted
-
-anoted setup          # pick detection, install Whisper if you want it
-anoted doctor         # fail here, not in a meeting
-anoted watch          # the TUI
+tar -xzf anoted-linux-amd64.tar.gz
+sudo install -m 755 anoted /usr/local/bin/anoted
+anoted setup && anoted doctor && anoted watch
 ```
 
-Useful extras: `pw-cat` / `ffmpeg` for capture, `xdotool` or `wmctrl` if you want window-title detection, `snixembed` on GNOME or i3 for the tray icon.
+PipeWire (or PulseAudio) should already be running. Useful extras: `pw-cat` / `ffmpeg`, `xdotool` or `wmctrl` for window-title detection, `snixembed` on GNOME or i3 for the tray.
+
+To build from source you need [Go 1.24+](https://go.dev/dl/): `git clone` then `make build`.
 
 Full walkthrough: [docs/linux.md](docs/linux.md)
 
 ### Windows 10 / 11
 
-Build on Windows (WASAPI capture uses cgo — GitHub Actions does this for releases):
+Download `anoted-windows-amd64.zip` from [Releases](https://github.com/gmarinan/anoted/releases), unzip, and run `anoted.exe` in [Windows Terminal](https://aka.ms/terminal):
 
 ```powershell
-git clone https://github.com/gmarinan/anoted.git
-cd anoted
-go build -o anoted.exe ./cmd/anoted
-
 .\anoted.exe setup
 .\anoted.exe doctor
 .\anoted.exe watch
 ```
 
-Allow microphone access in Windows Settings if Windows asks. Loopback follows the same OS privacy rules as any other recorder — anoted does not try to bypass them.
+The exe is **unsigned** for now — SmartScreen may warn; that is the OS being cautious, not a virus. Allow microphone access in Windows Settings if it asks. Loopback follows the same OS privacy rules as any other recorder — anoted does not try to bypass them.
 
 Config lives in `%AppData%\anoted\config.yaml`. Recordings default to `%USERPROFILE%\Music\anoted\`.
+
+Building from source needs Go 1.24+ and a C compiler (cgo / WASAPI). GitHub Actions already does that for the zip above.
 
 Full walkthrough, including WSL2: [docs/windows.md](docs/windows.md)
 

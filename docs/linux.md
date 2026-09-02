@@ -5,13 +5,23 @@ Record meetings and transcribe them on the same machine. Nothing is uploaded.
 ## What you need
 
 - Linux with a desktop session (X11 or Wayland)
-- [Go 1.24+](https://go.dev/dl/) to build
 - PipeWire (preferred) or PulseAudio
-- Optional, but useful:
-  - `pw-cat` and/or `ffmpeg` — capture backends
-  - `pactl` — device listing
-  - `xdotool` or `wmctrl` — window-title meeting detection
-  - `snixembed` — tray icon on GNOME and i3
+- [Go 1.24+](https://go.dev/dl/) only if you build from source
+
+Optional, but useful:
+
+- `pw-cat` and/or `ffmpeg` — capture backends
+- `pactl` — device listing
+- `xdotool` or `wmctrl` — window-title detection
+- `snixembed` — tray icon on GNOME and i3
+
+The usual path is to download `anoted-linux-amd64.tar.gz` from [Releases](https://github.com/gmarinan/anoted/releases) (**Nightly** tracks `main`):
+
+```bash
+tar -xzf anoted-linux-amd64.tar.gz
+sudo install -m 755 anoted /usr/local/bin/anoted
+anoted setup && anoted doctor && anoted watch
+```
 
 Arch example:
 
