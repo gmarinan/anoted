@@ -15,7 +15,7 @@ Optional, but useful:
 - `xdotool` or `wmctrl` — window-title detection
 - `snixembed` — tray icon on GNOME and i3
 
-The usual path is to download `anoted-linux-amd64.tar.gz` from [Releases](https://github.com/gmarinan/anoted/releases) (**Nightly** tracks `main`):
+The usual path is to download `anoted-linux-amd64.tar.gz` from [Releases](https://github.com/gmarinan/anoted/releases) (**Nightly** is published when `develop` is merged into `main`):
 
 ```bash
 tar -xzf anoted-linux-amd64.tar.gz

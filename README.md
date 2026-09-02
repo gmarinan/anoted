@@ -40,7 +40,7 @@ You always see when it is recording. Auto-record is off until you turn it on.
 
 ## Install
 
-Pick your OS. Every merge to `main` publishes a **Nightly** pre-release with Linux and Windows binaries. Version tags (`v0.1.0`, …) create a named release.
+Pick your OS. Merging `develop` into `main` publishes a **Nightly** pre-release with Linux and Windows binaries. Version tags (`v0.1.0`, …) create a named release. Downloads: [Releases](https://github.com/gmarinan/anoted/releases). Windows signing uses [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org).
 
 ### Linux
 
@@ -163,6 +163,8 @@ Tracked as ideas, not promises:
 Issues and PRs are welcome. This is a community project.
 
 ## Development
+
+Work on `develop`. Open a pull request into `main` when you want a release — `main` is protected, and that merge is what publishes Nightly.
 
 ```bash
 make test

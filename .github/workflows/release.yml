@@ -1,7 +1,6 @@
 name: Release
 
-# Every merge to main replaces the Nightly pre-release (Linux + Windows).
-# A tag v* creates a versioned release and leaves Nightly alone.
+# Every merge of develop → main (and a tag v*) publishes Linux + Windows binaries.
 on:
   push:
     branches: [main]
@@ -111,7 +110,7 @@ jobs:
             --prerelease \
             --latest=false \
             --title "Nightly ${GITHUB_SHA::7}" \
-            --notes "Latest build from main (${GITHUB_SHA}). Replaced on every merge. Windows exe is unsigned — SmartScreen may warn until Authenticode signing is set up."
+            --notes "Latest build from main (${GITHUB_SHA}), published when develop is merged. Free code signing provided by SignPath.io, certificate by SignPath Foundation. Windows exe may still be unsigned until a signing request is approved. Replaced on every merge to main."
       - name: Publish tagged release
         if: github.ref_type == 'tag'
         env:

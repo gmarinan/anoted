@@ -11,9 +11,9 @@ Native Windows is the real capture path. WSL2 cannot hear Windows audio by itsel
 - A C compiler for cgo (the WASAPI backend uses [malgo](https://github.com/gen2brain/malgo)). On Windows, [TDM-GCC](https://jmeubank.github.io/tdm-gcc/) or the compiler that ships with [MSYS2](https://www.msys2.org/) is enough
 - Microphone permission in **Settings → Privacy → Microphone**
 
-The usual path is to download `anoted-windows-amd64.zip` from [Releases](https://github.com/gmarinan/anoted/releases) (**Nightly** tracks `main`). That zip is built on `windows-latest` with cgo, so you can skip the compiler.
+The usual path is to download `anoted-windows-amd64.zip` from [Releases](https://github.com/gmarinan/anoted/releases) (**Nightly** is published when `develop` is merged into `main`). That zip is built on `windows-latest` with cgo, so you can skip the compiler.
 
-The exe is unsigned for now. SmartScreen may show “Windows protected your PC”; More info → Run anyway until we add Authenticode signing.
+Free code signing is provided by [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org). Until a signing request is approved, SmartScreen may show “Windows protected your PC”; More info → Run anyway.
 
 ## Install from a release
 
