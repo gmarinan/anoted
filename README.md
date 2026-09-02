@@ -157,13 +157,12 @@ transcription:
 
 ## Roadmap
 
-The next gift after transcripts is **meeting minutes**: a local summary (decisions, owners, next steps) written next to the recording, still without a cloud.
+The next gift after transcripts is **meeting minutes**: feed a finished transcript to a local [Ollama](https://ollama.com) model and write decisions, owners, and next steps next to the recording. Same machine, no cloud — Ollama is the usual way to run those models locally.
 
 Tracked as ideas, not promises:
 
-- [ ] Generate a minutes / summary file from a finished transcript
+- [ ] Minutes / summary via Ollama from a finished transcript
 - [ ] First-class Windows installer (and signed `anoted.exe` on Releases)
-- [ ] macOS capture, if someone who owns a Mac wants to own that backend
 - [ ] Smoother WSL2 helper protocol for people who live in the Linux TUI on Windows
 
 Issues and PRs are welcome. This is a community project.
