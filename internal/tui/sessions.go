@@ -139,10 +139,10 @@ func (m Model) handleSessionsKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, m.openSessionPath(true)
 	case "t":
 		rec, ok := m.selectedSession()
-		if m.transcribeActive || !ok {
+		if !ok {
 			return m, nil
 		}
-		return m.startTranscribe(rec.Dir)
+		return m.enqueueTranscribe(rec.Dir)
 	case "s":
 		if m.transcribeActive {
 			return m.stopTranscribe()

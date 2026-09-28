@@ -425,7 +425,7 @@ func (m Model) handleRecordToggle(msg recordToggleResultMsg) (tea.Model, tea.Cmd
 	}
 	if savedDir != "" && m.deps.Config.Transcription.AutoAfterRecording {
 		var transcribeCmd tea.Cmd
-		m, transcribeCmd = m.startTranscribe(savedDir)
+		m, transcribeCmd = m.enqueueTranscribe(savedDir)
 		cmds = append(cmds, transcribeCmd)
 	}
 	m.levelGen++

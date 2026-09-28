@@ -126,7 +126,8 @@ func (m Model) sessionsPanel() components.SessionsView {
 		// slice handed to a past render never observes later writes.
 		TranscribeLog:    m.transcribeLog,
 		TranscribeErr:    m.transcribeErr,
-		TranscribeErrDir: m.transcribeSessionDir,
+		TranscribeErrDir: m.transcribeErrDir,
+		TranscribeQueue:  m.transcribeQueue,
 		PreviewText:      m.previewText,
 		Artifacts:        m.sessionArtifacts,
 	}

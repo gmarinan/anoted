@@ -116,7 +116,20 @@ func InvalidateFasterWhisperCache() {
 // is equivalent; int8 on CPU trades a small accuracy loss on difficult audio
 // for a large speedup, which is the right default when there is no GPU anyway.
 func fasterWhisperComputeType(device string) string {
+	return fasterWhisperComputeTypeFor(device, gpuModeNormal)
+}
+
+// fasterWhisperComputeTypeFor picks numeric precision for one attempt.
+//
+// float16 matches openai-whisper. int8_float16 keeps the compute in float16
+// but stores the weights in int8, which is the difference between fitting next
+// to a game and dying with CUDA out of memory. It is slower and slightly less
+// accurate, so it is only used when the card is already tight.
+func fasterWhisperComputeTypeFor(device string, mode gpuMode) string {
 	if device == DeviceCUDA {
+		if mode == gpuModeLight {
+			return "int8_float16"
+		}
 		return "float16"
 	}
 	return "int8"
@@ -147,7 +160,7 @@ func runFasterWhisper(ctx context.Context, cfg config.TranscriptionConfig, pytho
 		"--audio", audioPath,
 		"--model", resolvedModel(cfg),
 		"--device", device,
-		"--compute-type", fasterWhisperComputeType(device),
+		"--compute-type", fasterWhisperComputeTypeFor(device, gpuModeFrom(ctx)),
 	}
 	if lang := strings.TrimSpace(cfg.Language); lang != "" {
 		args = append(args, "--language", lang)

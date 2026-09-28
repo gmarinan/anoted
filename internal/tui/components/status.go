@@ -52,6 +52,7 @@ func FooterForTab(tab TabID, awaitingConfirm bool, sessionsMode SessionsFooterMo
 		if sessionsMode == SessionsFooterTranscribing {
 			return FitFooter(width,
 				FooterHint("s", "stop transcribe"),
+				FooterHint("t", "queue another"),
 				FooterHint("↑↓", "navigate"),
 				FooterHint("[ ]", "page"),
 				FooterHint("o", "open folder"),

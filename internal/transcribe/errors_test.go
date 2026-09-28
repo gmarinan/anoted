@@ -13,8 +13,33 @@ torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 20.00 MiB.`
 	if got == "" {
 		t.Fatal("expected message")
 	}
-	if !strings.Contains(got, "GPU out of memory") || !strings.Contains(got, "smaller model") {
+	if !strings.Contains(got, "GPU out of memory") || !strings.Contains(got, "smaller model") || !strings.Contains(got, "close other apps") {
 		t.Fatalf("got %q", got)
+	}
+}
+
+func TestIsCUDAOOM(t *testing.T) {
+	oom := []string{
+		"torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 20.00 MiB.",
+		"CUDA failed with error out of memory",
+		"ggml_cuda_error: cudaMalloc failed: out of memory",
+		"GPU out of memory — close other apps using the GPU",
+	}
+	for _, s := range oom {
+		if !isCUDAOOM(s) {
+			t.Errorf("expected OOM: %s", s)
+		}
+	}
+	not := []string{
+		"file not found",
+		"out of memory", // system RAM, no GPU signal
+		"Torch not compiled with CUDA enabled",
+		"signal: aborted",
+	}
+	for _, s := range not {
+		if isCUDAOOM(s) {
+			t.Errorf("expected not OOM: %s", s)
+		}
 	}
 }
 

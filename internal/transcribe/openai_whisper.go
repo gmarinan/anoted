@@ -16,9 +16,12 @@ import (
 func transcribeOpenAI(ctx context.Context, cfg config.TranscriptionConfig, bin, audioPath, outDir, sessionDir string, onProgress ProgressFunc) (Result, error) {
 	device := resolveDevice(cfg)
 	out, err := runOpenAIWhisper(ctx, cfg, bin, audioPath, outDir, device, onProgress)
-	if err != nil && device == DeviceCUDA && isCUDAFailure(out) {
+	// OOM is handled by transcribeGuardingVRAM, which waits for the card instead
+	// of dropping the whole meeting onto the CPU while a game still has it.
+	// A missing driver or a CPU-only torch build will not get better by waiting.
+	if err != nil && device == DeviceCUDA && isCUDAFailure(out) && !isCUDAOOM(string(out)) {
 		emitProgress(onProgress, Progress{
-			SegmentText: "GPU out of memory — retrying on CPU…",
+			SegmentText: "GPU unavailable — retrying on CPU…",
 		})
 		out, err = runOpenAIWhisper(ctx, cfg, bin, audioPath, outDir, DeviceCPU, onProgress)
 	}
@@ -90,10 +93,18 @@ func transcribeWhisperCpp(ctx context.Context, cfg config.TranscriptionConfig, b
 	if lang := strings.TrimSpace(cfg.Language); lang != "" {
 		args = append(args, "-l", lang)
 	}
-	if cfg.GPULayers > 0 {
-		args = append(args, "-ngl", fmt.Sprintf("%d", cfg.GPULayers))
-	} else if resolveDevice(cfg) == DeviceCUDA {
-		args = append(args, "-ngl", "99")
+	// A full offload (99 layers) is what runs out of VRAM next to a game. The
+	// lighter pass keeps a slice of the model on the GPU and the rest on CPU,
+	// which is slower but fits in a much smaller hole.
+	layers := cfg.GPULayers
+	if layers <= 0 && resolveDevice(cfg) == DeviceCUDA {
+		layers = 99
+	}
+	if layers > 0 {
+		if gpuModeFrom(ctx) == gpuModeLight && layers > 16 {
+			layers = 16
+		}
+		args = append(args, "-ngl", fmt.Sprintf("%d", layers))
 	}
 
 	out, err := runWithProgress(ctx, bin, args, onProgress, func(stream string, line string) {

@@ -90,4 +90,7 @@ func TestFasterWhisperComputeType(t *testing.T) {
 	if got := fasterWhisperComputeType(DeviceCPU); got != "int8" {
 		t.Fatalf("cpu compute type = %q, want int8", got)
 	}
+	if got := fasterWhisperComputeTypeFor(DeviceCUDA, gpuModeLight); got != "int8_float16" {
+		t.Fatalf("light cuda compute type = %q, want int8_float16", got)
+	}
 }

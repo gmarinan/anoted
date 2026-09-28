@@ -147,12 +147,17 @@ type Model struct {
 
 	transcribeActive     bool
 	transcribeSessionDir string
-	transcribePercent    float64
-	transcribeETA        time.Duration
-	transcribeLog        []string
-	transcribeErr        string
-	transcribeBlink      bool
-	transcribeCancel     context.CancelFunc
+	// transcribeQueue holds session dirs waiting to run after the active job.
+	// One whisper process at a time: a game can pin the GPU for hours, and the
+	// meetings recorded during that window have to survive until it lets go.
+	transcribeQueue   []string
+	transcribePercent float64
+	transcribeETA     time.Duration
+	transcribeLog     []string
+	transcribeErr     string
+	transcribeErrDir  string
+	transcribeBlink   bool
+	transcribeCancel  context.CancelFunc
 
 	// Two identical installers sharing one type; see install_state.go.
 	whisperInstall installState

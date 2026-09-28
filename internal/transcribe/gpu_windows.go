@@ -21,6 +21,10 @@ func NVIDIAAvailable() bool {
 	return DetectGPU().NVIDIA
 }
 
+func nvidiaSMIPath() string {
+	return findNvidiaSMIWindows()
+}
+
 func findNvidiaSMIWindows() string {
 	candidates := []string{"nvidia-smi"}
 	if pf := os.Getenv("ProgramFiles"); pf != "" {

@@ -214,7 +214,9 @@ type SessionsView struct {
 	TranscribeLog        []string
 	TranscribeErr        string
 	TranscribeErrDir     string
-	PreviewText          string
+	// TranscribeQueue is session dirs waiting behind the active job, in order.
+	TranscribeQueue []string
+	PreviewText     string
 	// Artifacts is keyed by session directory. Gathered once per session load
 	// so rendering does not stat the filesystem per row, per frame.
 	Artifacts map[string]SessionArtifacts
@@ -480,10 +482,16 @@ func meetColWidth(v SessionsView) int {
 	}
 }
 
-func (v SessionsView) formatTXColumn(r session.Record, tableWidth int) string {
-	if v.TranscribeErrDir == r.Dir && v.TranscribeErr != "" {
-		return txErrorStyle.Render("err")
+func (v SessionsView) queuePos(dir string) int {
+	for i, queued := range v.TranscribeQueue {
+		if queued == dir {
+			return i + 1
+		}
 	}
+	return 0
+}
+
+func (v SessionsView) formatTXColumn(r session.Record, tableWidth int) string {
 	if v.TranscribeActive && r.Dir == v.TranscribeSessionDir {
 		if v.compactTable() || tableWidth < 120 {
 			return TranscribeProgressCompact(v.TranscribePercent, v.TranscribeBlink)
@@ -493,6 +501,15 @@ func (v SessionsView) formatTXColumn(r session.Record, tableWidth int) string {
 			barW = 14
 		}
 		return TranscribeProgressBar(v.TranscribePercent, barW, v.TranscribeETA, v.TranscribeBlink)
+	}
+	if pos := v.queuePos(r.Dir); pos > 0 {
+		if v.compactTable() {
+			return txActiveStyle.Render(fmt.Sprintf("Q%d", pos))
+		}
+		return txActiveStyle.Render(fmt.Sprintf("queue %d", pos))
+	}
+	if v.TranscribeErrDir == r.Dir && v.TranscribeErr != "" {
+		return txErrorStyle.Render("err")
 	}
 	if v.artifacts(r.Dir).HasTranscript {
 		if v.compactTable() {
@@ -540,6 +557,11 @@ func (v SessionsView) detailsBox(width int) string {
 			barW = min(14, width-20)
 		}
 		lines = append(lines, row("TX", TranscribeProgressBar(v.TranscribePercent, barW, v.TranscribeETA, v.TranscribeBlink)))
+		if n := len(v.TranscribeQueue); n > 0 {
+			lines = append(lines, row("Queue", fmt.Sprintf("%d waiting", n)))
+		}
+	} else if pos := v.queuePos(r.Dir); pos > 0 {
+		lines = append(lines, row("TX", fmt.Sprintf("queued #%d", pos)))
 	}
 	return Box("Details", strings.Join(lines, "\n"), width)
 }
