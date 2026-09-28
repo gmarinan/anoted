@@ -41,7 +41,7 @@ func extractWhisperError(out string) string {
 			continue
 		}
 		if strings.Contains(line, "torch.OutOfMemoryError") || strings.Contains(line, "CUDA out of memory") {
-			return "GPU out of memory — try a smaller model (turbo/base) or set transcription.device: cpu"
+			return "GPU out of memory — close other apps using the GPU, try a smaller model (turbo/base), or set transcription.device: cpu"
 		}
 		if strings.Contains(line, "No module named") {
 			return line
@@ -60,6 +60,22 @@ func extractWhisperError(out string) string {
 	// own conversation on the session row in red. The caller substitutes a
 	// generic message; the full output stays in the diagnostic log.
 	return ""
+}
+
+// isCUDAOOM reports a GPU allocation failure, as opposed to a CUDA setup
+// problem (missing driver, CPU-only torch). Setup failures are not worth
+// waiting out; an out-of-memory error often is, because another process —
+// typically a game — is holding VRAM that it will eventually release.
+func isCUDAOOM(s string) bool {
+	ls := strings.ToLower(s)
+	if strings.Contains(ls, "outofmemoryerror") {
+		return true
+	}
+	memory := strings.Contains(ls, "out of memory") || strings.Contains(ls, "failed to allocate")
+	if !memory {
+		return false
+	}
+	return strings.Contains(ls, "cuda") || strings.Contains(ls, "cublas") || strings.Contains(ls, "gpu")
 }
 
 func isCUDAFailure(out []byte) bool {

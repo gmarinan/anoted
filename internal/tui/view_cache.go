@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"strings"
 	"time"
 
 	"anoted/internal/session"
@@ -64,6 +65,8 @@ type sessionsBlockKey struct {
 	txLogPtr  *string
 	txLogLen  int
 	txErr     string
+	txErrDir  string
+	txQueue   string
 
 	previewText string
 }
@@ -105,6 +108,8 @@ func (m Model) sessionsBlockKey() sessionsBlockKey {
 		txLogPtr:       logPtr,
 		txLogLen:       len(m.transcribeLog),
 		txErr:          m.transcribeErr,
+		txErrDir:       m.transcribeErrDir,
+		txQueue:        strings.Join(m.transcribeQueue, "\n"),
 		previewText:    m.previewText,
 	}
 }

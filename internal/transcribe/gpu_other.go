@@ -11,3 +11,7 @@ func DetectGPU() GPUInfo {
 func NVIDIAAvailable() bool {
 	return false
 }
+
+func nvidiaSMIPath() string {
+	return ""
+}

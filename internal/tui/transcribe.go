@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -146,26 +147,104 @@ func (m Model) handleTranscribeResult(msg transcribeResultMsg) (tea.Model, tea.C
 	m.previewDir = ""
 	m = m.refreshPreview()
 
-	if msg.err != nil {
-		if errors.Is(msg.err, context.Canceled) {
-			m.transcribeErr = ""
-			m.sessionsErr = ""
-			m.appendTranscribeLog("transcription stopped")
-			return m, nil
-		}
-		m.transcribeErr = msg.err.Error()
-		m.transcribeSessionDir = msg.sessionDir
-		m.sessionsErr = msg.err.Error()
+	if msg.err != nil && errors.Is(msg.err, context.Canceled) {
+		// Stop means stop: a cancelled job must not drain the rest of the queue.
+		m.transcribeQueue = nil
+		m.transcribeErr = ""
+		m.transcribeErrDir = ""
+		m.sessionsErr = ""
+		m.transcribeSessionDir = ""
+		m.appendTranscribeLog("transcription stopped")
 		return m, nil
 	}
-	m.transcribeErr = ""
-	m.sessionsErr = ""
-	m.transcribePercent = 100
-	m.transcribeSessionDir = ""
-	if m.screen == ScreenMain {
+
+	if msg.err != nil {
+		m.transcribeErr = msg.err.Error()
+		m.transcribeErrDir = msg.sessionDir
+		// sessionsErr replaces the whole sessions table with the message. That
+		// is right when nothing else is waiting; with a queue behind this one
+		// it would hide the meetings that still have to run.
+		if len(m.transcribeQueue) == 0 {
+			m.transcribeSessionDir = msg.sessionDir
+			m.sessionsErr = msg.err.Error()
+			return m, nil
+		}
+		m.sessionsErr = ""
+	} else {
+		if m.transcribeErrDir == msg.sessionDir {
+			m.transcribeErr = ""
+			m.transcribeErrDir = ""
+		}
+		m.sessionsErr = ""
+		m.transcribePercent = 100
+		m.transcribeSessionDir = ""
+	}
+
+	m, nextCmd, started := m.startNextTranscribe()
+	if started {
+		if msg.err != nil {
+			// startNextTranscribe clears the error fields; the failed row should
+			// stay marked while the rest of the queue runs.
+			m.transcribeErr = msg.err.Error()
+			m.transcribeErrDir = msg.sessionDir
+			m.appendTranscribeLog("· previous session failed — continuing the queue")
+		}
+		var cmds []tea.Cmd
+		cmds = append(cmds, nextCmd)
+		if msg.err == nil && m.screen == ScreenMain {
+			cmds = append(cmds, m.loadSessionsCmd())
+		}
+		return m, tea.Batch(cmds...)
+	}
+	if msg.err == nil && m.screen == ScreenMain {
 		return m, m.loadSessionsCmd()
 	}
 	return m, nil
+}
+
+// enqueueTranscribe runs sessionDir now, or appends it if a job is already
+// active (including one parked until the GPU has free VRAM).
+func (m Model) enqueueTranscribe(sessionDir string) (Model, tea.Cmd) {
+	sessionDir = strings.TrimSpace(sessionDir)
+	if sessionDir == "" {
+		return m, nil
+	}
+	if m.transcribeActive && m.transcribeSessionDir == sessionDir {
+		return m, nil
+	}
+	if transcribeQueued(m.transcribeQueue, sessionDir) {
+		return m, nil
+	}
+	if !m.transcribeActive {
+		return m.startTranscribe(sessionDir)
+	}
+	m.transcribeQueue = append(m.transcribeQueue, sessionDir)
+	m.appendTranscribeLog(fmt.Sprintf("· queued — %d waiting", len(m.transcribeQueue)))
+	return m, nil
+}
+
+func transcribeQueued(queue []string, dir string) bool {
+	for _, queued := range queue {
+		if queued == dir {
+			return true
+		}
+	}
+	return false
+}
+
+func (m Model) startNextTranscribe() (Model, tea.Cmd, bool) {
+	if m.transcribeActive || len(m.transcribeQueue) == 0 {
+		return m, nil, false
+	}
+	next := m.transcribeQueue[0]
+	rest := m.transcribeQueue[1:]
+	m.transcribeQueue = rest
+	m, cmd := m.startTranscribe(next)
+	if cmd == nil {
+		m.transcribeQueue = append([]string{next}, rest...)
+		return m, nil, false
+	}
+	return m, cmd, true
 }
 
 func (m Model) startTranscribe(sessionDir string) (Model, tea.Cmd) {
@@ -180,8 +259,12 @@ func (m Model) startTranscribe(sessionDir string) (Model, tea.Cmd) {
 	m.transcribeETA = 0
 	m.transcribeLog = nil
 	m.transcribeErr = ""
+	m.transcribeErrDir = ""
 	m.transcribeBlink = true
 	m.sessionsErr = ""
+	if n := len(m.transcribeQueue); n > 0 {
+		m.appendTranscribeLog(fmt.Sprintf("· %d more queued after this one", n))
+	}
 	return m, tea.Batch(transcribeSessionCmd(m, sessionDir, ctx), m.scheduleTranscribeBlink())
 }
 
@@ -189,7 +272,13 @@ func (m Model) stopTranscribe() (Model, tea.Cmd) {
 	if !m.transcribeActive {
 		return m, nil
 	}
-	m.appendTranscribeLog("stopping…")
+	n := len(m.transcribeQueue)
+	m.transcribeQueue = nil
+	if n > 0 {
+		m.appendTranscribeLog(fmt.Sprintf("stopping… (%d queued cancelled)", n))
+	} else {
+		m.appendTranscribeLog("stopping…")
+	}
 	m.cancelTranscribeJob()
 	return m, nil
 }
@@ -204,6 +293,7 @@ func (m Model) handleTranscribeBlink() (tea.Model, tea.Cmd) {
 
 // cancelTranscribeOnQuit kills any in-flight whisper subprocess before exit.
 func (m Model) cancelTranscribeOnQuit() Model {
+	m.transcribeQueue = nil
 	if m.transcribeActive {
 		m.cancelTranscribeJob()
 		m.transcribeActive = false

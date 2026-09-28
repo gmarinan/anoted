@@ -91,21 +91,23 @@ func (s *Service) TranscribeSessionWithProgress(ctx context.Context, sessionDir 
 			backend, resolvedModel(s.cfg.Transcription), resolveDevice(s.cfg.Transcription)),
 	})
 
-	switch backend {
-	case BackendFasterWhisper:
-		// bin is the Python interpreter here, not a CLI: faster-whisper is a
-		// library, so anoted renders the output files itself from its segments.
-		if _, err := transcribeFasterWhisper(ctx, s.cfg.Transcription, bin, audioPath, outDir, sessionDir, onProgress); err != nil {
-			return Result{}, err
+	err = transcribeGuardingVRAM(ctx, s.cfg.Transcription, onProgress, func(ctx context.Context) error {
+		switch backend {
+		case BackendFasterWhisper:
+			// bin is the Python interpreter here, not a CLI: faster-whisper is a
+			// library, so anoted renders the output files itself from its segments.
+			_, err := transcribeFasterWhisper(ctx, s.cfg.Transcription, bin, audioPath, outDir, sessionDir, onProgress)
+			return err
+		case BackendWhisperCpp:
+			_, err := transcribeWhisperCpp(ctx, s.cfg.Transcription, bin, audioPath, outDir, sessionDir, onProgress)
+			return err
+		default:
+			_, err := transcribeOpenAI(ctx, s.cfg.Transcription, bin, audioPath, outDir, sessionDir, onProgress)
+			return err
 		}
-	case BackendWhisperCpp:
-		if _, err := transcribeWhisperCpp(ctx, s.cfg.Transcription, bin, audioPath, outDir, sessionDir, onProgress); err != nil {
-			return Result{}, err
-		}
-	default:
-		if _, err := transcribeOpenAI(ctx, s.cfg.Transcription, bin, audioPath, outDir, sessionDir, onProgress); err != nil {
-			return Result{}, err
-		}
+	})
+	if err != nil {
+		return Result{}, err
 	}
 	res, err := postProcessTranscription(s.cfg.Transcription, sessionDir, outDir)
 	if err != nil {

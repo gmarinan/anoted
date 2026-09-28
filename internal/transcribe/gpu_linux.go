@@ -15,3 +15,7 @@ func DetectGPU() GPUInfo {
 func NVIDIAAvailable() bool {
 	return DetectGPU().NVIDIA
 }
+
+func nvidiaSMIPath() string {
+	return findExecutable("nvidia-smi", "/usr/bin/nvidia-smi")
+}

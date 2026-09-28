@@ -1,11 +1,35 @@
 package transcribe
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
+
+// queryGPUMemorySMI reads free and total VRAM in MiB from the first GPU.
+//
+// nvidia-smi can block for a long time while the driver resets after a game
+// has exhausted the card, so a hung probe must not stall transcription forever.
+func queryGPUMemorySMI() (freeMiB, totalMiB int, ok bool) {
+	path := nvidiaSMIPath()
+	if path == "" {
+		return 0, 0, false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, path, "--query-gpu=memory.free,memory.total", "--format=csv,noheader,nounits").Output()
+	if err != nil {
+		return 0, 0, false
+	}
+	line := strings.TrimSpace(string(out))
+	if idx := strings.IndexByte(line, '\n'); idx >= 0 {
+		line = line[:idx]
+	}
+	return parseVRAMLine(line)
+}
 
 func queryNVIDIA(nvidiaSMI string, args ...string) string {
 	out, err := exec.Command(nvidiaSMI, args...).Output()

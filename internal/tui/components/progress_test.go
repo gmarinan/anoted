@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"anoted/internal/session"
 )
 
 func TestTranscribeProgressBar(t *testing.T) {
@@ -37,5 +39,19 @@ func TestTXStatusLabel(t *testing.T) {
 	no := TXStatusLabel("no")
 	if !strings.Contains(no, "none") {
 		t.Fatalf("no label: %q", no)
+	}
+}
+
+func TestFormatTXColumnShowsQueuePosition(t *testing.T) {
+	v := SessionsView{
+		Width:           160,
+		TranscribeQueue: []string{"/s/a", "/s/b"},
+		Artifacts: map[string]SessionArtifacts{
+			"/s/b": {HasAudio: true, HasTranscript: true},
+		},
+	}
+	got := v.formatTXColumn(session.Record{Dir: "/s/b"}, 160)
+	if !strings.Contains(got, "queue 2") {
+		t.Fatalf("queued session with a transcript rendered %q", got)
 	}
 }
