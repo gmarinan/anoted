@@ -9,6 +9,7 @@ import (
 	"anoted/internal/config"
 	"anoted/internal/level"
 	"anoted/internal/recorder"
+	"anoted/internal/retention"
 	"anoted/internal/session"
 	"anoted/internal/tui/components"
 	tea "charm.land/bubbletea/v2"
@@ -39,17 +40,35 @@ type sessionsLoadedMsg struct {
 	records   []session.Record
 	artifacts map[string]components.SessionArtifacts
 	err       error
+	usage     retention.Usage
+	preview   string
+	plan      retention.Plan
+	policy    retention.Policy
+	scanned   bool
 }
 
 func (m Model) loadSessionsCmd() tea.Cmd {
 	store := m.deps.Store
-	cfg := m.deps.Config.Transcription
+	cfg := m.deps.Config
+	inUse := m.audioInUse()
 	return func() tea.Msg {
 		recs, err := loadSessionRecords(store)
+		if err != nil {
+			return sessionsLoadedMsg{
+				err:       err,
+				artifacts: gatherSessionFacts(nil, cfg.Transcription),
+				preview:   "could not measure audio",
+			}
+		}
+		snap := planLibrary(recs, cfg, inUse)
 		return sessionsLoadedMsg{
 			records:   recs,
-			artifacts: gatherSessionFacts(recs, cfg),
-			err:       err,
+			artifacts: artifactsFromItems(recs, snap.items),
+			usage:     snap.usage,
+			preview:   snap.preview,
+			plan:      snap.plan,
+			policy:    snap.policy,
+			scanned:   snap.scanned,
 		}
 	}
 }
@@ -121,7 +140,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.sessionArtifacts = msg.artifacts
 			m = m.clampSessionsCursor()
 		}
-		return m, nil
+		m = m.storeAudioScan(msg.scanned, msg.usage, msg.preview)
+		if msg.err != nil {
+			m = m.refreshPreview()
+		}
+		return m, m.retentionFollowUp(msg.policy, msg.plan)
+	case audioLibraryMsg:
+		return m.handleAudioLibrary(msg)
+	case retentionDoneMsg:
+		return m.handleRetentionDone(msg)
 	case levelStartMsg:
 		if msg.err != nil && m.screen == ScreenMain {
 			m.errMsg = msg.err.Error()

@@ -10,10 +10,10 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-const configSectionCount = 6
+const configSectionCount = 7
 
 var configSectionLabels = []string{
-	"General", "Audio", "Detection", "Transcription", "Desktop", "Privacy",
+	"General", "Audio", "Detection", "Transcription", "Desktop", "Privacy", "Storage",
 }
 
 type cfgFieldKind int
@@ -48,6 +48,8 @@ type envFacts struct {
 	AutostartAvailable bool
 	AutostartEnabled   bool
 	Autostart          Autostart
+	AudioUsage         string
+	AudioPreview       string
 }
 
 func cfgFields(section int) []cfgField { return cfgFieldsWithEnv(section, envFacts{}) }
@@ -66,6 +68,8 @@ func cfgFieldsWithEnv(section int, env envFacts) []cfgField {
 		return desktopCfgFields()
 	case 5:
 		return privacyCfgFields()
+	case 6:
+		return storageCfgFields(env)
 	default:
 		return nil
 	}
@@ -721,6 +725,97 @@ func privacyCfgFields() []cfgField {
 	}
 }
 
+func storageCfgFields(env envFacts) []cfgField {
+	usage := env.AudioUsage
+	if usage == "" {
+		usage = "…"
+	}
+	preview := env.AudioPreview
+	if preview == "" {
+		preview = "…"
+	}
+	return []cfgField{
+		{
+			label: "audio_on_disk",
+			kind:  fieldReadonly,
+			get:   func(c config.Config) string { return usage },
+		},
+		{
+			label: "auto_delete",
+			kind:  fieldBool,
+			get: func(c config.Config) string {
+				return fmt.Sprintf("%v", c.Retention.AutoDelete)
+			},
+			set: func(c *config.Config, v string) error {
+				b, err := strconv.ParseBool(v)
+				if err != nil {
+					return err
+				}
+				c.Retention.AutoDelete = b
+				return nil
+			},
+		},
+		{
+			label: "keep_days",
+			kind:  fieldInt,
+			get: func(c config.Config) string {
+				return strconv.Itoa(c.Retention.KeepDays)
+			},
+			set: func(c *config.Config, v string) error {
+				n, err := strconv.Atoi(v)
+				if err != nil {
+					return fmt.Errorf("invalid keep_days: %w", err)
+				}
+				if n < 0 {
+					return fmt.Errorf("keep_days cannot be negative")
+				}
+				c.Retention.KeepDays = n
+				return nil
+			},
+		},
+		{
+			label: "keep_recordings",
+			kind:  fieldInt,
+			get: func(c config.Config) string {
+				return strconv.Itoa(c.Retention.KeepRecordings)
+			},
+			set: func(c *config.Config, v string) error {
+				n, err := strconv.Atoi(v)
+				if err != nil {
+					return fmt.Errorf("invalid keep_recordings: %w", err)
+				}
+				if n < 0 {
+					return fmt.Errorf("keep_recordings cannot be negative")
+				}
+				c.Retention.KeepRecordings = n
+				return nil
+			},
+		},
+		{
+			label: "protect_untranscribed",
+			kind:  fieldBool,
+			get: func(c config.Config) string {
+				return fmt.Sprintf("%v", c.Retention.ProtectsUntranscribed())
+			},
+			set: func(c *config.Config, v string) error {
+				b, err := strconv.ParseBool(v)
+				if err != nil {
+					return err
+				}
+				c.Retention.ProtectUntranscribed = boolPtr(b)
+				return nil
+			},
+		},
+		{
+			label: "would_free",
+			kind:  fieldReadonly,
+			get:   func(c config.Config) string { return preview },
+		},
+	}
+}
+
+func boolPtr(v bool) *bool { return &v }
+
 func (m Model) currentCfgFields() []cfgField {
 	return cfgFieldsWithEnv(m.configSection, m.envFacts())
 }
@@ -1070,6 +1165,7 @@ func (m Model) handleConfigMenuSave(msg configMenuSaveMsg) (tea.Model, tea.Cmd) 
 	var cmds []tea.Cmd
 	cmds = append(cmds, resolveDeviceLabelsCmd(m))
 	cmds = append(cmds, refreshDoctorCapsCmd(m.deps.Config))
+	cmds = append(cmds, m.refreshAudioLibraryCmd())
 	if m.screen == ScreenMain {
 		m.systemBands = nil
 		m.micBands = nil

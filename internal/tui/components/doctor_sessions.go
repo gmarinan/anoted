@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"anoted/internal/doctor"
+	"anoted/internal/retention"
 	"anoted/internal/session"
 	"github.com/charmbracelet/x/ansi"
 )
@@ -217,6 +218,9 @@ type SessionsView struct {
 	// TranscribeQueue is session dirs waiting behind the active job, in order.
 	TranscribeQueue []string
 	PreviewText     string
+	// AudioUsage is the measured size of recording.wav files. Empty until the
+	// library has been scanned; View must not stat the disk itself.
+	AudioUsage string
 	// Artifacts is keyed by session directory. Gathered once per session load
 	// so rendering does not stat the filesystem per row, per frame.
 	Artifacts map[string]SessionArtifacts
@@ -226,6 +230,7 @@ type SessionsView struct {
 type SessionArtifacts struct {
 	HasTranscript bool
 	HasAudio      bool
+	AudioBytes    int64
 }
 
 func (v SessionsView) artifacts(dir string) SessionArtifacts {
@@ -382,6 +387,22 @@ func (v SessionsView) renderDeleteModal() string {
 	return PickerModal("Confirm delete", strings.Join(lines, "\n"), maxW)
 }
 
+func (v SessionsView) diskLine(width int) string {
+	return row("Disk", truncate(v.AudioUsage, width-12))
+}
+
+func (v SessionsView) audioSizeLabel(dir string, width int) string {
+	art := v.artifacts(dir)
+	switch {
+	case art.HasAudio:
+		return truncate(retention.FormatBytes(art.AudioBytes), width-12)
+	case art.HasTranscript:
+		return truncate("removed — transcript kept", width-12)
+	default:
+		return "none"
+	}
+}
+
 func (v SessionsView) tableBox(width int) string {
 	if v.ErrMsg != "" {
 		return Box("Sessions", errStyle.Render(v.ErrMsg), width)
@@ -391,12 +412,19 @@ func (v SessionsView) tableBox(width int) string {
 			subtleStyle.Render("Press ") + keyStyle.Render("r") +
 			subtleStyle.Render(" to start your first recording — or enable auto-record with ") +
 			keyStyle.Render("a") + subtleStyle.Render(".")
+		if v.AudioUsage != "" {
+			empty = v.diskLine(width) + "\n\n" + empty
+		}
 		return Box("Sessions", empty, width)
 	}
 
 	title := fmt.Sprintf("Sessions (%d/%d · %d total)", v.Page, v.PageCount, v.TotalCount)
 	header := v.tableHeader()
-	lines := []string{subtleStyle.Render("  " + header)}
+	lines := []string{}
+	if v.AudioUsage != "" {
+		lines = append(lines, v.diskLine(width))
+	}
+	lines = append(lines, subtleStyle.Render("  "+header))
 	for i, r := range v.PageRecords {
 		line := v.formatRow(r, width)
 		if i == v.Cursor {
@@ -545,6 +573,7 @@ func (v SessionsView) detailsBox(width int) string {
 		row("Status", string(r.Status)),
 		row("Path", truncate(r.Dir, width-8)),
 		row("File", sessionAudioName),
+		row("Audio", v.audioSizeLabel(r.Dir, width)),
 		row("Open folders", truncate(v.OpenerDetected, width-14)),
 		row("Setting", openerSettingLabel(v.CurrentOpener)),
 	}
