@@ -69,6 +69,7 @@ type sessionsBlockKey struct {
 	txQueue   string
 
 	previewText string
+	audioUsage  string
 }
 
 func (m Model) sessionsBlockKey() sessionsBlockKey {
@@ -111,6 +112,7 @@ func (m Model) sessionsBlockKey() sessionsBlockKey {
 		txErrDir:       m.transcribeErrDir,
 		txQueue:        strings.Join(m.transcribeQueue, "\n"),
 		previewText:    m.previewText,
+		audioUsage:     m.audioUsageText(),
 	}
 }
 
@@ -148,6 +150,7 @@ type statusBoxKey struct {
 	detectionWarn   string
 	errMsg          string
 	width           int
+	audioUsage      string
 }
 
 // cachedStatusBox returns the rendered status panel, reused across meter ticks
@@ -169,6 +172,7 @@ func (m Model) cachedStatusBox(v components.HomeView) string {
 		detectionWarn:   m.detection.Warning,
 		errMsg:          m.errMsg,
 		width:           m.width,
+		audioUsage:      v.AudioUsage,
 	}
 	if m.cache != nil && m.cache.status != "" && m.cache.statusKey == key {
 		return m.cache.status

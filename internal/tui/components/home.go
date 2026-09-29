@@ -22,8 +22,10 @@ type HomeView struct {
 	StatusNote      string
 	DetectionWarn   string
 	ErrorMsg        string
-	Width           int
-	Height          int
+	// AudioUsage is the library's recording.wav total. Empty until measured.
+	AudioUsage string
+	Width      int
+	Height     int
 
 	SystemBands    []float64
 	MicBands       []float64
@@ -111,6 +113,9 @@ func (v HomeView) StatusBox(width int) string {
 		auto = subtleStyle.Render("off")
 	}
 	lines = append(lines, labelStyle.Render("Auto-record:")+" "+auto)
+	if v.AudioUsage != "" {
+		lines = append(lines, row("Disk", truncate(v.AudioUsage, width-12)))
+	}
 	if v.Recording {
 		lines = append(lines, row("Duration", v.Duration.Round(time.Second).String()))
 		// "Output: " is 8 cells and the box content area is width-4.

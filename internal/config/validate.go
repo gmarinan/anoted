@@ -62,6 +62,12 @@ func (c Config) Validate() error {
 	if c.OutputDir == "" {
 		add("output_dir: must not be empty")
 	}
+	if c.Retention.KeepDays < 0 {
+		add("retention.keep_days: %d cannot be negative (0 means no age limit)", c.Retention.KeepDays)
+	}
+	if c.Retention.KeepRecordings < 0 {
+		add("retention.keep_recordings: %d cannot be negative (0 means no count limit)", c.Retention.KeepRecordings)
+	}
 
 	if len(problems) == 0 {
 		return nil

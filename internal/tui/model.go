@@ -11,6 +11,7 @@ import (
 	"anoted/internal/level"
 	"anoted/internal/platform"
 	"anoted/internal/recorder"
+	"anoted/internal/retention"
 	"anoted/internal/session"
 	"anoted/internal/setup"
 	"anoted/internal/transcribe"
@@ -195,13 +196,18 @@ type Model struct {
 	// several file managers, stat calls per session row, a transcript read, and
 	// autostart's own filesystem checks — up to thirty times a second.
 	sessionArtifacts map[string]components.SessionArtifacts
-	previewDir       string
-	previewText      string
-	openerDetected   string
-	openerCurrent    string
-	autostartAvail   bool
-	autostartOn      bool
-	levelAvailable   bool
+	// audioScanned is false until the library has been measured, so the home
+	// screen does not flash "0 B" before the real total arrives.
+	audioScanned   bool
+	audioUsage     retention.Usage
+	audioPreview   string
+	previewDir     string
+	previewText    string
+	openerDetected string
+	openerCurrent  string
+	autostartAvail bool
+	autostartOn    bool
+	levelAvailable bool
 }
 
 // NewModel creates the initial TUI model.
@@ -329,7 +335,13 @@ type configSavedMsg struct {
 	err error
 }
 
-const sessionsListLimit = 500
+// sessionsListLimit bounds one query of the session table.
+//
+// It used to be 500, which hid the oldest rows — the ones an audio retention
+// sweep has to see, and the ones that dominate disk usage. Pagination still
+// draws a page at a time. The ceiling only stops a corrupt database from
+// forcing an unbounded allocation.
+const sessionsListLimit = 100000
 
 func loadSessionRecords(store session.Store) ([]session.Record, error) {
 	if store == nil {
@@ -359,10 +371,11 @@ func (m Model) recorderUnusable() string {
 // most of its height while a short one still tried to draw six rows plus the
 // details and preview panels, pushing the footer off the bottom.
 func (m Model) sessionsPageSize() int {
-	// Rows consumed by the header, tabs, status/audio boxes, the details and
-	// preview panels, borders and the footer. Box titles moved into the top
-	// border, saving one row in each of the three stacked panel bands.
-	const chrome = 23
+	// Rows consumed by the header, tabs, status/audio boxes, the disk-usage
+	// lines (status panel and sessions list), the details and preview panels,
+	// borders and the footer. Box titles moved into the top border, saving one
+	// row in each of the three stacked panel bands.
+	const chrome = 25
 	n := m.height - chrome
 	switch {
 	case m.height <= 0:

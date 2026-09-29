@@ -26,6 +26,7 @@ type Config struct {
 	Transcription                  TranscriptionConfig `yaml:"transcription"`
 	Desktop                        DesktopConfig       `yaml:"desktop"`
 	Privacy                        PrivacyConfig       `yaml:"privacy"`
+	Retention                      RetentionConfig     `yaml:"retention"`
 }
 
 type DesktopConfig struct {
@@ -103,6 +104,27 @@ type PrivacyConfig struct {
 	RequireManualConsentFirstRun bool `yaml:"require_manual_consent_first_run"`
 }
 
+// RetentionConfig controls automatic deletion of recording.wav.
+//
+// Transcripts and the session folder stay. Zero keep_days and keep_recordings
+// mean that cap is off. auto_delete defaults to false so upgrading anoted
+// cannot prune an existing library.
+type RetentionConfig struct {
+	AutoDelete           bool  `yaml:"auto_delete"`
+	KeepDays             int   `yaml:"keep_days"`
+	KeepRecordings       int   `yaml:"keep_recordings"`
+	ProtectUntranscribed *bool `yaml:"protect_untranscribed,omitempty"`
+}
+
+// ProtectsUntranscribed reports whether audio without a transcript is kept.
+// A missing value protects: deleting the wav first would throw the meeting away.
+func (r RetentionConfig) ProtectsUntranscribed() bool {
+	if r.ProtectUntranscribed == nil {
+		return true
+	}
+	return *r.ProtectUntranscribed
+}
+
 // Default returns the built-in default configuration.
 func Default() Config {
 	return Config{
@@ -157,6 +179,9 @@ func Default() Config {
 			ShowRecordingIndicator:       true,
 			TrayIndicator:                true,
 			RequireManualConsentFirstRun: true,
+		},
+		Retention: RetentionConfig{
+			ProtectUntranscribed: boolPtr(true),
 		},
 	}
 }
@@ -378,7 +403,15 @@ func (c *Config) applyDefaults() {
 	if c.Desktop.WMClass == "" {
 		c.Desktop.WMClass = def.Desktop.WMClass
 	}
+	// A missing flag means "keep the wav until it has been transcribed".
+	// Filling it here makes the next save write the safe value explicitly,
+	// without turning an explicit false back into true.
+	if c.Retention.ProtectUntranscribed == nil {
+		c.Retention.ProtectUntranscribed = boolPtr(true)
+	}
 }
+
+func boolPtr(v bool) *bool { return &v }
 
 // mergeProviderPatterns seeds defaults for providers the user has never
 // configured. It deliberately does not re-add individual patterns to a provider

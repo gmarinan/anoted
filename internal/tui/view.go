@@ -81,6 +81,7 @@ func (m Model) homeView() components.HomeView {
 		StatusNote:      m.statusNote,
 		DetectionWarn:   m.detection.Warning,
 		ErrorMsg:        m.errMsg,
+		AudioUsage:      m.audioUsageText(),
 		Width:           m.width,
 		Height:          m.height,
 
@@ -130,6 +131,7 @@ func (m Model) sessionsPanel() components.SessionsView {
 		TranscribeQueue:  m.transcribeQueue,
 		PreviewText:      m.previewText,
 		Artifacts:        m.sessionArtifacts,
+		AudioUsage:       m.audioUsageText(),
 	}
 	if m.sessionsDeleteConfirm {
 		v.DeleteID = rec.ID

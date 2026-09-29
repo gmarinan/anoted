@@ -30,10 +30,16 @@ func gatherSessionFacts(recs []session.Record, cfg config.TranscriptionConfig) m
 		if r.Dir == "" {
 			continue
 		}
-		_, audioErr := os.Stat(filepath.Join(r.Dir, recorder.SessionAudioFile))
+		info, audioErr := os.Lstat(filepath.Join(r.Dir, recorder.SessionAudioFile))
+		hasAudio := audioErr == nil && info.Mode().IsRegular()
+		var audioBytes int64
+		if hasAudio {
+			audioBytes = info.Size()
+		}
 		facts[r.Dir] = components.SessionArtifacts{
 			HasTranscript: transcribe.HasTranscript(r.Dir, cfg),
-			HasAudio:      audioErr == nil,
+			HasAudio:      hasAudio,
+			AudioBytes:    audioBytes,
 		}
 	}
 	return facts
@@ -92,5 +98,7 @@ func (m Model) envFacts() envFacts {
 		AutostartAvailable: m.autostartAvail,
 		AutostartEnabled:   m.autostartOn,
 		Autostart:          m.deps.Autostart,
+		AudioUsage:         m.audioUsageText(),
+		AudioPreview:       m.audioPreview,
 	}
 }
