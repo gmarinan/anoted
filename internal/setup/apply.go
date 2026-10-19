@@ -11,6 +11,8 @@ import (
 )
 
 // ApplyDetection configures meeting detection and returns status lines for the UI.
+//
+//nolint:contextcheck // one-shot probes, run the same way from the CLI wizard
 func ApplyDetection(cfg *config.Config, plat platform.Info, mode string) []string {
 	cfg.Detection.Mode = mode
 	var lines []string

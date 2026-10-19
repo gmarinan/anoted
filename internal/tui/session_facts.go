@@ -12,18 +12,13 @@ import (
 	"anoted/internal/tui/components"
 )
 
-// sessionFacts are the filesystem answers the session table needs.
+// gatherSessionFacts collects the filesystem answers the session table needs.
 //
 // These were probed inside View: HasTranscript stats several candidate paths
 // and audioExists stats one more, per visible row, on every frame — up to
 // thirty times a second while the level meter runs. On a home directory over
 // NFS or a spun-down disk that stalls the whole render loop. They are gathered
 // once per session load now, off the Update loop, and View just reads them.
-type sessionFacts struct {
-	HasTranscript bool
-	HasAudio      bool
-}
-
 func gatherSessionFacts(recs []session.Record, cfg config.TranscriptionConfig) map[string]components.SessionArtifacts {
 	facts := make(map[string]components.SessionArtifacts, len(recs))
 	for _, r := range recs {

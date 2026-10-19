@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 )
@@ -11,7 +12,7 @@ const LegacyAppName = "meetctl"
 func LegacyConfigDir() (string, error) {
 	dir, err := os.UserConfigDir()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("resolve user config dir: %w", err)
 	}
 	return filepath.Join(dir, LegacyAppName), nil
 }

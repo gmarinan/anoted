@@ -4,6 +4,7 @@ package detector
 
 import (
 	"context"
+	"fmt"
 	"os/exec"
 	"strings"
 
@@ -24,7 +25,7 @@ func (d *linuxDetector) Name() string { return "linux" }
 func listProcesses(ctx context.Context) ([]string, error) {
 	out, err := exec.CommandContext(ctx, "ps", "-eo", "comm=").Output()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("list processes: %w", err)
 	}
 	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
 	var names []string

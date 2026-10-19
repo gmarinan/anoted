@@ -22,7 +22,7 @@ func MigrateLegacyIfEmpty(currentDBPath string) error {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil
 		}
-		return err
+		return fmt.Errorf("stat legacy session db: %w", err)
 	}
 
 	count, err := sessionCount(currentDBPath)
@@ -52,7 +52,7 @@ func sessionCount(dbPath string) (int, error) {
 		if errors.Is(err, os.ErrNotExist) {
 			return 0, nil
 		}
-		return 0, err
+		return 0, fmt.Errorf("stat session db: %w", err)
 	}
 	store := NewSQLiteStore(dbPath)
 	if err := store.Open(); err != nil {

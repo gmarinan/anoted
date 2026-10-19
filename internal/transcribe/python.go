@@ -1,16 +1,19 @@
 package transcribe
 
 import (
+	"context"
 	"os/exec"
 	"strings"
 )
 
 // verifyPython runs a minimal check that the interpreter is a real Python 3.
+//
+//nolint:contextcheck // short probe, deliberately not tied to a caller's ctx
 func verifyPython(path string) bool {
 	if path == "" || isStorePythonStub(path) {
 		return false
 	}
-	cmd := exec.Command(path, "-c", "import sys; print(sys.version_info[0], sys.version_info[1])")
+	cmd := exec.CommandContext(context.Background(), path, "-c", "import sys; print(sys.version_info[0], sys.version_info[1])")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return false

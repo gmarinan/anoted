@@ -67,13 +67,14 @@ func detectionChecks(plat platform.Info, cfg config.Config) []Check {
 	}
 
 	if mode == "window" || mode == "both" {
-		if plat.Session == "wayland" {
+		switch plat.Session {
+		case "wayland":
 			checks = append(checks, Check{
 				Name:   "meeting_detection_window",
 				Status: "warn",
 				Detail: "window titles limited on Wayland",
 			})
-		} else if plat.Session == "x11" {
+		case "x11":
 			checks = append(checks, windowToolCheck(cfg.Detection.WindowTool)...)
 		}
 	}

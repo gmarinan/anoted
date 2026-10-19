@@ -4,6 +4,8 @@ on:
   push:
     branches: [main, develop]
   pull_request:
+  # release.yml runs this as its gate, so nothing ships with a red CI.
+  workflow_call:
 
 jobs:
   linux:
@@ -43,9 +45,11 @@ jobs:
         with:
           go-version: "1.24"
           cache: true
-      - uses: golangci/golangci-lint-action@v6
+      # Pinned: `latest` on the v6 action resolved to a v1 release that rejects
+      # this v2 config, so lint failed on every run without checking anything.
+      - uses: golangci/golangci-lint-action@v9
         with:
-          version: latest
+          version: v2.14.0
       # Second pass over the build-tagged Windows sources the run above cannot
       # see. Limited to packages that build without cgo — everything reaching
       # internal/wasapi is covered by the windows-latest job instead.

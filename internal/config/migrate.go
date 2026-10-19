@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"os"
 )
 
@@ -16,7 +17,7 @@ func MigrateLegacyIfNeeded(currentPath string) error {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil
 		}
-		return err
+		return fmt.Errorf("stat legacy config: %w", err)
 	}
 
 	current, err := Load(currentPath)

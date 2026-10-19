@@ -9,10 +9,6 @@ import (
 	"anoted/internal/transcribe"
 )
 
-const (
-	setupWizardSteps = 5
-)
-
 // WizardStep identifies the active setup wizard screen.
 type WizardStep int
 

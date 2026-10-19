@@ -579,9 +579,6 @@ func FloatCenter(background, overlay string, width, height int) string {
 	if startY+modalH > height {
 		height = startY + modalH
 	}
-	if startX+modalW > width {
-		width = startX + modalW
-	}
 
 	// Strip the background's own SGR codes before dimming. Style.Render just
 	// wraps the string in one escape pair, so the first reset inside the

@@ -43,10 +43,6 @@ func (m Model) closeSetupWizard() Model {
 	return m
 }
 
-func (m Model) setupAbsorbsKeys() bool {
-	return m.setupOpen
-}
-
 func (m Model) handleSetupKey(key string) (tea.Model, tea.Cmd) {
 	if m.setupWizard.Busy {
 		switch key {

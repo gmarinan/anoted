@@ -1,6 +1,7 @@
 package doctor
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"strings"
@@ -40,5 +41,5 @@ func i3SessionLikely() bool {
 	if _, err := exec.LookPath("i3-msg"); err != nil {
 		return false
 	}
-	return exec.Command("pgrep", "-x", "i3").Run() == nil
+	return exec.CommandContext(context.Background(), "pgrep", "-x", "i3").Run() == nil
 }

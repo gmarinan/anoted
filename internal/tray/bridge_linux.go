@@ -3,6 +3,7 @@
 package tray
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -58,7 +59,7 @@ func ensureLinuxBridge() error {
 	if bridgeProcessRunning() {
 		return waitForWatcher()
 	}
-	cmd := exec.Command(bin, "--fork")
+	cmd := exec.CommandContext(context.Background(), bin, "--fork")
 	cmd.Env = append(os.Environ(), "GDK_BACKEND=x11")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("tray bridge: snixembed --fork: %w (%s)", err, strings.TrimSpace(string(out)))
@@ -85,7 +86,7 @@ func x11Session() bool {
 }
 
 func bridgeProcessRunning() bool {
-	err := exec.Command("pgrep", "-x", "snixembed").Run()
+	err := exec.CommandContext(context.Background(), "pgrep", "-x", "snixembed").Run()
 	return err == nil
 }
 

@@ -3,6 +3,7 @@
 package setup
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -16,7 +17,7 @@ func installTool(out io.Writer, tool string) error {
 		return fmt.Errorf("unknown package manager; install %s manually", tool)
 	}
 	fmt.Fprintf(out, "\n  Running: %s\n\n", joinCmd(cmd))
-	c := exec.Command(cmd[0], cmd[1:]...)
+	c := exec.CommandContext(context.Background(), cmd[0], cmd[1:]...)
 	c.Stdin = os.Stdin
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr

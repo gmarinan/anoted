@@ -10,8 +10,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-const gpuInstallLogMax = 40
-
 type gpuInstallProgressMsg struct {
 	line string
 }

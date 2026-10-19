@@ -30,7 +30,9 @@ func TestConfigAbsorbsTabKeysWhileEditing(t *testing.T) {
 	if !m.configAbsorbsKeys() {
 		t.Fatal("editing should absorb tab switch keys")
 	}
-	if m.isTabSwitchKey("1") && m.configAbsorbsKeys() {
-		// nav.go must check configAbsorbsKeys before handleTabSwitch
+	// nav.go must check configAbsorbsKeys before handleTabSwitch; that only
+	// matters if "1" really is a tab switch key.
+	if !m.isTabSwitchKey("1") {
+		t.Fatal(`"1" should be a tab switch key`)
 	}
 }

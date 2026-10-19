@@ -3,6 +3,7 @@
 package audio
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -144,7 +145,7 @@ func listNodes(kind string) ([]nodeEntry, error) {
 	if err != nil {
 		return nil, fmt.Errorf("pactl not found: %w", err)
 	}
-	out, err := exec.Command(path, "list", kind, "short").Output()
+	out, err := exec.CommandContext(context.Background(), path, "list", kind, "short").Output()
 	if err != nil {
 		return nil, fmt.Errorf("pactl list %s: %w", kind, err)
 	}
@@ -182,7 +183,7 @@ func listSinkLinkedApps() map[string][]string {
 	if err != nil {
 		return nil
 	}
-	out, err := exec.Command(path, "list", "sink-inputs").Output()
+	out, err := exec.CommandContext(context.Background(), path, "list", "sink-inputs").Output()
 	if err != nil {
 		return nil
 	}
@@ -248,7 +249,7 @@ func pactlGet(subcommand string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("pactl not found: %w", err)
 	}
-	out, err := exec.Command(path, subcommand).Output()
+	out, err := exec.CommandContext(context.Background(), path, subcommand).Output()
 	if err != nil {
 		return "", fmt.Errorf("pactl %s: %w", subcommand, err)
 	}

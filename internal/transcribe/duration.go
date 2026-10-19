@@ -39,7 +39,8 @@ func AudioDuration(path string) (time.Duration, error) {
 		dataSize                            int64
 		haveFmt, haveData                   bool
 	)
-	for i := 0; i < maxWAVChunkScan && !(haveFmt && haveData); i++ {
+scan:
+	for i := 0; i < maxWAVChunkScan && (!haveFmt || !haveData); i++ {
 		var hdr [8]byte
 		if _, err := io.ReadFull(f, hdr[:]); err != nil {
 			break
@@ -68,7 +69,9 @@ func AudioDuration(path string) (time.Duration, error) {
 			haveData = true
 		default:
 			if _, err := f.Seek(size, io.SeekCurrent); err != nil {
-				break
+				// A bare break only left the switch, so scanning went on
+				// from the wrong offset.
+				break scan
 			}
 		}
 		// Chunks are word-aligned; an odd size carries a pad byte.

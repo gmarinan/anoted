@@ -37,7 +37,11 @@ func ResolveExec() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolve executable symlink: %w", err)
 	}
-	return filepath.Abs(exe)
+	abs, err := filepath.Abs(exe)
+	if err != nil {
+		return "", fmt.Errorf("resolve executable path: %w", err)
+	}
+	return abs, nil
 }
 
 // Available reports whether login autostart can be configured on this host.

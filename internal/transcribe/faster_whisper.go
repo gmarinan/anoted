@@ -81,6 +81,8 @@ var fasterWhisperProbe struct {
 
 // fasterWhisperImportable spawns the interpreter once per path and caches the
 // answer; this is called from doctor and from backend resolution.
+//
+//nolint:contextcheck // cached across callers, so no one caller's ctx may cancel it
 func fasterWhisperImportable(python string) bool {
 	fasterWhisperProbe.Lock()
 	if v, ok := fasterWhisperProbe.cache[python]; ok {
@@ -170,7 +172,7 @@ func runFasterWhisper(ctx context.Context, cfg config.TranscriptionConfig, pytho
 	cmd.Stdin = strings.NewReader(fasterWhisperRunner)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return nil, "", err
+		return nil, "", fmt.Errorf("faster-whisper stdout pipe: %w", err)
 	}
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
@@ -248,7 +250,7 @@ func parseRunnerStream(r io.Reader, onProgress ProgressFunc) (segs []Segment, la
 			runnerErr = ev.Message
 		}
 	}
-	return segs, language, runnerErr, sc.Err()
+	return segs, language, runnerErr, sc.Err() //nolint:wrapcheck // the caller wraps scanErr
 }
 
 // formatSegmentLine renders a segment the way the live preview already shows

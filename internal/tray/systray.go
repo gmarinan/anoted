@@ -72,19 +72,19 @@ func (t *systrayIndicator) onReady() {
 		}
 	}()
 	go func() {
-		for range quitItem.ClickedCh {
-			t.mu.Lock()
-			fn := t.onQuit
-			if fn == nil {
-				fn = t.opts.OnQuit
-			}
-			t.mu.Unlock()
-			if fn != nil {
-				fn()
-			}
-			systray.Quit()
+		if _, ok := <-quitItem.ClickedCh; !ok {
 			return
 		}
+		t.mu.Lock()
+		fn := t.onQuit
+		if fn == nil {
+			fn = t.opts.OnQuit
+		}
+		t.mu.Unlock()
+		if fn != nil {
+			fn()
+		}
+		systray.Quit()
 	}()
 
 	t.readyOnce.Do(func() { close(t.ready) })

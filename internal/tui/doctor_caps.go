@@ -47,10 +47,6 @@ func (m Model) handleDoctorCaps(msg doctorCapsMsg) Model {
 	return m
 }
 
-func (m Model) invalidateDoctorCapsCmd() tea.Cmd {
-	return refreshDoctorCapsCmd(m.deps.Config)
-}
-
 // doctorWhisperOffer reports cached whisper install availability for UI hints.
 func (m Model) doctorWhisperOffer() bool {
 	return m.doctorWhisperCanInstall && !m.whisperInstall.Active

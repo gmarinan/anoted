@@ -178,11 +178,11 @@ func runWithProgress(ctx context.Context, bin string, args []string, onProgress 
 	cmd := exec.CommandContext(ctx, bin, args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("whisper stdout pipe: %w", err)
 	}
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("whisper stderr pipe: %w", err)
 	}
 
 	// Each scanner gets its own buffer: sharing one strings.Builder across the
@@ -215,7 +215,7 @@ func runWithProgress(ctx context.Context, bin string, args []string, onProgress 
 	}()
 
 	if err := cmd.Start(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("start whisper: %w", err)
 	}
 	wg.Wait()
 	err = cmd.Wait()
@@ -233,7 +233,7 @@ func runWithProgress(ctx context.Context, bin string, args []string, onProgress 
 			}
 		}
 	}
-	return out, err
+	return out, err //nolint:wrapcheck // formatWhisperError adds the backend context
 }
 
 func resolveCppModelPath(cfg config.TranscriptionConfig) (string, error) {

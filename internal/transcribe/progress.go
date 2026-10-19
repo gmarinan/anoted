@@ -21,8 +21,6 @@ type Progress struct {
 // ProgressFunc receives progress updates during transcription.
 type ProgressFunc func(Progress)
 
-const maxPreviewLogLines = 30
-
 // ParseCppProgressLine extracts a percentage from whisper.cpp stderr output.
 // Example: "whisper_print_progress_callback: progress =  65%"
 func ParseCppProgressLine(line string) (float64, bool) {
@@ -149,7 +147,10 @@ func scanLines(r io.Reader, fn func(string)) error {
 	for sc.Scan() {
 		fn(sc.Text())
 	}
-	return sc.Err()
+	if err := sc.Err(); err != nil {
+		return fmt.Errorf("read output: %w", err)
+	}
+	return nil
 }
 
 // scanLinesOrCR splits on \n and on \r.
