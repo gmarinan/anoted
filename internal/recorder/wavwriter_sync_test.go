@@ -20,6 +20,10 @@ func TestWAVHeaderIsUsableWithoutClose(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewWAVWriter: %v", err)
 	}
+	// The point is that the header is valid before Close, but the handle must
+	// still be released before TempDir cleanup: Windows refuses to delete a
+	// file that is open.
+	t.Cleanup(func() { _ = w.Close() })
 
 	// Write well past one sync interval without ever calling Close.
 	chunk := make([]byte, 4096)

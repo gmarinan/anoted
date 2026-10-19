@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -76,6 +77,9 @@ func TestInstanceLockIgnoresPidFileNamingAnotherProcess(t *testing.T) {
 }
 
 func TestInstanceLockPidFileIsOwnerOnly(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix permission bits; Windows access is governed by ACLs, which Go's Chmod does not set")
+	}
 	dir := t.TempDir()
 	lock, err := AcquireInstanceLock(dir)
 	if err != nil {

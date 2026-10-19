@@ -40,8 +40,10 @@ func TestMigrateLegacyIfEmpty(t *testing.T) {
 	}
 
 	currentDB := filepath.Join(currentDir, "sessions.db")
+	// LegacyConfigDir uses os.UserConfigDir: XDG_CONFIG_HOME on Linux,
+	// %AppData% on Windows.
 	t.Setenv("XDG_CONFIG_HOME", dir)
-	// LegacyConfigDir uses UserConfigDir which respects XDG_CONFIG_HOME on Linux
+	t.Setenv("APPDATA", dir)
 	if err := MigrateLegacyIfEmpty(currentDB); err != nil {
 		t.Fatal(err)
 	}

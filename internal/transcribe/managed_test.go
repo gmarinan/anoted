@@ -8,6 +8,7 @@ import (
 
 func TestManagedVenvDir(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", "/tmp/anoted-test-data")
+	t.Setenv("LOCALAPPDATA", "/tmp/anoted-test-data")
 	got := ManagedVenvDir()
 	want := filepath.Join("/tmp/anoted-test-data", "anoted", "whisper-venv")
 	if got != want {
@@ -17,17 +18,19 @@ func TestManagedVenvDir(t *testing.T) {
 
 func TestManagedWhisperBinary(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", "/tmp/anoted-test-data")
+	t.Setenv("LOCALAPPDATA", "/tmp/anoted-test-data")
 	got := ManagedWhisperBinary()
 	if !filepath.IsAbs(got) {
 		t.Fatalf("expected absolute path, got %q", got)
 	}
-	if filepath.Base(got) != "whisper" {
+	if filepath.Base(got) != filepath.Base(venvWhisperPath("venv")) {
 		t.Fatalf("expected whisper binary, got %q", got)
 	}
 }
 
 func TestIsManagedBinary(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", "/tmp/anoted-test-data")
+	t.Setenv("LOCALAPPDATA", "/tmp/anoted-test-data")
 	if IsManagedBinary("/usr/bin/whisper") {
 		t.Fatal("system whisper should not be managed")
 	}
