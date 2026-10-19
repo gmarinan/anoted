@@ -139,7 +139,7 @@ func truncateDevice(s string, max int) string {
 func ExtractMarkdownBody(path string) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("read transcript: %w", err)
 	}
 	content := string(data)
 	if !strings.HasPrefix(content, "---") {

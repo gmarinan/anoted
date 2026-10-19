@@ -3,6 +3,7 @@
 package setup
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"anoted/internal/transcribe"
 )
 
+//nolint:contextcheck // installer steps run to completion; there is no caller ctx to honour
 func installTranscription(in io.Reader, out io.Writer, autoInstall bool) error {
 	if _, err := transcribe.FindPython(); err != nil {
 		switch {
@@ -29,7 +31,7 @@ func installTranscription(in io.Reader, out io.Writer, autoInstall bool) error {
 			// the way the whisper installer already does.
 			args := []string{"sudo", "pacman", "-S", "--needed", "--noconfirm", "python"}
 			fmt.Fprintf(out, "  Python missing — running: %s\n\n", strings.Join(args, " "))
-			cmd := exec.Command(args[0], args[1:]...)
+			cmd := exec.CommandContext(context.Background(), args[0], args[1:]...)
 			cmd.Stdin = os.Stdin
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr

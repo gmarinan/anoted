@@ -27,11 +27,20 @@ linters:
         - errors.Join(
         - .Wrap(
         - .WithMessage(
-    staticcheck:
-      checks:
-        - all
+      # Internal packages wrap at their own boundary; re-wrapping every hop
+      # only repeats the same context.
+      ignore-package-globs:
+        - anoted/*
+      # ctx.Err() is a sentinel callers compare against; it carries no call site.
+      ignore-sig-regexps:
+        - \(context\.Context\)\.Err\(\)
 
   exclusions:
+    # Unchecked fmt.Fprint*/Close and friends; these were excluded by default
+    # before golangci-lint v2.
+    presets:
+      - std-error-handling
+      - common-false-positives
     rules:
       # Tests may ignore errors and skip wrapping for brevity.
       - path: _test\.go

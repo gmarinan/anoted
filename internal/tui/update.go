@@ -29,6 +29,7 @@ func (m Model) Init() tea.Cmd {
 		m.loadSessionsCmd(),
 		func() tea.Msg { return homeEnterLevelsMsg{} },
 		refreshDoctorCapsCmd(m.deps.Config),
+		scheduleRetentionSweep(),
 	}
 	if poll := m.scheduleWindowSizePoll(); poll != nil {
 		cmds = append(cmds, poll)
@@ -149,6 +150,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleAudioLibrary(msg)
 	case retentionDoneMsg:
 		return m.handleRetentionDone(msg)
+	case retentionSweepMsg:
+		return m.handleRetentionSweep()
 	case levelStartMsg:
 		if msg.err != nil && m.screen == ScreenMain {
 			m.errMsg = msg.err.Error()
@@ -441,11 +444,6 @@ func (m Model) handleRecordToggle(msg recordToggleResultMsg) (tea.Model, tea.Cmd
 	m.syncTrayState()
 
 	var cmds []tea.Cmd
-	if m.screen == ScreenMain {
-		// A finished recording adds a row; reload through a command so the store
-		// call stays off the Update loop.
-		cmds = append(cmds, m.loadSessionsCmd())
-	}
 	savedDir := msg.savedDir
 	if savedDir == "" {
 		savedDir = st.SessionDir
@@ -454,6 +452,12 @@ func (m Model) handleRecordToggle(msg recordToggleResultMsg) (tea.Model, tea.Cmd
 		var transcribeCmd tea.Cmd
 		m, transcribeCmd = m.enqueueTranscribe(savedDir)
 		cmds = append(cmds, transcribeCmd)
+	}
+	if m.screen == ScreenMain {
+		// A finished recording adds a row; reload through a command so the store
+		// call stays off the Update loop. Queue the transcription first so the
+		// reload's retention plan already counts the new wav as in use.
+		cmds = append(cmds, m.loadSessionsCmd())
 	}
 	m.levelGen++
 	m.levelQuiet = 0
@@ -589,7 +593,7 @@ func startRecordingCmd(m Model) tea.Cmd {
 			Provider:      p,
 			Platform:      platformName,
 			AutoRecord:    autoRecord && inMeeting,
-			Manual:        !(autoRecord && inMeeting),
+			Manual:        !autoRecord || !inMeeting,
 			SampleRate:    sampleRate,
 			Channels:      channels,
 			SystemMonitor: cfg.Audio.SystemMonitor,

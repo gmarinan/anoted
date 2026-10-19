@@ -15,7 +15,13 @@ permissions:
   contents: write
 
 jobs:
+  # CI runs as a separate workflow and nothing stops a merge when it fails, so
+  # the release repeats its checks: a red build must never become the Nightly.
+  verify:
+    uses: ./.github/workflows/ci.yml
+
   linux:
+    needs: verify
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -41,6 +47,7 @@ jobs:
           path: dist/anoted-linux-amd64.tar.gz
 
   windows:
+    needs: verify
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4

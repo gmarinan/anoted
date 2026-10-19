@@ -55,11 +55,14 @@ func (s *SQLiteStore) Close() error {
 	if s.db == nil {
 		return nil
 	}
-	return s.db.Close()
+	if err := s.db.Close(); err != nil {
+		return fmt.Errorf("close session db: %w", err)
+	}
+	return nil
 }
 
 func (s *SQLiteStore) migrate() error {
-	_, err := s.db.Exec(`
+	_, err := s.db.ExecContext(context.Background(), `
 		CREATE TABLE IF NOT EXISTS sessions (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			dir TEXT NOT NULL,
@@ -165,7 +168,10 @@ func (s *SQLiteStore) List(ctx context.Context, limit int) ([]Record, error) {
 		}
 		out = append(out, rec)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list sessions: %w", err)
+	}
+	return out, nil
 }
 
 func (s *SQLiteStore) Delete(ctx context.Context, id int64) error {

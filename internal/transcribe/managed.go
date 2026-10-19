@@ -1,6 +1,7 @@
 package transcribe
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -221,21 +222,26 @@ func setTorchCUDACache(available bool) {
 	torchCUDACache.Unlock()
 }
 
+//nolint:contextcheck // cached across callers, so no one caller's ctx may cancel it
 func probeManagedTorchCUDA() bool {
 	python := venvPythonPath(resolveManagedVenvDir())
-	cmd := exec.Command(python, "-c", "import torch; raise SystemExit(0 if torch.cuda.is_available() else 1)")
+	cmd := exec.CommandContext(context.Background(), python, "-c", "import torch; raise SystemExit(0 if torch.cuda.is_available() else 1)")
 	return cmd.Run() == nil
 }
 
+//nolint:contextcheck // installer steps run to completion; there is no caller ctx to honour
 func runCmd(stdout, stderr io.Writer, args ...string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("empty command")
 	}
-	cmd := exec.Command(args[0], args[1:]...)
+	cmd := exec.CommandContext(context.Background(), args[0], args[1:]...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
-	return cmd.Run()
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("run %s: %w", args[0], err)
+	}
+	return nil
 }
 
 func formatCmdError(step string, err error) error {

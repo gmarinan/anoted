@@ -3,6 +3,7 @@
 package recorder
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -33,6 +34,9 @@ func startDualCapture(devs resolvedDevices, sess SessionConfig, dir string) (*ca
 	return startDualFFmpeg(devs, sess, dir)
 }
 
+// The capture must outlive the Start call's ctx; Stop ends it.
+//
+//nolint:contextcheck // see above
 func startDualFFmpeg(devs resolvedDevices, sess SessionConfig, dir string) (*captureProc, error) {
 	rate := strconv.Itoa(outputSampleRate(sess))
 	channels := strconv.Itoa(outputChannels(sess))
@@ -46,7 +50,7 @@ func startDualFFmpeg(devs resolvedDevices, sess SessionConfig, dir string) (*cap
 		"-ac", channels,
 		dirFile(dir, SessionAudioFile),
 	}
-	cmd := exec.Command("ffmpeg", args...)
+	cmd := exec.CommandContext(context.Background(), "ffmpeg", args...)
 	stderr := &boundedBuffer{limit: captureStderrLimit}
 	cmd.Stderr = stderr
 

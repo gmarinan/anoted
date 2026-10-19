@@ -3,6 +3,7 @@ package recorder
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -41,6 +42,9 @@ func TestCreateSessionDirNeverReusesADirectory(t *testing.T) {
 // Recordings and the directories holding them must not be readable by other
 // users on a shared machine.
 func TestCreateSessionDirIsOwnerOnly(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix permission bits; Windows access is governed by ACLs, which Go's Chmod does not set")
+	}
 	dir, err := createSessionDir(SessionConfig{OutputRoot: t.TempDir(), Provider: "teams"})
 	if err != nil {
 		t.Fatalf("createSessionDir: %v", err)

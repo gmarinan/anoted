@@ -32,7 +32,7 @@ func startRecorderWithTimeoutDur(rec recorder.Recorder, ctx context.Context, cfg
 		go func() {
 			if err := <-ch; err == nil {
 				slog.Warn("record start completed after timeout; stopping abandoned capture")
-				if stopErr := rec.Stop(context.Background()); stopErr != nil {
+				if stopErr := rec.Stop(context.WithoutCancel(ctx)); stopErr != nil {
 					slog.Error("failed to stop abandoned capture", "err", stopErr)
 				}
 			}

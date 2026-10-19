@@ -91,8 +91,10 @@ func chooseWindowTool(in io.Reader, out io.Writer, preset string, hasXdotool, ha
 }
 
 func verifyPactl(ctx context.Context) error {
-	_, err := exec.CommandContext(ctx, "pactl", "list", "source-outputs", "short").Output()
-	return err
+	if _, err := exec.CommandContext(ctx, "pactl", "list", "source-outputs", "short").Output(); err != nil {
+		return fmt.Errorf("pactl: %w", err)
+	}
+	return nil
 }
 
 func hasTool(name string) bool {
@@ -124,7 +126,7 @@ func verifyTitles(ctx context.Context, tool string) error {
 		}
 		out, err := exec.CommandContext(ctx, "xdotool", "getactivewindow").Output()
 		if err != nil {
-			return err
+			return fmt.Errorf("xdotool: %w", err)
 		}
 		if strings.TrimSpace(string(out)) == "" {
 			return fmt.Errorf("no active window")
@@ -133,8 +135,10 @@ func verifyTitles(ctx context.Context, tool string) error {
 		if !hasTool(ToolWmctrl) {
 			return fmt.Errorf("wmctrl not found")
 		}
-		_, err := exec.CommandContext(ctx, "wmctrl", "-l").Output()
-		return err
+		if _, err := exec.CommandContext(ctx, "wmctrl", "-l").Output(); err != nil {
+			return fmt.Errorf("wmctrl: %w", err)
+		}
+		return nil
 	}
 	return nil
 }

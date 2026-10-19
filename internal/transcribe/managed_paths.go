@@ -21,14 +21,6 @@ func venvPythonPath(venv string) string {
 	return filepath.Join(venvBinDir(venv), name)
 }
 
-func venvPipPath(venv string) string {
-	name := "pip"
-	if runtime.GOOS == "windows" {
-		name = "pip.exe"
-	}
-	return filepath.Join(venvBinDir(venv), name)
-}
-
 func venvWhisperPath(venv string) string {
 	name := "whisper"
 	if runtime.GOOS == "windows" {

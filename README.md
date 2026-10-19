@@ -146,6 +146,22 @@ transcription:
   output_formats: [txt, srt]
 ```
 
+### Audio retention
+
+A meeting's WAV is hundreds of megabytes; its transcript is a few kilobytes. The `retention` section (Config → Storage in the TUI) deletes `recording.wav` once it is no longer needed and leaves the transcript, metadata, and session row alone.
+
+```yaml
+retention:
+  auto_delete: false            # opt-in; nothing is deleted until this is true
+  keep_days: 0                  # delete audio of meetings that ended this many days ago (0 = no age limit)
+  keep_recordings: 0            # keep only the newest N recordings' audio (0 = no count limit)
+  protect_untranscribed: true   # never delete audio without a transcript
+```
+
+With both limits set, audio goes as soon as it breaks either one: "the newest 20, and nothing older than 30 days". `anoted watch` applies the policy at startup, when a recording or transcription finishes, and at least once an hour. It never touches the session being recorded or transcribed, or anything queued for transcription. With `protect_untranscribed` on, it also keeps sessions whose transcript is missing or empty (a failed or silent run).
+
+To see what would go without deleting anything, run `anoted retention`. `anoted retention --apply` deletes the listed files once, even with `auto_delete` off. It refuses while `anoted watch` is running, because only that process knows which session is busy.
+
 <p align="center">
   <img src="docs/assets/config.png" alt="anoted Config tab" width="920">
 </p>

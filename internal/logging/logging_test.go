@@ -9,6 +9,7 @@ import (
 )
 
 func TestSetupFileReturnsLogger(t *testing.T) {
+	isolateConfigDir(t)
 	logger, closer, err := SetupFile(slog.LevelInfo)
 	if err != nil {
 		t.Fatal(err)
@@ -20,6 +21,7 @@ func TestSetupFileReturnsLogger(t *testing.T) {
 }
 
 func TestSetupReturnsLogger(t *testing.T) {
+	isolateConfigDir(t)
 	logger, closer, err := Setup(slog.LevelInfo)
 	if err != nil {
 		t.Fatal(err)
@@ -28,6 +30,17 @@ func TestSetupReturnsLogger(t *testing.T) {
 	if logger == nil {
 		t.Fatal("expected logger")
 	}
+}
+
+// isolateConfigDir points os.UserConfigDir at an empty temp dir, so the tests
+// neither depend on nor write to the developer's real anoted.log, and cover the
+// fresh-install case where the config dir does not exist yet.
+func isolateConfigDir(t *testing.T) {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	t.Setenv("AppData", filepath.Join(home, "AppData"))
 }
 
 func TestParseLevel(t *testing.T) {

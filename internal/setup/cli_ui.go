@@ -39,21 +39,6 @@ func printInfo(out io.Writer, msg string) {
 	fmt.Fprintf(out, "  │    %s\n", msg)
 }
 
-func printChoiceList(out io.Writer, choices []DetectionChoice, selected int) {
-	for i, c := range choices {
-		marker := " "
-		if i == selected {
-			marker = "›"
-		}
-		line := fmt.Sprintf("%s %d) %s", marker, i+1, c.Label)
-		if c.Recommended {
-			line += " (recommended)"
-		}
-		fmt.Fprintf(out, "  │  %s\n", line)
-		fmt.Fprintf(out, "  │      %s\n", c.Description)
-	}
-}
-
 func boxTop() string {
 	return "  ╭" + strings.Repeat("─", cliWidth) + "╮"
 }

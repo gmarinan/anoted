@@ -76,7 +76,9 @@ func (m *linuxMonitor) StartSystem(monitorID string) error {
 	if err != nil {
 		return fmt.Errorf("resolve system monitor %q: %w", monitorID, err)
 	}
-	m.StopSystem()
+	if err := m.StopSystem(); err != nil {
+		return fmt.Errorf("stop system monitor: %w", err)
+	}
 	cancel, err := m.startStream(device, func(peak float64, bands []float64) {
 		m.mu.Lock()
 		m.system = peak
@@ -97,7 +99,9 @@ func (m *linuxMonitor) StartMic(sourceID string) error {
 	if err != nil {
 		return fmt.Errorf("resolve microphone %q: %w", sourceID, err)
 	}
-	m.StopMic()
+	if err := m.StopMic(); err != nil {
+		return fmt.Errorf("stop microphone monitor: %w", err)
+	}
 	cancel, err := m.startStream(device, func(peak float64, bands []float64) {
 		m.mu.Lock()
 		m.mic = peak

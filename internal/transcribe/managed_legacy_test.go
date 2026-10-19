@@ -9,13 +9,14 @@ import (
 func TestResolveManagedVenvDirUsesLegacy(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("XDG_DATA_HOME", root)
+	t.Setenv("LOCALAPPDATA", root)
 
-	current := filepath.Join(root, "anoted", managedVenvName, "bin")
-	legacy := filepath.Join(root, "meetctl", managedVenvName, "bin")
-	if err := os.MkdirAll(legacy, 0o755); err != nil {
+	current := venvBinDir(filepath.Join(root, "anoted", managedVenvName))
+	legacyVenv := filepath.Join(root, "meetctl", managedVenvName)
+	if err := os.MkdirAll(venvBinDir(legacyVenv), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(legacy, "whisper"), []byte("stub"), 0o755); err != nil {
+	if err := os.WriteFile(venvWhisperPath(legacyVenv), []byte("stub"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(current, 0o755); err != nil {
@@ -23,9 +24,8 @@ func TestResolveManagedVenvDirUsesLegacy(t *testing.T) {
 	}
 
 	got := resolveManagedVenvDir()
-	want := filepath.Join(root, "meetctl", managedVenvName)
-	if got != want {
-		t.Fatalf("got %q want %q", got, want)
+	if got != legacyVenv {
+		t.Fatalf("got %q want %q", got, legacyVenv)
 	}
 	if !ManagedWhisperInstalled() {
 		t.Fatal("expected legacy whisper to be detected")

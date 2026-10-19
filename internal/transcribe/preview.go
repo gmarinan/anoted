@@ -39,7 +39,7 @@ func ReadPreview(sessionDir string, tcfg config.TranscriptionConfig, maxLines in
 func readPreviewFile(path string, maxLines int) (string, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("open preview: %w", err)
 	}
 	defer f.Close()
 

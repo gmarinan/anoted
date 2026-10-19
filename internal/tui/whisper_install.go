@@ -10,8 +10,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-const whisperInstallLogMax = 40
-
 type whisperInstallProgressMsg struct {
 	line string
 }

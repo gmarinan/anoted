@@ -3,6 +3,7 @@
 package setup
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -79,7 +80,7 @@ func installWhisper(out io.Writer, autoInstall bool) error {
 	if _, err := transcribe.FindPython(); err != nil {
 		if autoInstall && hasCmd("pacman") {
 			fmt.Fprintln(out, "  Python missing — installing via pacman…")
-			cmd := exec.Command("sudo", "pacman", "-S", "--needed", "--noconfirm", "python")
+			cmd := exec.CommandContext(context.Background(), "sudo", "pacman", "-S", "--needed", "--noconfirm", "python")
 			cmd.Stdin = os.Stdin
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr

@@ -31,8 +31,9 @@ func queryGPUMemorySMI() (freeMiB, totalMiB int, ok bool) {
 	return parseVRAMLine(line)
 }
 
+//nolint:contextcheck // short probe, deliberately not tied to a caller's ctx
 func queryNVIDIA(nvidiaSMI string, args ...string) string {
-	out, err := exec.Command(nvidiaSMI, args...).Output()
+	out, err := exec.CommandContext(context.Background(), nvidiaSMI, args...).Output()
 	if err != nil {
 		return ""
 	}

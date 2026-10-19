@@ -4,7 +4,6 @@ package recorder
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os/exec"
 
@@ -61,19 +60,6 @@ func (r *WSLHelperRecorder) Status() RecorderStatus {
 		st.Backend = r.Name()
 	}
 	return st
-}
-
-func (r *WSLHelperRecorder) helperAvailable(ctx context.Context) bool {
-	if r.helper == "" {
-		return false
-	}
-	cmd := exec.CommandContext(ctx, r.helper, "status")
-	out, err := cmd.Output()
-	if err != nil {
-		return false
-	}
-	var resp map[string]any
-	return json.Unmarshal(out, &resp) == nil
 }
 
 func cfgExpandHelperPath() string {

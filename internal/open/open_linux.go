@@ -3,6 +3,7 @@
 package open
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -27,8 +28,11 @@ func Open(path string, cfg config.DesktopConfig, kind Kind) error {
 	if err != nil {
 		return err
 	}
-	c := exec.Command(cmd, args...)
-	return c.Start()
+	c := exec.CommandContext(context.Background(), cmd, args...)
+	if err := c.Start(); err != nil {
+		return fmt.Errorf("start %s: %w", cmd, err)
+	}
+	return nil
 }
 
 // Detected returns a human-readable description of the opener that would be used.
@@ -150,7 +154,7 @@ var xdgFolderDesktopOnce struct {
 // file manager does not change mid-session.
 func xdgFolderDesktop() string {
 	xdgFolderDesktopOnce.Do(func() {
-		out, err := exec.Command("xdg-mime", "query", "default", "inode/directory").Output()
+		out, err := exec.CommandContext(context.Background(), "xdg-mime", "query", "default", "inode/directory").Output()
 		if err != nil {
 			return
 		}

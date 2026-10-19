@@ -102,7 +102,7 @@ func FormatLocalTime(t time.Time, layout string) string {
 func ReadMetadataFile(dir string) (Metadata, error) {
 	data, err := os.ReadFile(filepath.Join(dir, "metadata.json"))
 	if err != nil {
-		return Metadata{}, err
+		return Metadata{}, fmt.Errorf("read metadata.json: %w", err)
 	}
 	var meta Metadata
 	if err := json.Unmarshal(data, &meta); err != nil {
@@ -131,7 +131,7 @@ func UpdateMetadataEnded(dir string, startedAt, ended time.Time) error {
 func WriteMetadataFile(dir string, meta Metadata) error {
 	data, err := json.MarshalIndent(meta, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("encode metadata.json: %w", err)
 	}
 	return writeFile(dir, "metadata.json", data)
 }

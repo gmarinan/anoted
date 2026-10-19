@@ -133,7 +133,11 @@ func RenderJSON(segs []Segment, language string) ([]byte, error) {
 		text.WriteString(s.Text)
 	}
 	out.Text = strings.TrimSpace(text.String())
-	return json.MarshalIndent(out, "", "  ")
+	data, err := json.MarshalIndent(out, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("encode transcript json: %w", err)
+	}
+	return data, nil
 }
 
 // formatTimestamp renders seconds as HH:MM:SS<sep>mmm.

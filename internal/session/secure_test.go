@@ -3,6 +3,7 @@ package session
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -10,6 +11,9 @@ import (
 // O_CREATE and MkdirAll leave an existing path's mode alone, so an upgrade left
 // the user's whole meeting history world-readable.
 func TestSecureExistingTightensAnOldRecording(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix permission bits; Windows access is governed by ACLs, which Go's Chmod does not set")
+	}
 	root := t.TempDir()
 	dir := filepath.Join(root, "2026-06-23_12-35-42_google_meet")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -36,6 +40,9 @@ func TestSecureExistingTightensAnOldRecording(t *testing.T) {
 }
 
 func TestSecureFileLeavesAlreadyPrivateFilesAlone(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix permission bits; Windows access is governed by ACLs, which Go's Chmod does not set")
+	}
 	path := filepath.Join(t.TempDir(), "sessions.db")
 	if err := os.WriteFile(path, []byte("db"), 0o600); err != nil {
 		t.Fatalf("write: %v", err)

@@ -83,6 +83,11 @@ func openLogFile() (*os.File, error) {
 	if err != nil {
 		return nil, err
 	}
+	// On a fresh install nothing has created the config dir yet (config.Save
+	// only runs once settings change), so the first run had no log at all.
+	if err := os.MkdirAll(filepath.Dir(logPath), 0o700); err != nil {
+		return nil, fmt.Errorf("create log dir: %w", err)
+	}
 	if err := rotateIfLarge(logPath); err != nil {
 		return nil, err
 	}

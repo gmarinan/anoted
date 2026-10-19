@@ -133,18 +133,34 @@ func HasTranscript(sessionDir string, tcfg config.TranscriptionConfig) bool {
 }
 
 func hasTranscriptInDir(dir string, tcfg config.TranscriptionConfig, sessionDir string) bool {
+	return len(transcriptFilesInDir(dir, tcfg, sessionDir)) > 0
+}
+
+// AllTranscriptFiles returns every transcript file on disk for a session in
+// any format, not only the ones output_formats asks for now. A session
+// transcribed before the user changed formats still has its transcript.
+func AllTranscriptFiles(sessionDir string, tcfg config.TranscriptionConfig) []string {
+	dir, err := OutputDir(tcfg, sessionDir)
+	if err != nil {
+		dir = sessionDir
+	}
+	return transcriptFilesInDir(dir, tcfg, sessionDir)
+}
+
+func transcriptFilesInDir(dir string, tcfg config.TranscriptionConfig, sessionDir string) []string {
 	fileBase := outputFileBase(tcfg, sessionDir)
+	var out []string
 	for _, ext := range []string{".txt", ".srt", ".vtt", ".json"} {
 		p := filepath.Join(dir, fileBase+ext)
 		if _, err := os.Stat(p); err == nil {
-			return true
+			out = append(out, p)
 		}
 	}
 	md := filepath.Join(dir, markdownFilename(tcfg, sessionDir))
 	if _, err := os.Stat(md); err == nil {
-		return true
+		out = append(out, md)
 	}
-	return false
+	return out
 }
 
 // ListTranscriptFiles returns existing transcript output files for a session.

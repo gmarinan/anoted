@@ -27,7 +27,7 @@ func pickWindowsDialog(ctx context.Context, powershell, startDir string) (path s
 		if detail != "" {
 			return "", false, fmt.Errorf("powershell folder dialog: %s", detail)
 		}
-		return "", false, err
+		return "", false, fmt.Errorf("powershell folder dialog: %w", err)
 	}
 	path = strings.TrimSpace(stdout.String())
 	if path == "" {
