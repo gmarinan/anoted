@@ -54,3 +54,28 @@ func TestRetentionRejectsNegativeCaps(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestRetentionRoundTrips(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	cfg := Default()
+	cfg.Retention.AutoDelete = true
+	cfg.Retention.KeepDays = 30
+	cfg.Retention.KeepRecordings = 50
+	cfg.Retention.ProtectUntranscribed = boolPtr(false)
+	if err := Save(path, cfg); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := got.Retention
+	if !r.AutoDelete || r.KeepDays != 30 || r.KeepRecordings != 50 || r.ProtectsUntranscribed() {
+		t.Fatalf("retention after round trip = %+v (protect %v)", r, r.ProtectsUntranscribed())
+	}
+
+	cfg.Retention.KeepDays = -1
+	if err := Save(path, cfg); err == nil {
+		t.Fatal("Save must refuse a negative keep_days")
+	}
+}

@@ -107,8 +107,9 @@ type PrivacyConfig struct {
 // RetentionConfig controls automatic deletion of recording.wav.
 //
 // Transcripts and the session folder stay. Zero keep_days and keep_recordings
-// mean that cap is off. auto_delete defaults to false so upgrading anoted
-// cannot prune an existing library.
+// mean that cap is off. With both set, a wav goes as soon as it breaks either
+// one: "keep the newest N, and nothing older than D days". auto_delete
+// defaults to false so upgrading anoted cannot prune an existing library.
 type RetentionConfig struct {
 	AutoDelete           bool  `yaml:"auto_delete"`
 	KeepDays             int   `yaml:"keep_days"`

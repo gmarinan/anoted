@@ -85,6 +85,7 @@ func newRootCmd() *cobra.Command {
 		configCmd(),
 		doctorCmd(),
 		autostartCmd(),
+		retentionCmd(),
 	)
 	return root
 }
@@ -401,7 +402,7 @@ func configCmd() *cobra.Command {
 			}
 			data, err := os.ReadFile(path)
 			if err != nil {
-				return err
+				return fmt.Errorf("read config: %w", err)
 			}
 			fmt.Printf("Config: %s\n\n%s", path, string(data))
 			return nil

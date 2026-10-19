@@ -92,7 +92,7 @@ func generalCfgFields(env envFacts) []cfgField {
 			set: func(c *config.Config, v string) error {
 				b, err := strconv.ParseBool(v)
 				if err != nil {
-					return err
+					return fmt.Errorf("invalid auto_record: %w", err)
 				}
 				c.AutoRecord = b
 				return nil
@@ -110,7 +110,7 @@ func generalCfgFields(env envFacts) []cfgField {
 			set: func(c *config.Config, v string) error {
 				b, err := strconv.ParseBool(v)
 				if err != nil {
-					return err
+					return fmt.Errorf("invalid launch_at_login: %w", err)
 				}
 				if b {
 					entry, err := env.Autostart.EntryFromConfig(*c)
@@ -131,7 +131,7 @@ func generalCfgFields(env envFacts) []cfgField {
 			set: func(c *config.Config, v string) error {
 				b, err := strconv.ParseBool(v)
 				if err != nil {
-					return err
+					return fmt.Errorf("invalid tray_indicator: %w", err)
 				}
 				c.Privacy.TrayIndicator = b
 				return nil
@@ -146,7 +146,7 @@ func generalCfgFields(env envFacts) []cfgField {
 			set: func(c *config.Config, v string) error {
 				b, err := strconv.ParseBool(v)
 				if err != nil {
-					return err
+					return fmt.Errorf("invalid auto_record_requires_confirmation: %w", err)
 				}
 				c.AutoRecordRequiresConfirmation = b
 				return nil
@@ -182,7 +182,7 @@ func audioCfgFields() []cfgField {
 			set: func(c *config.Config, v string) error {
 				n, err := strconv.Atoi(v)
 				if err != nil {
-					return err
+					return fmt.Errorf("invalid channels: %w", err)
 				}
 				c.Audio.Channels = n
 				return nil
@@ -402,7 +402,7 @@ func transcriptionCfgFields() []cfgField {
 			set: func(c *config.Config, v string) error {
 				b, err := strconv.ParseBool(v)
 				if err != nil {
-					return err
+					return fmt.Errorf("invalid auto_after_recording: %w", err)
 				}
 				c.Transcription.AutoAfterRecording = b
 				return nil
@@ -554,7 +554,7 @@ func transcriptionCfgFields() []cfgField {
 			set: func(c *config.Config, v string) error {
 				b, err := strconv.ParseBool(v)
 				if err != nil {
-					return err
+					return fmt.Errorf("invalid markdown.weekday_class: %w", err)
 				}
 				c.Transcription.Markdown.WeekdayClass = &b
 				return nil
@@ -701,7 +701,7 @@ func privacyCfgFields() []cfgField {
 			set: func(c *config.Config, v string) error {
 				b, err := strconv.ParseBool(v)
 				if err != nil {
-					return err
+					return fmt.Errorf("invalid show_recording_indicator: %w", err)
 				}
 				c.Privacy.ShowRecordingIndicator = b
 				return nil
@@ -716,7 +716,7 @@ func privacyCfgFields() []cfgField {
 			set: func(c *config.Config, v string) error {
 				b, err := strconv.ParseBool(v)
 				if err != nil {
-					return err
+					return fmt.Errorf("invalid require_manual_consent_first_run: %w", err)
 				}
 				c.Privacy.RequireManualConsentFirstRun = b
 				return nil
@@ -749,7 +749,7 @@ func storageCfgFields(env envFacts) []cfgField {
 			set: func(c *config.Config, v string) error {
 				b, err := strconv.ParseBool(v)
 				if err != nil {
-					return err
+					return fmt.Errorf("invalid auto_delete: %w", err)
 				}
 				c.Retention.AutoDelete = b
 				return nil
@@ -800,7 +800,7 @@ func storageCfgFields(env envFacts) []cfgField {
 			set: func(c *config.Config, v string) error {
 				b, err := strconv.ParseBool(v)
 				if err != nil {
-					return err
+					return fmt.Errorf("invalid protect_untranscribed: %w", err)
 				}
 				c.Retention.ProtectUntranscribed = boolPtr(b)
 				return nil

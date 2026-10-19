@@ -105,7 +105,7 @@ func TestRetentionFollowUpRespectsCurrentPolicy(t *testing.T) {
 	}
 }
 
-func TestLibraryItemsMarksLiveAndOutsideAudio(t *testing.T) {
+func TestScanMarksLiveAndOutsideAudio(t *testing.T) {
 	root := t.TempDir()
 	inside := filepath.Join(root, "sess")
 	if err := os.Mkdir(inside, 0o700); err != nil {
@@ -128,7 +128,7 @@ func TestLibraryItemsMarksLiveAndOutsideAudio(t *testing.T) {
 		{Dir: outside, StartedAt: ended.Add(-time.Hour), EndedAt: ended},
 		{Dir: inside, StartedAt: ended.Add(-time.Hour), EndedAt: ended},
 	}
-	items := libraryItems(root, recs, config.TranscriptionConfig{}, map[string]struct{}{inside: {}})
+	items := retention.Scan(root, recs, config.TranscriptionConfig{}, map[string]struct{}{inside: {}})
 	if len(items) != 2 {
 		t.Fatalf("items = %d, duplicate session dirs must collapse", len(items))
 	}
@@ -156,5 +156,47 @@ func TestLibraryItemsMarksLiveAndOutsideAudio(t *testing.T) {
 	usage := retention.Summarize(items)
 	if usage.Files != 2 || usage.Bytes != 9 {
 		t.Fatalf("usage %+v", usage)
+	}
+}
+
+func TestRetentionFollowUpSkipsAudioThatBecameBusy(t *testing.T) {
+	dir := t.TempDir()
+	wav := filepath.Join(dir, "recording.wav")
+	if err := os.WriteFile(wav, []byte("abcd"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	plan := retention.Plan{Remove: []retention.Removal{{
+		Dir: dir, Path: wav, Bytes: 4, Reason: "older than 30 days",
+	}}}
+	pol := retention.Policy{Enabled: true, KeepDays: 30, ProtectUntranscribed: true}
+
+	m := Model{deps: Deps{Config: config.Default()}}
+	m.deps.Config.Retention.AutoDelete = true
+	m.deps.Config.Retention.KeepDays = 30
+	// Queued for re-transcription after the scan that built the plan started.
+	m.transcribeActive = true
+	m.transcribeSessionDir = "other"
+	m.transcribeQueue = []string{dir}
+	if cmd := m.retentionFollowUp(pol, plan); cmd != nil {
+		t.Fatal("a queued session must not lose its audio")
+	}
+	if _, err := os.Stat(wav); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRetentionSweepOnlyScansWhenActive(t *testing.T) {
+	m := Model{deps: Deps{Config: config.Default()}}
+	if m.retentionSweepScan() != nil {
+		t.Fatal("policy off must not scan the library")
+	}
+	if _, cmd := m.handleRetentionSweep(); cmd == nil {
+		t.Fatal("the sweep must reschedule itself even with the policy off")
+	}
+
+	m.deps.Config.Retention.AutoDelete = true
+	m.deps.Config.Retention.KeepRecordings = 5
+	if m.retentionSweepScan() == nil {
+		t.Fatal("an active policy must scan the library")
 	}
 }

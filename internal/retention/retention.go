@@ -63,8 +63,12 @@ type Item struct {
 	StartedAt     time.Time
 	EndedAt       time.Time
 	HasTranscript bool
-	HasAudio      bool
-	AudioBytes    int64
+	// EmptyTranscript means transcript files exist but none holds any words:
+	// a silent or broken wav, or a run that went wrong. The wav is not safe
+	// to drop yet.
+	EmptyTranscript bool
+	HasAudio        bool
+	AudioBytes      int64
 	// InUse is the recording being captured or transcribed right now.
 	InUse bool
 	// Outside is a session directory that does not live under the configured
@@ -127,7 +131,7 @@ func Summarize(items []Item) Usage {
 		}
 		u.Files++
 		u.Bytes += it.AudioBytes
-		if !it.HasTranscript {
+		if !it.transcribed() {
 			u.UntranscribedFiles++
 			u.UntranscribedBytes += it.AudioBytes
 		}
@@ -187,7 +191,7 @@ func BuildPlan(now time.Time, p Policy, items []Item) Plan {
 		if it.InUse {
 			continue
 		}
-		if p.ProtectUntranscribed && !it.HasTranscript {
+		if p.ProtectUntranscribed && !it.transcribed() {
 			plan.Protected++
 			plan.ProtectedBytes += it.AudioBytes
 			continue
@@ -200,6 +204,11 @@ func BuildPlan(now time.Time, p Policy, items []Item) Plan {
 		})
 	}
 	return plan
+}
+
+// transcribed reports whether the transcript can stand in for the audio.
+func (it Item) transcribed() bool {
+	return it.HasTranscript && !it.EmptyTranscript
 }
 
 func effectiveTime(it Item) time.Time {
@@ -231,7 +240,7 @@ func PreviewLine(p Policy, plan Plan) string {
 		return "off — set keep_days or keep_recordings"
 	}
 
-	freed, n := plan.totals()
+	freed, n := plan.Totals()
 	keep := keepingClause(plan)
 	switch {
 	case n == 0 && keep == "":
@@ -259,7 +268,8 @@ func PreviewLine(p Policy, plan Plan) string {
 	}
 }
 
-func (p Plan) totals() (int64, int) {
+// Totals is the bytes and number of files the plan removes.
+func (p Plan) Totals() (int64, int) {
 	var bytes int64
 	for _, r := range p.Remove {
 		bytes += r.Bytes
@@ -303,12 +313,15 @@ func removeAudio(path string) error {
 	}
 	info, err := os.Lstat(path)
 	if err != nil {
-		return err
+		return fmt.Errorf("remove audio: %w", err)
 	}
 	if !info.Mode().IsRegular() {
 		return fmt.Errorf("refusing to delete non-regular file %s", path)
 	}
-	return os.Remove(path)
+	if err := os.Remove(path); err != nil {
+		return fmt.Errorf("remove audio: %w", err)
+	}
+	return nil
 }
 
 // FormatBytes renders a size the way the rest of the UI talks about disk.

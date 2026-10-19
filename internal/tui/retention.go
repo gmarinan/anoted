@@ -3,28 +3,17 @@ package tui
 import (
 	"fmt"
 	"log/slog"
-	"os"
 	"time"
 
 	"anoted/internal/config"
 	"anoted/internal/retention"
 	"anoted/internal/session"
-	"anoted/internal/transcribe"
 	"anoted/internal/tui/components"
 	tea "charm.land/bubbletea/v2"
 )
 
-func retentionPolicy(r config.RetentionConfig) retention.Policy {
-	return retention.Policy{
-		Enabled:              r.AutoDelete,
-		KeepDays:             r.KeepDays,
-		KeepRecordings:       r.KeepRecordings,
-		ProtectUntranscribed: r.ProtectsUntranscribed(),
-	}
-}
-
 func (m Model) retentionPolicy() retention.Policy {
-	return retentionPolicy(m.deps.Config.Retention)
+	return retention.PolicyFrom(m.deps.Config.Retention)
 }
 
 // audioInUse is the set of session dirs whose wav is open right now.
@@ -57,13 +46,13 @@ type librarySnap struct {
 }
 
 func planLibrary(recs []session.Record, cfg config.Config, inUse map[string]struct{}) librarySnap {
-	pol := retentionPolicy(cfg.Retention)
+	pol := retention.PolicyFrom(cfg.Retention)
 	root, err := cfg.ResolvedOutputDir()
 	if err != nil {
 		// An unresolved root must not make every session dir look deletable.
 		root = ""
 	}
-	items := libraryItems(root, recs, cfg.Transcription, inUse)
+	items := retention.Scan(root, recs, cfg.Transcription, inUse)
 	plan := retention.BuildPlan(time.Now(), pol, items)
 	return librarySnap{
 		usage:   retention.Summarize(items),
@@ -73,40 +62,6 @@ func planLibrary(recs []session.Record, cfg config.Config, inUse map[string]stru
 		items:   items,
 		scanned: true,
 	}
-}
-
-func libraryItems(root string, recs []session.Record, tcfg config.TranscriptionConfig, inUse map[string]struct{}) []retention.Item {
-	items := make([]retention.Item, 0, len(recs))
-	seen := make(map[string]struct{}, len(recs))
-	for _, r := range recs {
-		if r.Dir == "" {
-			continue
-		}
-		if _, dup := seen[r.Dir]; dup {
-			continue
-		}
-		seen[r.Dir] = struct{}{}
-
-		it := retention.Item{
-			Dir:           r.Dir,
-			StartedAt:     r.StartedAt,
-			EndedAt:       r.EndedAt,
-			HasTranscript: transcribe.HasTranscript(r.Dir, tcfg),
-		}
-		info, err := os.Lstat(retention.AudioPath(r.Dir))
-		if err == nil && info.Mode().IsRegular() {
-			it.HasAudio = true
-			it.AudioBytes = info.Size()
-		}
-		if _, live := inUse[r.Dir]; live {
-			it.InUse = true
-		}
-		if !retention.InsideLibrary(root, r.Dir) {
-			it.Outside = true
-		}
-		items = append(items, it)
-	}
-	return items
 }
 
 func artifactsFromItems(recs []session.Record, items []retention.Item) map[string]components.SessionArtifacts {
@@ -170,9 +125,14 @@ type retentionDoneMsg struct {
 
 // retentionFollowUp deletes only when the plan was built for the policy that
 // is still in effect. A scan that started before the user turned auto-delete
-// off must not unlink files on the way out.
+// off must not unlink files on the way out. The same goes for a session that
+// started recording or transcribing while the scan ran.
 func (m Model) retentionFollowUp(pol retention.Policy, plan retention.Plan) tea.Cmd {
-	if m.retentionPolicy() != pol || !pol.Active() || len(plan.Remove) == 0 {
+	if m.retentionPolicy() != pol || !pol.Active() {
+		return nil
+	}
+	plan = plan.Without(m.audioInUse())
+	if len(plan.Remove) == 0 {
 		return nil
 	}
 	protected := plan.Protected
@@ -180,6 +140,31 @@ func (m Model) retentionFollowUp(pol retention.Policy, plan retention.Plan) tea.
 		n, freed, err := retention.Apply(plan)
 		return retentionDoneMsg{removed: n, freed: freed, protected: protected, err: err}
 	}
+}
+
+// retentionSweepInterval re-applies the policy while anoted sits idle.
+// keep_days is a clock rule: without the sweep, audio only aged out when a
+// recording or a transcription happened to reload the library on the main
+// screen.
+const retentionSweepInterval = time.Hour
+
+type retentionSweepMsg struct{}
+
+func scheduleRetentionSweep() tea.Cmd {
+	return tea.Tick(retentionSweepInterval, func(time.Time) tea.Msg { return retentionSweepMsg{} })
+}
+
+func (m Model) handleRetentionSweep() (tea.Model, tea.Cmd) {
+	return m, tea.Batch(scheduleRetentionSweep(), m.retentionSweepScan())
+}
+
+// retentionSweepScan rescans only when the scan could delete something; the
+// Storage screen refreshes its own preview when it is opened or saved.
+func (m Model) retentionSweepScan() tea.Cmd {
+	if !m.retentionPolicy().Active() {
+		return nil
+	}
+	return m.refreshAudioLibraryCmd()
 }
 
 func (m Model) handleAudioLibrary(msg audioLibraryMsg) (tea.Model, tea.Cmd) {
