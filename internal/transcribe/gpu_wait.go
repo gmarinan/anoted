@@ -98,6 +98,11 @@ func modelVRAMBudgetMiB(model string) (full, light int) {
 		return 4096, 2560
 	case "large", "large-v1", "large-v2", "large-v3":
 		return 6144, 4096
+	case ParakeetModel:
+		// Measured: ~5 GB at peak for the whole process, chunks and retries
+		// included. There is no lighter mode, so both bars are the same and a
+		// tight card queues instead of crashing twice.
+		return 5632, 5632
 	default:
 		return 4096, 2560
 	}

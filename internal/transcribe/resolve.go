@@ -27,6 +27,15 @@ func resolveBinary(cfg config.TranscriptionConfig) (path, backend string, err er
 		}
 		return py, BackendFasterWhisper, nil
 	}
+	// Same reasoning: a library behind an interpreter, opt-in only, and its
+	// first run downloads a 2.4 GB model.
+	if isParakeet(cfg) {
+		py := ParakeetPython()
+		if py == "" {
+			return "", "", fmt.Errorf("parakeet is not installed — run `anoted parakeet install`")
+		}
+		return py, BackendParakeet, nil
+	}
 
 	if cfg.Binary != "" {
 		if _, err := os.Stat(cfg.Binary); err != nil {
@@ -93,6 +102,15 @@ func resolveDevice(cfg config.TranscriptionConfig) string {
 	case DeviceCPU:
 		return DeviceCPU
 	default:
+		// Parakeet runs on onnxruntime, not PyTorch: whether the Whisper venv
+		// has a CUDA torch says nothing about it, and its GPU install brings
+		// its own CUDA libraries, so a driver is all it needs.
+		if isParakeet(cfg) {
+			if NVIDIAAvailable() {
+				return DeviceCUDA
+			}
+			return DeviceCPU
+		}
 		if cfg.GPULayers > 0 {
 			return DeviceCUDA
 		}
@@ -116,7 +134,15 @@ func hasCUDA() bool {
 	return ManagedTorchCUDAAvailable()
 }
 
+// ResolvedModel is the model a transcription with cfg will actually run.
+func ResolvedModel(cfg config.TranscriptionConfig) string {
+	return resolvedModel(cfg)
+}
+
 func resolvedModel(cfg config.TranscriptionConfig) string {
+	if isParakeet(cfg) {
+		return ParakeetModel
+	}
 	if cfg.Model != "" {
 		return cfg.Model
 	}

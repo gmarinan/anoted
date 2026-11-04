@@ -428,7 +428,7 @@ func transcriptionCfgFields() []cfgField {
 		{
 			label:   "backend",
 			kind:    fieldEnum,
-			options: []string{"auto", "openai-whisper", "faster-whisper", "whisper-cpp"},
+			options: []string{"auto", "openai-whisper", "faster-whisper", "parakeet", "whisper-cpp"},
 			get:     func(c config.Config) string { return c.Transcription.Backend },
 			set:     func(c *config.Config, v string) error { c.Transcription.Backend = v; return nil },
 		},
