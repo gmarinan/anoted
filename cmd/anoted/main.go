@@ -86,6 +86,7 @@ func newRootCmd() *cobra.Command {
 		doctorCmd(),
 		autostartCmd(),
 		retentionCmd(),
+		parakeetCmd(),
 	)
 	return root
 }
@@ -360,11 +361,15 @@ func transcribeCmd() *cobra.Command {
 			dur, durErr := transcribe.AudioDuration(audio)
 
 			started := time.Now()
+			// Status lines carry no percent; mid-run ones (parakeet re-checking
+			// a passage) would otherwise flash the bar back to 0%.
+			var percent float64
 			res, err := transcribe.New(cfg).TranscribeSessionWithProgress(
 				cmd.Context(), sessionDir,
 				func(p transcribe.Progress) {
+					percent = max(percent, p.Percent)
 					if p.SegmentText != "" {
-						fmt.Fprintf(os.Stderr, "\r%5.1f%% %-70.70s", p.Percent, p.SegmentText)
+						fmt.Fprintf(os.Stderr, "\r%5.1f%% %-70.70s", percent, p.SegmentText)
 					}
 				})
 			elapsed := time.Since(started)
@@ -374,7 +379,7 @@ func transcribeCmd() *cobra.Command {
 			}
 
 			fmt.Printf("backend:  %s\n", cfg.Transcription.Backend)
-			fmt.Printf("model:    %s\n", cfg.Transcription.Model)
+			fmt.Printf("model:    %s\n", transcribe.ResolvedModel(cfg.Transcription))
 			fmt.Printf("elapsed:  %s\n", elapsed.Round(time.Millisecond))
 			if durErr == nil && dur > 0 {
 				fmt.Printf("audio:    %s (%.2fx realtime)\n", dur.Round(time.Second), dur.Seconds()/elapsed.Seconds())
@@ -385,7 +390,7 @@ func transcribeCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&backend, "backend", "", "override transcription backend (auto, openai-whisper, faster-whisper, whisper-cpp)")
+	cmd.Flags().StringVar(&backend, "backend", "", "override transcription backend (auto, openai-whisper, faster-whisper, parakeet, whisper-cpp)")
 	cmd.Flags().StringVar(&model, "model", "", "override model (e.g. large-v3, turbo)")
 	cmd.Flags().StringVar(&device, "device", "", "override device (cpu, cuda, auto)")
 	return cmd

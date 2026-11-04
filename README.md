@@ -136,10 +136,12 @@ anoted is designed so a passer-by can tell it is recording. That protects the pe
 
 Whisper is local. `faster-whisper` is the speed pick when you have a GPU; `auto` stays on the conservative backends so a first run does not surprise you with a multi-gigabyte download.
 
+`parakeet` (NVIDIA Parakeet TDT 0.6B v3, 25 European languages) is faster still: on an RTX 4070 SUPER it transcribes a 56-minute meeting in about 20 seconds, where faster-whisper `large` takes over three minutes. Install it with `anoted parakeet install --use`. Its catch: it cannot be told the language, and on a non-English meeting it now and then switches a passage to English; anoted notices and re-decodes those passages, which removes most of it but not all. Setting `language` (e.g. `es`) keeps that check on for the whole meeting.
+
 ```yaml
 transcription:
   auto_after_recording: false
-  backend: auto                 # auto, openai-whisper, faster-whisper, whisper-cpp
+  backend: auto                 # auto, openai-whisper, faster-whisper, parakeet, whisper-cpp
   model: turbo
   device: auto                  # cpu, cuda, auto
   language: ""                  # empty = auto-detect

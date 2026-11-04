@@ -17,6 +17,7 @@ const (
 	BackendOpenAI        = "openai-whisper"
 	BackendWhisperCpp    = "whisper-cpp"
 	BackendFasterWhisper = "faster-whisper"
+	BackendParakeet      = "parakeet"
 	DeviceCPU            = "cpu"
 	DeviceCUDA           = "cuda"
 	DeviceAuto           = "auto"
@@ -97,6 +98,9 @@ func (s *Service) TranscribeSessionWithProgress(ctx context.Context, sessionDir 
 			// bin is the Python interpreter here, not a CLI: faster-whisper is a
 			// library, so anoted renders the output files itself from its segments.
 			_, err := transcribeFasterWhisper(ctx, s.cfg.Transcription, bin, audioPath, outDir, sessionDir, onProgress)
+			return err
+		case BackendParakeet:
+			_, err := transcribeParakeet(ctx, s.cfg.Transcription, bin, audioPath, outDir, sessionDir, onProgress)
 			return err
 		case BackendWhisperCpp:
 			_, err := transcribeWhisperCpp(ctx, s.cfg.Transcription, bin, audioPath, outDir, sessionDir, onProgress)

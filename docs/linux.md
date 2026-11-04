@@ -133,6 +133,15 @@ Press `t` in the session list, or set `transcription.auto_after_recording: true`
 anoted transcribe ~/Music/anoted/<session> --backend faster-whisper
 ```
 
+`parakeet` is the fastest by far — a 56-minute meeting in about 20 seconds on an RTX 4070 SUPER — and needs ~5 GB of free VRAM. It lives in its own venv next to the Whisper one, with its own CUDA libraries, so it does not depend on the PyTorch build:
+
+```bash
+anoted parakeet install --use     # ~2.5 GB of wheels plus a 2.4 GB model; --use switches the backend
+anoted transcribe ~/Music/anoted/<session> --backend parakeet
+```
+
+Parakeet picks the language by itself and occasionally drifts into English on a non-English meeting; anoted re-decodes those passages with different cuts. Set `transcription.language` to your meeting language to keep that check on throughout.
+
 Doctor can install Whisper (`i`) and CUDA wheels (`g`) without leaving the TUI.
 
 ## Troubleshooting

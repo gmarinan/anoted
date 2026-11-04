@@ -50,6 +50,13 @@ func DoctorChecks(cfg config.Config) []Check {
 		Status: "ok",
 		Detail: resolvedModel(tcfg),
 	})
+	if backend == BackendParakeet && !ParakeetModelDownloaded() {
+		checks = append(checks, Check{
+			Name:   "parakeet_model",
+			Status: "warn",
+			Detail: "not downloaded — the next transcription fetches 2.4 GB first; `anoted parakeet install` does it now",
+		})
+	}
 
 	// Report faster-whisper availability even when another backend is selected,
 	// so the speedup is discoverable rather than something you have to know about.
@@ -61,6 +68,14 @@ func DoctorChecks(cfg config.Config) []Check {
 				Detail: "available — set transcription.backend: faster-whisper to use it",
 			})
 		}
+	}
+
+	if backend != BackendParakeet && ParakeetPython() != "" {
+		checks = append(checks, Check{
+			Name:   "parakeet",
+			Status: "ok",
+			Detail: "available — set transcription.backend: parakeet to use it",
+		})
 	}
 
 	if tcfg.AutoAfterRecording {
@@ -84,6 +99,17 @@ func DoctorChecks(cfg config.Config) []Check {
 func gpuCheck(cfg config.TranscriptionConfig) []Check {
 	gpu := DetectGPU()
 	device := resolveDevice(cfg)
+	// Parakeet brings its own CUDA libraries; the Whisper venv's torch is
+	// irrelevant to it, so only the driver decides.
+	if isParakeet(cfg) {
+		if device == DeviceCUDA && gpu.NVIDIA {
+			return []Check{{Name: "transcription_gpu", Status: "ok", Detail: formatGPUActiveDetail(gpu, cfg)}}
+		}
+		if device == DeviceCUDA {
+			return []Check{{Name: "transcription_gpu", Status: "warn", Detail: "CUDA requested but no NVIDIA GPU found; parakeet will run on CPU"}}
+		}
+		return []Check{{Name: "transcription_gpu", Status: "ok", Detail: "CPU"}}
+	}
 	usingCUDA := cfg.GPULayers > 0 || cfg.Device == DeviceCUDA || (device == DeviceCUDA && hasCUDA())
 
 	if usingCUDA {

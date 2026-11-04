@@ -74,42 +74,53 @@ func venvDirForBinary(bin string) string {
 	return dir
 }
 
-var fasterWhisperProbe struct {
+var importProbe struct {
 	sync.Mutex
 	cache map[string]bool
 }
 
-// fasterWhisperImportable spawns the interpreter once per path and caches the
-// answer; this is called from doctor and from backend resolution.
+// fasterWhisperImportable reports whether python can import faster_whisper.
+func fasterWhisperImportable(python string) bool {
+	return pythonCanImport(python, "faster_whisper")
+}
+
+// pythonCanImport spawns the interpreter once per (path, modules) and caches
+// the answer: the Doctor tab and every transcription ask, and each probe
+// costs a Python start-up.
 //
 //nolint:contextcheck // cached across callers, so no one caller's ctx may cancel it
-func fasterWhisperImportable(python string) bool {
-	fasterWhisperProbe.Lock()
-	if v, ok := fasterWhisperProbe.cache[python]; ok {
-		fasterWhisperProbe.Unlock()
+func pythonCanImport(python, modules string) bool {
+	key := python + "\x00" + modules
+	importProbe.Lock()
+	if v, ok := importProbe.cache[key]; ok {
+		importProbe.Unlock()
 		return v
 	}
-	fasterWhisperProbe.Unlock()
+	importProbe.Unlock()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	err := exec.CommandContext(ctx, python, "-c", "import faster_whisper").Run()
+	err := exec.CommandContext(ctx, python, "-c", "import "+modules).Run()
 	ok := err == nil
 
-	fasterWhisperProbe.Lock()
-	if fasterWhisperProbe.cache == nil {
-		fasterWhisperProbe.cache = map[string]bool{}
+	importProbe.Lock()
+	if importProbe.cache == nil {
+		importProbe.cache = map[string]bool{}
 	}
-	fasterWhisperProbe.cache[python] = ok
-	fasterWhisperProbe.Unlock()
+	importProbe.cache[key] = ok
+	importProbe.Unlock()
 	return ok
 }
 
 // InvalidateFasterWhisperCache forgets probe results after an install.
 func InvalidateFasterWhisperCache() {
-	fasterWhisperProbe.Lock()
-	fasterWhisperProbe.cache = nil
-	fasterWhisperProbe.Unlock()
+	invalidateImportProbes()
+}
+
+func invalidateImportProbes() {
+	importProbe.Lock()
+	importProbe.cache = nil
+	importProbe.Unlock()
 }
 
 // fasterWhisperComputeType picks the numeric precision for the device.
@@ -143,7 +154,12 @@ func transcribeFasterWhisper(ctx context.Context, cfg config.TranscriptionConfig
 	if err != nil {
 		return Result{}, err
 	}
+	return writeRunnerSegments(cfg, outDir, sessionDir, segs, language, "faster-whisper")
+}
 
+// writeRunnerSegments renders a library backend's segments into the
+// configured output formats: those backends yield segments, not files.
+func writeRunnerSegments(cfg config.TranscriptionConfig, outDir, sessionDir string, segs []Segment, language, name string) (Result, error) {
 	fileBase := outputFileBase(cfg, sessionDir)
 	formats := config.NormalizeOutputFormats(cfg.OutputFormats)
 	files, err := writeSegmentFiles(outDir, fileBase, segs, formats, language)
@@ -151,7 +167,7 @@ func transcribeFasterWhisper(ctx context.Context, cfg config.TranscriptionConfig
 		return Result{}, err
 	}
 	if len(files) == 0 {
-		return Result{}, fmt.Errorf("faster-whisper produced no output files")
+		return Result{}, fmt.Errorf("%s produced no output files", name)
 	}
 	return Result{SessionDir: outDir, Files: files}, nil
 }
@@ -168,17 +184,24 @@ func runFasterWhisper(ctx context.Context, cfg config.TranscriptionConfig, pytho
 		args = append(args, "--language", lang)
 	}
 
+	return runJSONRunner(ctx, "faster-whisper", python, fasterWhisperRunner, args, onProgress)
+}
+
+// runJSONRunner runs an embedded Python runner and parses its JSON-lines
+// protocol. args[0] must be "-": the script is fed on stdin, so there is no
+// temp file to create, race or clean up. name labels errors.
+func runJSONRunner(ctx context.Context, name, python, script string, args []string, onProgress ProgressFunc) ([]Segment, string, error) {
 	cmd := exec.CommandContext(ctx, python, args...)
-	cmd.Stdin = strings.NewReader(fasterWhisperRunner)
+	cmd.Stdin = strings.NewReader(script)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return nil, "", fmt.Errorf("faster-whisper stdout pipe: %w", err)
+		return nil, "", fmt.Errorf("%s stdout pipe: %w", name, err)
 	}
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
 
 	if err := cmd.Start(); err != nil {
-		return nil, "", fmt.Errorf("start faster-whisper: %w", err)
+		return nil, "", fmt.Errorf("start %s: %w", name, err)
 	}
 
 	segs, language, runnerErr, scanErr := parseRunnerStream(stdout, onProgress)
@@ -188,17 +211,17 @@ func runFasterWhisper(ctx context.Context, cfg config.TranscriptionConfig, pytho
 		return nil, "", ctx.Err()
 	}
 	if runnerErr != "" {
-		return nil, "", fmt.Errorf("faster-whisper: %s", runnerErr)
+		return nil, "", fmt.Errorf("%s: %s", name, runnerErr)
 	}
 	if waitErr != nil {
 		msg := strings.TrimSpace(stderr.String())
 		if msg == "" {
 			msg = waitErr.Error()
 		}
-		return nil, "", fmt.Errorf("faster-whisper: %s", trimOutput([]byte(msg)))
+		return nil, "", fmt.Errorf("%s: %s", name, trimOutput([]byte(msg)))
 	}
 	if scanErr != nil {
-		return nil, "", fmt.Errorf("read faster-whisper output: %w", scanErr)
+		return nil, "", fmt.Errorf("read %s output: %w", name, scanErr)
 	}
 	return segs, language, nil
 }
