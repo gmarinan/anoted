@@ -158,11 +158,11 @@ func List(root string) ([]Job, error) {
 func load(dir string) (Job, error) {
 	data, err := os.ReadFile(filepath.Join(dir, metaFile))
 	if err != nil {
-		return Job{}, err
+		return Job{}, fmt.Errorf("read job: %w", err)
 	}
 	var job Job
 	if err := json.Unmarshal(data, &job); err != nil {
-		return Job{}, err
+		return Job{}, fmt.Errorf("decode %s: %w", filepath.Join(dir, metaFile), err)
 	}
 	job.Dir = dir
 	if job.Name == "" {
@@ -178,7 +178,7 @@ func load(dir string) (Job, error) {
 func ReadTranscript(dir string) (string, error) {
 	data, err := os.ReadFile(filepath.Join(dir, TranscriptFile))
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("read transcript: %w", err)
 	}
 	return strings.TrimRight(string(data), "\n"), nil
 }
@@ -199,7 +199,10 @@ func Remove(root, dir string) error {
 	if _, err := os.Stat(filepath.Join(dir, metaFile)); err != nil {
 		return fmt.Errorf("refusing to remove %s: not a transcription job", dir)
 	}
-	return os.RemoveAll(dir)
+	if err := os.RemoveAll(dir); err != nil {
+		return fmt.Errorf("remove %s: %w", dir, err)
+	}
+	return nil
 }
 
 // slug reduces a file name to something safe as a folder name on every

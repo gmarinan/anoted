@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -381,7 +382,7 @@ func (m Model) handleFileText(msg fileTextMsg) (tea.Model, tea.Cmd) {
 		return m, nil // the selection moved on while the file was being read
 	}
 	if msg.err != nil {
-		return m.setFileNote("could not read the transcript: "+msg.err.Error(), true), nil
+		return m.setFileNote(msg.err.Error(), true), nil
 	}
 	return m.setFileText(msg.dir, msg.text), nil
 }
@@ -557,12 +558,18 @@ func nativeClipboardCmd(text string) tea.Cmd {
 		if name == "" {
 			return nil
 		}
-		cmd := exec.Command(name, args...)
+		// Bounded: a clipboard tool waiting on an unreachable display must not
+		// leave a goroutine and a process behind for the rest of the session.
+		ctx, cancel := context.WithTimeout(context.Background(), clipboardTimeout)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, name, args...)
 		cmd.Stdin = strings.NewReader(text)
 		_ = cmd.Run()
 		return nil
 	}
 }
+
+const clipboardTimeout = 5 * time.Second
 
 func clipboardTool() (string, []string) {
 	// Linux only. clip.exe reads its input in the console code page and would
