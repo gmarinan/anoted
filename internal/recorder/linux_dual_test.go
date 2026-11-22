@@ -8,6 +8,12 @@ import (
 	"testing"
 )
 
+// newTestCapture runs shell under sh. Long-running helpers must use exec:
+// dash, the sh on Ubuntu CI runners, does not replace itself with a lone
+// command, so a signal meant for the capture reached only the shell, which
+// defers it until its child exits — and the orphaned child kept the stderr
+// pipe open, so Stop waited out the whole sleep. Bash (sh on Arch) execs
+// implicitly, which is why this only ever failed in CI.
 func newTestCapture(t *testing.T, shell string) *captureProc {
 	t.Helper()
 	cmd := exec.Command("sh", "-c", shell)
@@ -39,7 +45,7 @@ func TestCaptureProcReportsUnexpectedExit(t *testing.T) {
 func TestCaptureProcStopIsNotAnError(t *testing.T) {
 	// A deliberate Stop kills the child, so Wait reports a signal; that must
 	// not be surfaced as a failed recording.
-	c := newTestCapture(t, "sleep 30")
+	c := newTestCapture(t, "exec sleep 30")
 	if err := c.Stop(); err != nil {
 		t.Fatalf("Stop() = %v, want nil for a deliberate stop", err)
 	}
@@ -49,7 +55,7 @@ func TestCaptureProcStopIsNotAnError(t *testing.T) {
 }
 
 func TestCaptureProcErrNilWhileRunning(t *testing.T) {
-	c := newTestCapture(t, "sleep 30")
+	c := newTestCapture(t, "exec sleep 30")
 	defer c.Stop()
 	if err := c.Err(); err != nil {
 		t.Fatalf("Err() = %v while still running, want nil", err)
