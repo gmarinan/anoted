@@ -103,7 +103,7 @@ Press `?` inside the app for this list. Sessions live on the Home tab.
 
 | Key | Action |
 |-----|--------|
-| `1` `2` `3` | Home, Doctor, Config |
+| `1` `2` `3` `4` | Home, Doctor, Config, Files |
 | `r` | Start / stop recording |
 | `a` | Toggle auto-record |
 | `y` / `n` | Confirm or dismiss the auto-record prompt |
@@ -112,9 +112,16 @@ Press `?` inside the app for this list. Sessions live on the Home tab.
 | `d` | Delete the selected session |
 | `S` | Setup wizard |
 | `i` / `g` | Install Whisper / GPU support (Doctor) |
+| `c` | Copy the selected transcript (Files) |
 | `q` | Quit (`Ctrl+C` from anywhere) |
 
 Config saves as you edit. There is no extra save key.
+
+### Transcribing any file
+
+The **Files** tab (`4`) transcribes audio that did not come from a meeting — a voice note, a call recording, a video. Drag the file onto the terminal window (or press `a` and type the path), and it joins the same queue as your meetings, with the same engine. When it finishes, the transcript fills the panel: scroll with `PgUp`/`PgDn` or the wheel, and press `c` to copy it. `l` picks the language for new files (`t` re-runs one with it).
+
+Your file is never moved or modified. With ffmpeg installed anything it can read works, including the audio track of a video; without it, WAV always works. Only the transcript is kept, under `~/.local/share/anoted/files/` (`%LOCALAPPDATA%\anoted\files\` on Windows), never in your meeting notes folder. Copying uses the terminal's clipboard support (OSC 52) and, on Linux, `wl-copy`, `xclip` or `xsel` when one is installed.
 
 ## Privacy, on purpose
 

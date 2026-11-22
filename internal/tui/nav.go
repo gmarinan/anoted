@@ -41,6 +41,8 @@ func (m Model) switchScreen(screen Screen) (tea.Model, tea.Cmd) {
 		}
 	case ScreenConfig:
 		m = m.initConfigMenu()
+	case ScreenFiles:
+		cmds = append(cmds, m.loadFileJobsCmd())
 	}
 
 	return m, tea.Batch(cmds...)
@@ -85,6 +87,11 @@ func (m Model) dispatchKey(msg tea.KeyPressMsg, key string) (tea.Model, tea.Cmd)
 	// away the edit. ctrl+c stays global as the escape hatch.
 	if m.screen == ScreenConfig && m.configAbsorbsKeys() && key != "ctrl+c" {
 		return m.handleConfigKey(msg)
+	}
+
+	// Same reason on Files: a path being typed is text, not shortcuts.
+	if m.screen == ScreenFiles && m.fileEditing && key != "ctrl+c" {
+		return m.handleFilesInputKey(msg)
 	}
 
 	// The help overlay swallows everything while open so it behaves like the
@@ -146,6 +153,8 @@ func (m Model) dispatchKey(msg tea.KeyPressMsg, key string) (tea.Model, tea.Cmd)
 	switch m.screen {
 	case ScreenMain:
 		return m.handleHomeKey(msg)
+	case ScreenFiles:
+		return m.handleFilesKey(msg)
 	}
 
 	switch key {
@@ -288,6 +297,9 @@ func (m Model) handleTabSwitch(key string) (tea.Model, tea.Cmd, bool) {
 	case "3":
 		model, cmd := m.switchTab(components.TabConfig)
 		return model, cmd, true
+	case "4":
+		model, cmd := m.switchTab(components.TabFiles)
+		return model, cmd, true
 	default:
 		return m, nil, false
 	}
@@ -301,6 +313,8 @@ func (m Model) handleRefresh() (tea.Model, tea.Cmd) {
 		return m, tea.Batch(m.loadSessionsCmd(), resolveDeviceLabelsCmd(m), m.startSystemLevelCmd())
 	case ScreenConfig:
 		return m.reloadConfigFromDisk(), resolveDeviceLabelsCmd(m)
+	case ScreenFiles:
+		return m, m.loadFileJobsCmd()
 	default:
 		return m, resolveDeviceLabelsCmd(m)
 	}

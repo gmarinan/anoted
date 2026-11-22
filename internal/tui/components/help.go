@@ -66,7 +66,7 @@ func GlobalHelp() []HelpSection {
 		{
 			Title: "Global",
 			Entries: []HelpEntry{
-				{"1 2 3", "Switch tab: Home, Doctor, Config"},
+				{"1 2 3 4", "Switch tab: Home, Doctor, Config, Files"},
 				{"?", "This help"},
 				{"Esc", "Close overlay, or return to Home"},
 				{"R", "Refresh the current tab"},
@@ -106,6 +106,18 @@ func GlobalHelp() []HelpSection {
 				{"Tab", "Next section"},
 				{"Enter", "Edit the field or apply a choice"},
 				{"Esc", "Cancel the edit"},
+			},
+		},
+		{
+			Title: "Files",
+			Entries: []HelpEntry{
+				{"drag a file", "Transcribe any audio or video file"},
+				{"a", "Type or paste a path instead"},
+				{"c", "Copy the transcript to the clipboard"},
+				{"PgUp/PgDn", "Scroll the transcript"},
+				{"t / s", "Transcribe again / stop"},
+				{"l", "Language for new files"},
+				{"o / d", "Open the folder / remove from the list"},
 			},
 		},
 	}

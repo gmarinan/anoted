@@ -30,6 +30,9 @@ func (m Model) expireStatusNotes(now time.Time) Model {
 	m.statusNote = ""
 	m.configSavedMsg = ""
 	m.sessionsDesktopNote = ""
+	if !m.fileNoteErr {
+		m.fileNote = ""
+	}
 	m.statusExpiry = time.Time{}
 	return m
 }

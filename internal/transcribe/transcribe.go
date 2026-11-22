@@ -29,6 +29,9 @@ type Result struct {
 	SessionDir    string
 	TranscriptDir string
 	Files         []string
+	// AudioDuration is filled for standalone files, where there is no session
+	// metadata to carry it; zero when unknown.
+	AudioDuration time.Duration
 }
 
 // Service transcribes session audio with Whisper.
@@ -51,16 +54,23 @@ func (s *Service) TranscribeSessionWithProgress(ctx context.Context, sessionDir 
 	if _, err := os.Stat(audioPath); err != nil {
 		return Result{}, fmt.Errorf("audio file missing: %w", err)
 	}
+	return s.transcribeAudio(ctx, s.cfg.Transcription, audioPath, sessionDir, onProgress)
+}
 
-	outDir, err := OutputDir(s.cfg.Transcription, sessionDir)
+// transcribeAudio runs the configured backend over audioPath and writes the
+// outputs tcfg asks for. sessionDir names the outputs and is where they land
+// unless tcfg.OutputDir says otherwise; the audio itself may live elsewhere,
+// which is what lets a file from outside the library be transcribed.
+func (s *Service) transcribeAudio(ctx context.Context, tcfg config.TranscriptionConfig, audioPath, sessionDir string, onProgress ProgressFunc) (Result, error) {
+	outDir, err := OutputDir(tcfg, sessionDir)
 	if err != nil {
 		return Result{}, err
 	}
 
-	bin, backend, err := resolveBinary(s.cfg.Transcription)
+	bin, backend, err := resolveBinary(tcfg)
 	if err != nil {
 		slog.Error("transcription backend unavailable", "err", err,
-			"configured_backend", s.cfg.Transcription.Backend)
+			"configured_backend", tcfg.Backend)
 		return Result{}, err
 	}
 
@@ -71,8 +81,8 @@ func (s *Service) TranscribeSessionWithProgress(ctx context.Context, sessionDir 
 	slog.Info("transcription started",
 		"backend", backend,
 		"binary", bin,
-		"model", resolvedModel(s.cfg.Transcription),
-		"device", resolveDevice(s.cfg.Transcription),
+		"model", resolvedModel(tcfg),
+		"device", resolveDevice(tcfg),
 		"session_dir", sessionDir,
 		"output_dir", outDir,
 	)
@@ -89,31 +99,31 @@ func (s *Service) TranscribeSessionWithProgress(ctx context.Context, sessionDir 
 	// using a different engine than the Config tab displayed.
 	emitProgress(onProgress, Progress{
 		SegmentText: fmt.Sprintf("· %s · %s · %s",
-			backend, resolvedModel(s.cfg.Transcription), resolveDevice(s.cfg.Transcription)),
+			backend, resolvedModel(tcfg), resolveDevice(tcfg)),
 	})
 
-	err = transcribeGuardingVRAM(ctx, s.cfg.Transcription, onProgress, func(ctx context.Context) error {
+	err = transcribeGuardingVRAM(ctx, tcfg, onProgress, func(ctx context.Context) error {
 		switch backend {
 		case BackendFasterWhisper:
 			// bin is the Python interpreter here, not a CLI: faster-whisper is a
 			// library, so anoted renders the output files itself from its segments.
-			_, err := transcribeFasterWhisper(ctx, s.cfg.Transcription, bin, audioPath, outDir, sessionDir, onProgress)
+			_, err := transcribeFasterWhisper(ctx, tcfg, bin, audioPath, outDir, sessionDir, onProgress)
 			return err
 		case BackendParakeet:
-			_, err := transcribeParakeet(ctx, s.cfg.Transcription, bin, audioPath, outDir, sessionDir, onProgress)
+			_, err := transcribeParakeet(ctx, tcfg, bin, audioPath, outDir, sessionDir, onProgress)
 			return err
 		case BackendWhisperCpp:
-			_, err := transcribeWhisperCpp(ctx, s.cfg.Transcription, bin, audioPath, outDir, sessionDir, onProgress)
+			_, err := transcribeWhisperCpp(ctx, tcfg, bin, audioPath, outDir, sessionDir, onProgress)
 			return err
 		default:
-			_, err := transcribeOpenAI(ctx, s.cfg.Transcription, bin, audioPath, outDir, sessionDir, onProgress)
+			_, err := transcribeOpenAI(ctx, tcfg, bin, audioPath, outDir, sessionDir, onProgress)
 			return err
 		}
 	})
 	if err != nil {
 		return Result{}, err
 	}
-	res, err := postProcessTranscription(s.cfg.Transcription, sessionDir, outDir)
+	res, err := postProcessTranscription(tcfg, sessionDir, outDir)
 	if err != nil {
 		return Result{}, err
 	}

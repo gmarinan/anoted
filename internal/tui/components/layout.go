@@ -13,16 +13,17 @@ import (
 
 // All styles live in theme.go so the light/dark palettes swap in one place.
 
-// TabID identifies the active main screen (switch with 1–3, not Tab).
+// TabID identifies the active main screen (switch with 1–4, not Tab).
 type TabID int
 
 const (
 	TabHome TabID = iota
 	TabDoctor
 	TabConfig
+	TabFiles
 )
 
-var tabLabels = []string{"Home", "Doctor", "Config"}
+var tabLabels = []string{"Home", "Doctor", "Config", "Files"}
 
 // Header renders the app title line, including the running build so a user
 // reporting a problem can say which version they are on without digging.
@@ -61,7 +62,7 @@ func formatClock(d time.Duration) string {
 	return fmt.Sprintf("%d:%02d", m, s)
 }
 
-// TabBar renders the top main navigation tabs (visual only; use 1–3 to switch).
+// TabBar renders the top main navigation tabs (visual only; use 1–4 to switch).
 func TabBar(active TabID) string {
 	var parts []string
 	for i, label := range tabLabels {

@@ -5,6 +5,7 @@ import (
 
 	"anoted/internal/autostart"
 	"anoted/internal/config"
+	"anoted/internal/filejob"
 	"anoted/internal/folderpicker"
 	"anoted/internal/open"
 )
@@ -86,6 +87,9 @@ func (d Deps) withDefaults() Deps {
 	}
 	if d.FolderPicker == nil {
 		d.FolderPicker = systemFolderPicker{}
+	}
+	if d.FilesRoot == "" {
+		d.FilesRoot = filejob.Root()
 	}
 	return d
 }
