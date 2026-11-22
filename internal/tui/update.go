@@ -81,6 +81,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
+	case tea.PasteMsg:
+		return m.handlePaste(msg)
+	case tea.MouseWheelMsg:
+		// On Home the scroll filter has already turned wheel input into
+		// session navigation; what reaches here belongs to another screen.
+		if m.screen == ScreenFiles && !m.fileEditing {
+			switch msg.Button {
+			case tea.MouseWheelUp:
+				return m.scrollFileText(-fileWheelStep), nil
+			case tea.MouseWheelDown:
+				return m.scrollFileText(fileWheelStep), nil
+			}
+		}
+		return m, nil
 	case sessionScrollTickMsg:
 		return m.handleSessionScrollTick()
 	case windowSizePollTickMsg:
@@ -92,6 +106,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if msg.Height > 0 {
 			m.height = msg.Height
+		}
+		if resized {
+			// The transcript is wrapped to the panel, so a new width or
+			// height changes both its lines and how far it can scroll.
+			m = m.rewrapFileText()
 		}
 		if resized && m.deps.Platform.ClearScreenOnResize() {
 			return m, tea.ClearScreen
@@ -179,6 +198,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleConfigMenuSave(msg)
 	case configFolderPickMsg:
 		return m.handleConfigFolderPick(msg)
+	case filesLoadedMsg:
+		return m.handleFilesLoaded(msg)
+	case filesAddedMsg:
+		return m.handleFilesAdded(msg)
+	case fileTextMsg:
+		return m.handleFileText(msg)
+	case fileRemovedMsg:
+		return m.handleFileRemoved(msg)
+	case filesNoteMsg:
+		return m.setFileNote(msg.note, msg.isErr), nil
 	case transcribeEnvelopeMsg:
 		return m.handleTranscribeEnvelope(msg)
 	case transcribeBlinkMsg:

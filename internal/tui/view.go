@@ -28,6 +28,8 @@ func (m Model) View() tea.View {
 		content.WriteString(m.doctorView().View())
 	case ScreenConfig:
 		content.WriteString(m.configView().View())
+	case ScreenFiles:
+		content.WriteString(m.filesView().View())
 	default:
 		content.WriteString(m.homeView().View())
 	}
@@ -56,6 +58,9 @@ func (m Model) View() tea.View {
 func (m Model) appFooter(tab components.TabID) string {
 	if m.quitConfirmOpen {
 		return components.QuitConfirmFooter()
+	}
+	if tab == components.TabFiles {
+		return components.FilesFooter(m.filesFooter(), m.width)
 	}
 	return components.FooterForTab(tab, m.awaitingRecordConfirm, m.sessionsFooter(), m.doctorFooter(), m.configFooter(), m.configSavedMsg, m.configErr, m.width)
 }

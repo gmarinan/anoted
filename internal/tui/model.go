@@ -8,6 +8,7 @@ import (
 	"anoted/internal/config"
 	"anoted/internal/detector"
 	"anoted/internal/doctor"
+	"anoted/internal/filejob"
 	"anoted/internal/level"
 	"anoted/internal/platform"
 	"anoted/internal/recorder"
@@ -38,6 +39,7 @@ const (
 	ScreenMain   Screen = "main"
 	ScreenDoctor Screen = "doctor"
 	ScreenConfig Screen = "config"
+	ScreenFiles  Screen = "files"
 )
 
 // Deps bundles injected services for the TUI.
@@ -58,6 +60,10 @@ type Deps struct {
 	Opener       Opener
 	Autostart    Autostart
 	FolderPicker FolderPicker
+
+	// FilesRoot is where the Files tab keeps its jobs; empty means the default
+	// under anoted's data directory. Tests point it at a temp dir.
+	FilesRoot string
 }
 
 // Model is the Bubble Tea model.
@@ -160,6 +166,28 @@ type Model struct {
 	transcribeBlink   bool
 	transcribeCancel  context.CancelFunc
 
+	// Files tab: audio transcribed outside the meeting library; see files.go.
+	// A job waits in transcribeQueue like any session, keyed by its folder.
+	fileJobs   []filejob.Job // newest first
+	fileCursor int
+	// fileText is the selected job's transcript and fileLines its wrapping for
+	// the current width. Both are filled in Update — View never reads a file.
+	fileText    string
+	fileTextDir string
+	fileLines   []string
+	fileWords   int
+	fileScroll  int
+	fileNote    string
+	fileNoteErr bool
+	fileEditing bool
+	fileInput   string
+	// fileRemoveArmed is the job folder a first d press asked to remove.
+	fileRemoveArmed string
+	// fileLang overrides the meeting language for new files once fileLangSet.
+	fileLang       string
+	fileLangSet    bool
+	filesRootLabel string
+
 	// Two identical installers sharing one type; see install_state.go.
 	whisperInstall installState
 	gpuInstall     installState
@@ -222,6 +250,8 @@ func NewModel(deps Deps) Model {
 		scroll:     newSessionScroll(),
 		cache:      &viewCache{},
 		recStatus:  deps.Recorder.Status(),
+
+		filesRootLabel: filesRootDisplay(deps.FilesRoot),
 	}
 	m = m.refreshEnvironment()
 	if setup.NeedsSetup(deps.Config, deps.Platform) {

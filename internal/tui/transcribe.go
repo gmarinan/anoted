@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
+	"anoted/internal/filejob"
 	"anoted/internal/transcribe"
 	"anoted/internal/tui/components"
 	tea "charm.land/bubbletea/v2"
@@ -25,6 +27,8 @@ type transcribeResultMsg struct {
 	result     transcribe.Result
 	err        error
 	sessionDir string
+	// file is set when the job was a standalone file rather than a session.
+	file *fileOutcome
 }
 
 type transcribeEnvelopeMsg struct {
@@ -39,8 +43,25 @@ func transcribeSessionCmd(m Model, sessionDir string, ctx context.Context) tea.C
 	ch := make(chan tea.Msg, 8)
 	started := time.Now()
 
+	// A file job is queued under its folder, like a session, but its audio
+	// lives wherever the user keeps it and its outcome is recorded in the job.
+	job, isFile := m.fileJob(sessionDir)
+	if isFile {
+		// The job carries its own language, so it gets its own service: the
+		// shared one is bound to the meeting language.
+		cfg := m.deps.Config
+		cfg.Transcription.Language = job.Language
+		svc = transcribe.New(cfg)
+	}
+
 	go func() {
-		res, err := svc.TranscribeSessionWithProgress(ctx, sessionDir, func(p transcribe.Progress) {
+		run := func(onProgress transcribe.ProgressFunc) (transcribe.Result, error) {
+			if isFile {
+				return svc.TranscribeFileWithProgress(ctx, job.Source, job.Dir, onProgress)
+			}
+			return svc.TranscribeSessionWithProgress(ctx, sessionDir, onProgress)
+		}
+		res, err := run(func(p transcribe.Progress) {
 			if ctx.Err() != nil {
 				return
 			}
@@ -55,10 +76,40 @@ func transcribeSessionCmd(m Model, sessionDir string, ctx context.Context) tea.C
 			default:
 			}
 		})
-		sendTranscribeMsg(ch, ctx, transcribeResultMsg{result: res, err: err, sessionDir: sessionDir})
+		msg := transcribeResultMsg{result: res, err: err, sessionDir: sessionDir}
+		if isFile {
+			msg.file = finishFileJob(job, res, err)
+		}
+		sendTranscribeMsg(ch, ctx, msg)
 	}()
 
 	return waitTranscribeMsg(ch)
+}
+
+// finishFileJob records how a file job ended and reads back its transcript.
+// It runs on the transcription goroutine so Update does no disk I/O for it.
+func finishFileJob(job filejob.Job, res transcribe.Result, err error) *fileOutcome {
+	out := &fileOutcome{}
+	switch {
+	case err == nil:
+		job.Error = ""
+		job.Done = true
+		if res.AudioDuration > 0 {
+			job.DurationSec = res.AudioDuration.Seconds()
+		}
+		if text, readErr := filejob.ReadTranscript(job.Dir); readErr == nil {
+			out.text = text
+		}
+	case errors.Is(err, context.Canceled):
+		// Stopped by the user: not a failure, and nothing new to record.
+	default:
+		job.Error = err.Error()
+	}
+	if saveErr := job.Save(); saveErr != nil {
+		slog.Warn("could not save file job", "dir", job.Dir, "err", saveErr)
+	}
+	out.job = job
+	return out
 }
 
 func sendTranscribeMsg(ch chan<- tea.Msg, ctx context.Context, msg tea.Msg) {
@@ -141,11 +192,16 @@ func (m Model) handleTranscribeResult(msg transcribeResultMsg) (tea.Model, tea.C
 	m.transcribeActive = false
 	m.transcribeBlink = false
 	m.clearTranscribeCancel()
-	// A finished run creates transcript files, so the cached artifacts and the
-	// preview are both stale.
-	m.sessionArtifacts = gatherSessionFacts(m.sessions, m.deps.Config.Transcription)
-	m.previewDir = ""
-	m = m.refreshPreview()
+	isFile := msg.file != nil
+	if isFile {
+		m = m.applyFileOutcome(msg.file)
+	} else {
+		// A finished run creates transcript files, so the cached artifacts and
+		// the preview are both stale.
+		m.sessionArtifacts = gatherSessionFacts(m.sessions, m.deps.Config.Transcription)
+		m.previewDir = ""
+		m = m.refreshPreview()
+	}
 
 	if msg.err != nil && errors.Is(msg.err, context.Canceled) {
 		// Stop means stop: a cancelled job must not drain the rest of the queue.
@@ -158,7 +214,13 @@ func (m Model) handleTranscribeResult(msg transcribeResultMsg) (tea.Model, tea.C
 		return m, nil
 	}
 
-	if msg.err != nil {
+	if msg.err != nil && isFile {
+		// The failure is already on the job and shown on the Files tab. It must
+		// not reach sessionsErr, which replaces the whole sessions table on
+		// Home with the message — for a file that is not even listed there.
+		m.transcribeSessionDir = ""
+		m.sessionsErr = ""
+	} else if msg.err != nil {
 		m.transcribeErr = msg.err.Error()
 		m.transcribeErrDir = msg.sessionDir
 		// sessionsErr replaces the whole sessions table with the message. That
@@ -182,7 +244,7 @@ func (m Model) handleTranscribeResult(msg transcribeResultMsg) (tea.Model, tea.C
 
 	m, nextCmd, started := m.startNextTranscribe()
 	if started {
-		if msg.err != nil {
+		if msg.err != nil && !isFile {
 			// startNextTranscribe clears the error fields; the failed row should
 			// stay marked while the rest of the queue runs.
 			m.transcribeErr = msg.err.Error()
@@ -191,12 +253,12 @@ func (m Model) handleTranscribeResult(msg transcribeResultMsg) (tea.Model, tea.C
 		}
 		var cmds []tea.Cmd
 		cmds = append(cmds, nextCmd)
-		if msg.err == nil && m.screen == ScreenMain {
+		if msg.err == nil && !isFile && m.screen == ScreenMain {
 			cmds = append(cmds, m.loadSessionsCmd())
 		}
 		return m, tea.Batch(cmds...)
 	}
-	if msg.err == nil && m.screen == ScreenMain {
+	if msg.err == nil && !isFile && m.screen == ScreenMain {
 		return m, m.loadSessionsCmd()
 	}
 	return m, nil

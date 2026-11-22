@@ -194,6 +194,7 @@ type footerKey struct {
 	sessionsMode    components.SessionsFooterMode
 	doctorMode      components.DoctorFooterMode
 	configMode      components.ConfigFooterMode
+	filesMode       components.FilesFooterMode
 	configSaved     string
 	configErr       string
 	width           int
@@ -210,6 +211,7 @@ func (m Model) cachedFooter(tab components.TabID) string {
 		sessionsMode:    m.sessionsFooter(),
 		doctorMode:      m.doctorFooter(),
 		configMode:      m.configFooter(),
+		filesMode:       m.filesFooter(),
 		configSaved:     m.configSavedMsg,
 		configErr:       m.configErr,
 		width:           m.width,

@@ -132,6 +132,8 @@ func ScreenToTab(screen string) TabID {
 		return TabDoctor
 	case "config":
 		return TabConfig
+	case "files":
+		return TabFiles
 	default:
 		return TabHome
 	}
@@ -144,6 +146,8 @@ func TabToScreen(tab TabID) string {
 		return "doctor"
 	case TabConfig:
 		return "config"
+	case TabFiles:
+		return "files"
 	default:
 		return "main"
 	}
