@@ -10,10 +10,10 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-const configSectionCount = 7
+const configSectionCount = 8
 
 var configSectionLabels = []string{
-	"General", "Audio", "Detection", "Transcription", "Desktop", "Privacy", "Storage",
+	"General", "Audio", "Detection", "Transcription", "Desktop", "Privacy", "Storage", "Models",
 }
 
 type cfgFieldKind int
@@ -27,6 +27,8 @@ const (
 	fieldReadonly
 	fieldDevice
 	fieldPath
+	// fieldDownload is a runtime or model on disk; d deletes it.
+	fieldDownload
 )
 
 type cfgField struct {
@@ -40,6 +42,7 @@ type cfgField struct {
 	list          func(c config.Config) []string
 	addItem       func(c *config.Config, v string)
 	delItem       func(c *config.Config, i int)
+	downloadID    string
 }
 
 // envFacts carries cached environment answers into the field definitions so
@@ -50,6 +53,10 @@ type envFacts struct {
 	Autostart          Autostart
 	AudioUsage         string
 	AudioPreview       string
+	Downloads          []downloadEntry
+	DownloadsScanned   bool
+	DownloadArmed      string
+	DownloadRemoving   string
 }
 
 func cfgFields(section int) []cfgField { return cfgFieldsWithEnv(section, envFacts{}) }
@@ -70,6 +77,8 @@ func cfgFieldsWithEnv(section int, env envFacts) []cfgField {
 		return privacyCfgFields()
 	case 6:
 		return storageCfgFields(env)
+	case modelsSection:
+		return modelsCfgFields(env)
 	default:
 		return nil
 	}
@@ -915,21 +924,20 @@ func (m Model) handleConfigKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleConfigInputKey(msg)
 	}
 
+	// A delete armed on the Models section only survives the confirming press.
+	if key != "d" && key != "x" && key != "enter" && key != " " {
+		m.downloadArmed = ""
+	}
+
 	switch key {
-	case "tab":
-		m = m.configNextSection()
-		return m, nil
-	case "shift+tab":
-		m = m.configPrevSection()
-		return m, nil
-	case "left", "h", "[":
-		m = m.configPrevSection()
-		return m, nil
-	case "right", "l", "]":
-		m = m.configNextSection()
-		return m, nil
+	case "tab", "right", "l", "]":
+		return m.configNextSection().enterModelsSection()
+	case "shift+tab", "left", "h", "[":
+		return m.configPrevSection().enterModelsSection()
 	case "R":
-		return m.reloadConfigFromDisk(), resolveDeviceLabelsCmd(m)
+		var scan tea.Cmd
+		m, scan = m.reloadConfigFromDisk().enterModelsSection()
+		return m, tea.Batch(resolveDeviceLabelsCmd(m), scan)
 	case "up", "k":
 		return m.configNavUp(), nil
 	case "down", "j":
@@ -1081,6 +1089,8 @@ func (m Model) activateConfigField() (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m, m.pickConfigFolderCmd()
+	case fieldDownload:
+		return m.pressDeleteDownload(f)
 	}
 	return m, nil
 }
@@ -1097,6 +1107,9 @@ func (m Model) startConfigListAdd() (tea.Model, tea.Cmd) {
 
 func (m Model) deleteConfigListItem() (tea.Model, tea.Cmd) {
 	f, ok := m.currentCfgField()
+	if ok && f.kind == fieldDownload {
+		return m.pressDeleteDownload(f)
+	}
 	if !ok || f.kind != fieldList || f.delItem == nil {
 		return m, nil
 	}
@@ -1147,6 +1160,8 @@ func (m Model) saveConfigCmd(cfg config.Config) tea.Cmd {
 type configMenuSaveMsg struct {
 	cfg config.Config
 	err error
+	// note replaces "saved" when the save was a side effect of something else.
+	note string
 }
 
 func (m Model) handleConfigMenuSave(msg configMenuSaveMsg) (tea.Model, tea.Cmd) {
@@ -1157,6 +1172,9 @@ func (m Model) handleConfigMenuSave(msg configMenuSaveMsg) (tea.Model, tea.Cmd) 
 	}
 	m.configErr = ""
 	m.configSavedMsg = "saved"
+	if msg.note != "" {
+		m.configSavedMsg = msg.note
+	}
 	m.markStatusTransient()
 	m = m.applyConfig(msg.cfg)
 	m.autoRecord = msg.cfg.AutoRecord
@@ -1235,7 +1253,7 @@ func (m Model) configAbsorbsKeys() bool {
 
 func (m Model) isTabSwitchKey(key string) bool {
 	switch key {
-	case "1", "2", "3":
+	case "1", "2", "3", "4":
 		return true
 	default:
 		return false

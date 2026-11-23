@@ -60,6 +60,7 @@ type Deps struct {
 	Opener       Opener
 	Autostart    Autostart
 	FolderPicker FolderPicker
+	Downloads    DownloadStore
 
 	// FilesRoot is where the Files tab keeps its jobs; empty means the default
 	// under anoted's data directory. Tests point it at a temp dir.
@@ -151,6 +152,13 @@ type Model struct {
 	configModalOptions []string
 	configErr          string
 	configSavedMsg     string
+
+	// Config › Models: what is on disk, and a delete waiting for its second press.
+	downloads         []downloadEntry
+	downloadsScanned  bool
+	downloadsScanning bool
+	downloadArmed     string
+	downloadRemoving  string
 
 	transcribeActive     bool
 	transcribeSessionDir string

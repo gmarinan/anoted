@@ -106,6 +106,7 @@ func GlobalHelp() []HelpSection {
 				{"Tab", "Next section"},
 				{"Enter", "Edit the field or apply a choice"},
 				{"Esc", "Cancel the edit"},
+				{"d d", "Models: delete a runtime or model to free space"},
 			},
 		},
 		{
