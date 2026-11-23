@@ -8,6 +8,7 @@ import (
 	"anoted/internal/filejob"
 	"anoted/internal/folderpicker"
 	"anoted/internal/open"
+	"anoted/internal/transcribe"
 )
 
 // The TUI reaches three build-tagged packages — internal/open,
@@ -40,6 +41,22 @@ type Autostart interface {
 // FolderPicker shows the platform's native directory chooser.
 type FolderPicker interface {
 	Pick(ctx context.Context, startDir string) (path string, canceled bool, err error)
+}
+
+// DownloadStore lists and deletes the runtimes and models on disk.
+type DownloadStore interface {
+	List(tcfg config.TranscriptionConfig) []transcribe.Download
+	Remove(tcfg config.TranscriptionConfig, id string) (transcribe.Download, error)
+}
+
+// systemDownloads is the production DownloadStore.
+type systemDownloads struct{}
+
+func (systemDownloads) List(tcfg config.TranscriptionConfig) []transcribe.Download {
+	return transcribe.Downloads(tcfg)
+}
+func (systemDownloads) Remove(tcfg config.TranscriptionConfig, id string) (transcribe.Download, error) {
+	return transcribe.RemoveDownload(tcfg, id) //nolint:wrapcheck // already names the download
 }
 
 // systemOpener is the production Opener, backed by internal/open.
@@ -87,6 +104,9 @@ func (d Deps) withDefaults() Deps {
 	}
 	if d.FolderPicker == nil {
 		d.FolderPicker = systemFolderPicker{}
+	}
+	if d.Downloads == nil {
+		d.Downloads = systemDownloads{}
 	}
 	if d.FilesRoot == "" {
 		d.FilesRoot = filejob.Root()

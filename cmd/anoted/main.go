@@ -87,6 +87,7 @@ func newRootCmd() *cobra.Command {
 		autostartCmd(),
 		retentionCmd(),
 		parakeetCmd(),
+		modelsCmd(),
 	)
 	return root
 }

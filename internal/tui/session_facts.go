@@ -95,5 +95,9 @@ func (m Model) envFacts() envFacts {
 		Autostart:          m.deps.Autostart,
 		AudioUsage:         m.audioUsageText(),
 		AudioPreview:       m.audioPreview,
+		Downloads:          m.downloads,
+		DownloadsScanned:   m.downloadsScanned,
+		DownloadArmed:      m.downloadArmed,
+		DownloadRemoving:   m.downloadRemoving,
 	}
 }

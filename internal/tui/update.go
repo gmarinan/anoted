@@ -194,6 +194,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleSessionsAction(msg)
 	case sessionsDeletedMsg:
 		return m.handleSessionsDeleted(msg)
+	case downloadsScannedMsg:
+		return m.handleDownloadsScanned(msg)
+	case downloadRemovedMsg:
+		return m.handleDownloadRemoved(msg)
 	case configMenuSaveMsg:
 		return m.handleConfigMenuSave(msg)
 	case configFolderPickMsg:

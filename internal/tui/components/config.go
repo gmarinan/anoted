@@ -153,12 +153,36 @@ func (v ConfigMenuView) renderStackedSectionTabs() string {
 	return b.String()
 }
 
+// configSidebarChrome is the frame around the sidebar: header, tab bar, the
+// File line and the footer.
+const configSidebarChrome = 9
+
 func (v ConfigMenuView) renderSidebar(width int) string {
+	// Each boxed item takes three rows; with eight sections that no longer
+	// fits a 30-row terminal, so fall back to one line per section.
+	if v.Height > 0 && v.Height < 3*len(v.Sections)+configSidebarChrome {
+		return v.renderCompactSidebar(width)
+	}
 	items := make([]string, 0, len(v.Sections))
 	for _, sec := range v.Sections {
 		items = append(items, v.renderSidebarItem(sec, width))
 	}
 	return strings.Join(items, "\n")
+}
+
+func (v ConfigMenuView) renderCompactSidebar(width int) string {
+	inner := width - 4
+	lines := make([]string, 0, len(v.Sections))
+	for _, sec := range v.Sections {
+		label := strings.ToUpper(sec.Label)
+		if sec.Focused {
+			lines = append(lines, selRowStyle.Render(padCell("▸ "+label, inner)))
+			continue
+		}
+		lines = append(lines, subtleStyle.Render(padCell("  "+label, inner)))
+	}
+	// Not Box: it widens anything under MinPanelWidth, and the sidebar is narrower.
+	return configSidebarInactiveStyle.Width(width).Render(strings.Join(lines, "\n"))
 }
 
 func (v ConfigMenuView) renderSidebarItem(sec ConfigSectionPanel, width int) string {
@@ -253,7 +277,9 @@ func (v ConfigMenuView) renderFieldLine(focused bool, f ConfigFieldRow, innerW i
 	if f.Kind == "readonly" || f.Kind == "device" || f.Kind == "path" {
 		val = subtleStyle.Render(f.Value)
 	}
-	return "  " + label + " " + val
+	// Cut, do not wrap: a wrapped value spills onto a row of its own and
+	// reads as the next field. The selected row above is cut the same way.
+	return truncate("  "+label+" "+val, innerW)
 }
 
 func (v ConfigMenuView) renderListItems(focused bool, f ConfigFieldRow) []string {
@@ -362,6 +388,7 @@ const (
 	ConfigFooterDevicePicker
 	ConfigFooterEditing
 	ConfigFooterPathField
+	ConfigFooterModels
 )
 
 // FooterForConfig returns context-sensitive footer for the Config tab.
@@ -380,6 +407,14 @@ func FooterForConfig(mode ConfigFooterMode, savedMsg, errMsg string, width int) 
 			FooterHint("Enter", "browse"),
 			FooterHint("e", "edit"),
 			FooterHint("c", "clear"),
+			FooterHint("q", "quit"),
+		)
+	case ConfigFooterModels:
+		hints = JoinFooter(
+			FooterHint("←→", "section"),
+			FooterHint("↑↓", "navigate"),
+			FooterHint("d", "delete"),
+			FooterHint("R", "rescan"),
 			FooterHint("q", "quit"),
 		)
 	case ConfigFooterEditing:

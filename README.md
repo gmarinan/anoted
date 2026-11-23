@@ -171,6 +171,12 @@ With both limits set, audio goes as soon as it breaks either one: "the newest 20
 
 To see what would go without deleting anything, run `anoted retention`. `anoted retention --apply` deletes the listed files once, even with `auto_delete` off. It refuses while `anoted watch` is running, because only that process knows which session is busy.
 
+### Freeing space taken by models
+
+The engines are most of anoted's footprint: a CUDA PyTorch venv for Whisper is several gigabytes, and so is each large model. Config → Models lists everything on disk with its size: the Whisper and Parakeet runtimes anoted installed, the Parakeet model, and the speech models the backends downloaded (faster-whisper models in the Hugging Face cache, openai-whisper and whisper.cpp models in `~/.cache/whisper`). Select one and press `d` twice to delete it.
+
+Whatever the configured backend runs is marked *in use* and cannot be deleted; switch `transcription.backend` first. Other models in the Hugging Face cache are left alone. From a shell, `anoted models` prints the same list and `anoted models rm <id>` deletes an entry. Deleting a runtime you need again later means reinstalling it (`anoted setup`, `anoted parakeet install`); a deleted model downloads again on its next use.
+
 <p align="center">
   <img src="docs/assets/config.png" alt="anoted Config tab" width="920">
 </p>

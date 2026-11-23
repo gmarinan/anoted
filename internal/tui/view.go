@@ -302,6 +302,9 @@ func (m Model) configFooter() components.ConfigFooterMode {
 	if f, ok := m.currentCfgField(); ok && f.kind == fieldPath {
 		return components.ConfigFooterPathField
 	}
+	if m.configSection == modelsSection {
+		return components.ConfigFooterModels
+	}
 	return components.ConfigFooterNormal
 }
 
@@ -321,6 +324,8 @@ func configFieldKindName(k cfgFieldKind) string {
 		return "device"
 	case fieldPath:
 		return "path"
+	case fieldDownload:
+		return "download"
 	default:
 		return "readonly"
 	}
