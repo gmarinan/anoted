@@ -395,6 +395,21 @@ func (m Model) handleFileText(msg fileTextMsg) (tea.Model, tea.Cmd) {
 // the transcript panel's borders and status line (3).
 const filesChromeRows = 15
 
+// filesCompactHeight is the height below which the drop panel keeps one line,
+// giving its other two to the transcript.
+const filesCompactHeight = 26
+
+func (m Model) filesChrome() int {
+	if m.filesCompactDrop() {
+		return filesChromeRows - 2
+	}
+	return filesChromeRows
+}
+
+func (m Model) filesCompactDrop() bool {
+	return m.height > 0 && m.height < filesCompactHeight
+}
+
 func (m Model) fileListRows() int {
 	n := len(m.fileJobs)
 	if n == 0 {
@@ -402,7 +417,7 @@ func (m Model) fileListRows() int {
 	}
 	limit := 5
 	if m.height > 0 {
-		limit = min(max((m.height-filesChromeRows)/3, 3), 8)
+		limit = min(max((m.height-m.filesChrome())/3, 3), 8)
 	}
 	return min(n, limit)
 }
@@ -425,7 +440,7 @@ func (m Model) fileTextRows() int {
 	if n := m.fileListRows(); n > 0 {
 		list = n + 3 // header row and borders
 	}
-	return max(m.height-filesChromeRows-list, 3)
+	return max(m.height-m.filesChrome()-list, 3)
 }
 
 // --- keys ------------------------------------------------------------------
@@ -689,22 +704,23 @@ func (m Model) filesView() components.FilesView {
 	}
 
 	v := components.FilesView{
-		Width:    m.width,
-		Rows:     rows,
-		Cursor:   m.fileCursor - first,
-		First:    first,
-		Total:    len(m.fileJobs),
-		Language: m.fileLanguage(),
-		Engine:   m.deps.Config.Transcription.Backend,
-		Root:     m.filesRootLabel,
-		Editing:  m.fileEditing,
-		Input:    m.fileInput,
-		Note:     m.fileNote,
-		NoteErr:  m.fileNoteErr,
-		ETA:      m.transcribeETA,
-		Blink:    m.transcribeBlink,
-		Log:      m.transcribeLog,
-		TextRows: m.fileTextRows(),
+		CompactDrop: m.filesCompactDrop(),
+		Width:       m.width,
+		Rows:        rows,
+		Cursor:      m.fileCursor - first,
+		First:       first,
+		Total:       len(m.fileJobs),
+		Language:    m.fileLanguage(),
+		Engine:      m.deps.Config.Transcription.Backend,
+		Root:        m.filesRootLabel,
+		Editing:     m.fileEditing,
+		Input:       m.fileInput,
+		Note:        m.fileNote,
+		NoteErr:     m.fileNoteErr,
+		ETA:         m.transcribeETA,
+		Blink:       m.transcribeBlink,
+		Log:         m.transcribeLog,
+		TextRows:    m.fileTextRows(),
 	}
 	if job, ok := m.selectedFile(); ok {
 		v.HasSelection = true

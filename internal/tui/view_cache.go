@@ -27,6 +27,13 @@ type viewCache struct {
 
 	statusKey statusBoxKey
 	status    string
+
+	audioKey  audioRowsKey
+	audioRows int
+
+	layoutKey homeLayoutKey
+	layout    homeLayout
+	layoutSet bool
 }
 
 // sessionsBlockKey fingerprints every input of SessionsView.renderMainContent.
@@ -70,6 +77,7 @@ type sessionsBlockKey struct {
 
 	previewText string
 	audioUsage  string
+	bottomRows  int
 }
 
 func (m Model) sessionsBlockKey() sessionsBlockKey {
@@ -113,6 +121,7 @@ func (m Model) sessionsBlockKey() sessionsBlockKey {
 		txQueue:        strings.Join(m.transcribeQueue, "\n"),
 		previewText:    m.previewText,
 		audioUsage:     m.audioUsageText(),
+		bottomRows:     m.homeLayout().bottomRows,
 	}
 }
 
@@ -151,6 +160,9 @@ type statusBoxKey struct {
 	errMsg          string
 	width           int
 	audioUsage      string
+	compactTop      bool
+	systemDevice    string
+	micDevice       string
 }
 
 // cachedStatusBox returns the rendered status panel, reused across meter ticks
@@ -173,11 +185,14 @@ func (m Model) cachedStatusBox(v components.HomeView) string {
 		errMsg:          m.errMsg,
 		width:           m.width,
 		audioUsage:      v.AudioUsage,
+		compactTop:      v.CompactTop,
+		systemDevice:    v.SystemDevice,
+		micDevice:       v.MicDevice,
 	}
 	if m.cache != nil && m.cache.status != "" && m.cache.statusKey == key {
 		return m.cache.status
 	}
-	box := v.StatusBox(components.StatusPanelWidth(m.width))
+	box := v.StatusBox(components.StatusPanelWidth(m.width, v.CompactTop))
 	if m.cache != nil {
 		m.cache.statusKey = key
 		m.cache.status = box

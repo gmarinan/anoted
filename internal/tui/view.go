@@ -2,9 +2,7 @@ package tui
 
 import (
 	"strings"
-	"time"
 
-	"anoted/internal/config"
 	"anoted/internal/tui/components"
 	tea "charm.land/bubbletea/v2"
 )
@@ -57,7 +55,7 @@ func (m Model) View() tea.View {
 
 func (m Model) appFooter(tab components.TabID) string {
 	if m.quitConfirmOpen {
-		return components.QuitConfirmFooter()
+		return components.QuitConfirmFooter(m.width)
 	}
 	if tab == components.TabFiles {
 		return components.FilesFooter(m.filesFooter(), m.width)
@@ -68,38 +66,9 @@ func (m Model) appFooter(tab components.TabID) string {
 func (m Model) homeView() components.HomeView {
 	// recordElapsed is maintained by the duration tick, so View stays a pure
 	// function of the Model instead of reading the clock per frame.
-	duration := time.Duration(0)
-	if m.recording {
-		duration = m.recordElapsed
-	}
-	v := components.HomeView{
-		AppState:        string(m.appState),
-		SystemDevice:    m.systemDevice,
-		MicDevice:       m.micDevice,
-		Provider:        displayProvider(m.provider, m.detection.Title),
-		Recording:       m.recording,
-		Duration:        duration,
-		SessionDir:      m.sessionDir,
-		AutoRecord:      m.autoRecord,
-		AwaitingConfirm: m.awaitingRecordConfirm,
-		ConfirmPrompt:   "Meeting detected — start recording? [y/n]",
-		StatusNote:      m.statusNote,
-		DetectionWarn:   m.detection.Warning,
-		ErrorMsg:        m.errMsg,
-		AudioUsage:      m.audioUsageText(),
-		Width:           m.width,
-		Height:          m.height,
-
-		SystemBands:    m.systemBands,
-		MicBands:       m.micBands,
-		LevelEnabled:   config.LevelMeterEnabled(m.deps.Config),
-		LevelAvailable: m.levelAvailable,
-		MonitorWarn:    m.audioMonitorWarn,
-		LevelFrame:     m.levelFrame,
-
-		Sessions:      m.sessionsPanel(),
-		SessionsBlock: m.cachedSessionsBlock(),
-	}
+	v := m.homeViewBase(m.homeCompactTop())
+	v.Sessions = m.sessionsPanel()
+	v.SessionsBlock = m.cachedSessionsBlock()
 	v.StatusBlock = m.cachedStatusBox(v)
 	return v
 }
@@ -137,6 +106,7 @@ func (m Model) sessionsPanel() components.SessionsView {
 		PreviewText:      m.previewText,
 		Artifacts:        m.sessionArtifacts,
 		AudioUsage:       m.audioUsageText(),
+		BottomRows:       m.homeLayout().bottomRows,
 	}
 	if m.sessionsDeleteConfirm {
 		v.DeleteID = rec.ID
@@ -354,6 +324,7 @@ func (m Model) helpOverlay(base string) string {
 	}
 	return components.HelpView{
 		Sections: components.GlobalHelp(),
+		Current:  components.TabLabel(components.ScreenToTab(string(m.screen))),
 		Width:    m.width,
 		Height:   m.height,
 	}.Overlay(base)

@@ -33,6 +33,10 @@ type HomeView struct {
 	LevelEnabled   bool
 	LevelAvailable bool
 	MonitorWarn    string
+	// CompactTop folds the audio devices into the status panel and drops the
+	// level meter: on a short terminal its eight rows are better spent on
+	// sessions.
+	CompactTop bool
 
 	Sessions SessionsView
 	// SessionsBlock and StatusBlock, when set, are the pre-rendered (typically
@@ -44,9 +48,9 @@ type HomeView struct {
 
 // StatusPanelWidth returns the width the Home status box renders at for the
 // given terminal width — the memoizing caller must match View's layout branch.
-func StatusPanelWidth(width int) int {
+func StatusPanelWidth(width int, compactTop bool) int {
 	layout := NewPanelLayout(width)
-	if layout.Width >= HomeTopRowMinWidth {
+	if layout.Width >= HomeTopRowMinWidth && !compactTop {
 		return layout.ColumnWidth()
 	}
 	return layout.FullWidth()
@@ -64,17 +68,7 @@ func (v HomeView) View() string {
 		sessionsBlock = sess.RenderMainContent()
 	}
 
-	status := v.StatusBlock
-	if status == "" {
-		status = v.StatusBox(StatusPanelWidth(v.Width))
-	}
-	var topRow string
-	if layout.Width >= HomeTopRowMinWidth {
-		topRow = layout.JoinColumns(status, v.audioBox(layout.ColumnWidth(), true))
-	} else {
-		topRow = JoinBlocksVertical(status, v.audioBox(fullW, layout.Width < SessionsCompactWidth))
-	}
-	content := JoinBlocksVertical(topRow, sessionsBlock)
+	content := JoinBlocksVertical(v.TopRow(), sessionsBlock)
 
 	if sess.DeleteConfirm {
 		h := v.overlayHeight(content)
@@ -85,6 +79,23 @@ func (v HomeView) View() string {
 		return FloatCenter(content, sess.renderOpenerModal(), v.Width, h)
 	}
 	return content
+}
+
+// TopRow renders the status and audio panels above the sessions table.
+// Exported so the caller can measure it when budgeting the screen.
+func (v HomeView) TopRow() string {
+	layout := NewPanelLayout(v.Width)
+	status := v.StatusBlock
+	if status == "" {
+		status = v.StatusBox(StatusPanelWidth(v.Width, v.CompactTop))
+	}
+	if v.CompactTop {
+		return status
+	}
+	if layout.Width >= HomeTopRowMinWidth {
+		return layout.JoinColumns(status, v.audioBox(layout.ColumnWidth(), true))
+	}
+	return JoinBlocksVertical(status, v.audioBox(layout.FullWidth(), layout.Width < SessionsCompactWidth))
 }
 
 func (v HomeView) overlayHeight(base string) int {
@@ -116,6 +127,11 @@ func (v HomeView) StatusBox(width int) string {
 	if v.AudioUsage != "" {
 		lines = append(lines, row("Disk", truncate(v.AudioUsage, width-12)))
 	}
+	if v.CompactTop {
+		lines = append(lines,
+			row("System", truncate(orLoading(v.SystemDevice), width-12)),
+			row("Mic", truncate(orLoading(v.MicDevice), width-9)))
+	}
 	if v.Recording {
 		lines = append(lines, row("Duration", v.Duration.Round(time.Second).String()))
 		// "Output: " is 8 cells and the box content area is width-4.
@@ -134,6 +150,22 @@ func (v HomeView) StatusBox(width int) string {
 		lines = append(lines, errStyle.Render("✗ "+v.ErrorMsg))
 	}
 	return Box("Status", strings.Join(lines, "\n"), width)
+}
+
+// AudioRows is the audio panel's height as TopRow draws it.
+func (v HomeView) AudioRows() int {
+	layout := NewPanelLayout(v.Width)
+	if layout.Width >= HomeTopRowMinWidth {
+		return lipgloss.Height(v.audioBox(layout.ColumnWidth(), true))
+	}
+	return lipgloss.Height(v.audioBox(layout.FullWidth(), layout.Width < SessionsCompactWidth))
+}
+
+func orLoading(device string) string {
+	if device == "" {
+		return subtleStyle.Render("(loading…)")
+	}
+	return device
 }
 
 func (v HomeView) audioBox(width int, forceCompact bool) string {

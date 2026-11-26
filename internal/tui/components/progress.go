@@ -48,8 +48,9 @@ func TranscribeProgressBar(percent float64, barWidth int, eta time.Duration, bli
 	if blink {
 		pulse = "○"
 	}
-	body := fmt.Sprintf("%s [%s] %d%% - ETA: %s", pulse, bar, pct, etaStr)
-	return txActiveStyle.Render("TX: " + body)
+	// No "TX:" prefix: every caller already puts the bar under a TX column or
+	// label, and the details panel read "TX: TX: ● […]".
+	return txActiveStyle.Render(fmt.Sprintf("%s [%s] %d%% - ETA: %s", pulse, bar, pct, etaStr))
 }
 
 // barPartials index 1..7 maps to eighth-block fill glyphs.

@@ -9,6 +9,7 @@ import (
 	"anoted/internal/doctor"
 	"anoted/internal/retention"
 	"anoted/internal/session"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -39,6 +40,11 @@ type DoctorView struct {
 func (v DoctorView) View() string {
 	layout := NewPanelLayout(v.Width)
 	colW := layout.ColumnWidth()
+	if v.useSingleColumn() {
+		// Stacked panels get the full width; at half width every check's
+		// detail was cut to a dozen characters, or wrapped onto its own line.
+		colW = layout.FullWidth()
+	}
 	var b strings.Builder
 
 	summary := v.summaryBox(colW)
@@ -65,7 +71,22 @@ func (v DoctorView) useSingleColumn() bool {
 	if v.Height > 0 && v.Height < 30 {
 		return true
 	}
+	// Below this a half-width summary leaves under 25 cells for each detail.
+	if v.Width < doctorTwoColumnMinWidth {
+		return true
+	}
 	return v.Platform == "windows"
+}
+
+const doctorTwoColumnMinWidth = 110
+
+// hideOKChecks lists only the checks that need attention when every check
+// would not fit: the count still says how many passed.
+func (v DoctorView) hideOKChecks() bool {
+	// Header, tabs, footer, the panels' borders and headers, the environment
+	// panel and the recommendations under it.
+	const chrome = 24
+	return v.Height > 0 && len(v.Report.Checks)+chrome > v.Height
 }
 
 func (v DoctorView) whisperInstallBox(width int) string {
@@ -113,6 +134,7 @@ func (v DoctorView) summaryBox(width int) string {
 
 	var lines []string
 	okCount := 0
+	hideOK := v.hideOKChecks()
 	for _, c := range v.Report.Checks {
 		icon := "✓"
 		style := okStyle
@@ -125,6 +147,10 @@ func (v DoctorView) summaryBox(width int) string {
 			style = errStyle
 		default:
 			okCount++
+		}
+		if hideOK {
+			// The recommendations panel below lists the rest already.
+			continue
 		}
 		// icon(1) + gap + name(22) + gap = 25 cells, inside a box whose content
 		// area is width-4; anything longer than width-29 wraps and breaks the
@@ -142,7 +168,14 @@ func (v DoctorView) summaryBox(width int) string {
 			subtleStyle.Render(detail))
 	}
 	header := fmt.Sprintf("%s / %d checks OK", Badge("OK", "ok"), okCount)
-	body := header + "\n" + strings.Join(lines, "\n")
+	if hideOK && okCount > 0 {
+		header += subtleStyle.Render(" · details hidden on a short terminal")
+	}
+	header = clampStyledWidth(header, width-4)
+	body := header
+	if len(lines) > 0 {
+		body += "\n" + strings.Join(lines, "\n")
+	}
 	return Box("Diagnostic summary", body, width)
 }
 
@@ -163,11 +196,9 @@ func (v DoctorView) warningsBox(width int) string {
 	var warns []string
 	for _, c := range v.Report.Checks {
 		if c.Status == "warn" || c.Status == "fail" {
-			maxDetail := width - len(c.Name) - 6
-			if maxDetail < 16 {
-				maxDetail = 16
-			}
-			warns = append(warns, fmt.Sprintf("• %s: %s", c.Name, truncate(c.Detail, maxDetail)))
+			// Cut the whole line to the box: the detail's own budget was two
+			// cells too generous, so every long warning wrapped.
+			warns = append(warns, clampStyledWidth(fmt.Sprintf("• %s: %s", c.Name, c.Detail), width-4))
 		}
 	}
 	if v.DetectionWarn != "" {
@@ -224,6 +255,21 @@ type SessionsView struct {
 	// Artifacts is keyed by session directory. Gathered once per session load
 	// so rendering does not stat the filesystem per row, per frame.
 	Artifacts map[string]SessionArtifacts
+	// BottomRows budgets the details and preview panels under the table:
+	// 0 draws them at their natural height, a positive value fits them into
+	// exactly that many rows, and a negative one leaves them out because the
+	// terminal is too short for them and a useful number of sessions.
+	BottomRows int
+}
+
+// DetailsRows is the natural height of the details panel, so the caller can
+// budget the screen before it knows which session is selected.
+func DetailsRows(transcribing bool) int {
+	rows := 2 + 11 // borders plus the lines every session has, Duration included
+	if transcribing {
+		rows += 2 // TX progress and queue length
+	}
+	return rows
 }
 
 // SessionArtifacts records what a session directory actually contains.
@@ -248,16 +294,45 @@ func (v SessionsView) RenderMainContent() string {
 		b.WriteString("\n")
 		b.WriteString(okStyle.Render("✓ " + v.DesktopNote))
 	}
+	if v.BottomRows < 0 {
+		return b.String()
+	}
 	b.WriteString("\n\n")
 
 	details := v.detailsBox(v.detailsWidth())
 	preview := v.previewBox(v.previewWidth())
 	if v.detailsPreviewTwoColumn() {
+		if v.BottomRows > 0 {
+			details = FitBoxRows(details, v.BottomRows)
+			preview = FitBoxRows(preview, v.BottomRows)
+		} else {
+			details, preview = EqualizeBoxHeights(details, preview)
+		}
 		b.WriteString(layout.JoinColumns(details, preview))
-	} else {
-		b.WriteString(JoinBlocksVertical(details, preview))
+		return b.String()
 	}
+	details, preview = v.fitStacked(details, preview)
+	b.WriteString(JoinBlocksVertical(details, preview))
 	return b.String()
+}
+
+// fitStacked shares BottomRows between details and the preview under it. The
+// preview keeps a few lines when there is room; otherwise details alone.
+func (v SessionsView) fitStacked(details, preview string) (string, string) {
+	if v.BottomRows <= 0 {
+		return details, preview
+	}
+	dh, ph := lipgloss.Height(details), lipgloss.Height(preview)
+	const minDetails, minPreview = 5, 3
+	switch {
+	case dh+1+ph <= v.BottomRows:
+		return details, preview
+	case v.BottomRows >= minDetails+1+minPreview:
+		pr := min(ph, max(minPreview, v.BottomRows-1-dh))
+		return FitBoxRows(details, v.BottomRows-1-pr), FitBoxRows(preview, pr)
+	default:
+		return FitBoxRows(details, v.BottomRows), ""
+	}
 }
 
 func (v SessionsView) detailsPreviewTwoColumn() bool {
@@ -489,9 +564,14 @@ func (v SessionsView) formatRow(r session.Record, tableWidth int) string {
 		return joinCells(padCell(id, 4), padCell(date, 14), padCell(meet, 9),
 			padCell(dur, 6), tx)
 	}
+	// The path takes whatever the fixed columns leave: borders, the selection
+	// marker, 68 cells of columns and five gaps. It was a fixed 36 cells, so a
+	// wide terminal still cut every path. Its end is the part that tells
+	// sessions apart, so cut from the left.
 	path := filepath.Join(r.Dir, sessionAudioName)
+	pathW := max(tableWidth-6-68-5*2, 20)
 	return joinCells(padCell(id, 4), padCell(date, 16), padCell(meet, 12),
-		padCell(dur, 8), padCell(tx, 28), truncate(path, 36))
+		padCell(dur, 8), padCell(tx, 28), tailCells(path, pathW))
 }
 
 // joinCells separates table cells with the same two spaces the header uses.
@@ -565,17 +645,10 @@ func (v SessionsView) detailsBox(width int) string {
 		return Box("Details", "", width)
 	}
 	r := v.PageRecords[v.Cursor]
+	// Most useful first: on a short terminal the panel is cut from the bottom.
 	lines := []string{
 		row("ID", fmt.Sprintf("#%d", r.ID)),
 		row("Started", session.FormatLocalTime(r.StartedAt, "2006-01-02 15:04:05")),
-		row("Provider", formatProvider(string(r.Provider))),
-		row("Backend", r.Backend),
-		row("Status", string(r.Status)),
-		row("Path", truncate(r.Dir, width-8)),
-		row("File", sessionAudioName),
-		row("Audio", v.audioSizeLabel(r.Dir, width)),
-		row("Open folders", truncate(v.OpenerDetected, width-14)),
-		row("Setting", openerSettingLabel(v.CurrentOpener)),
 	}
 	if r.Metadata.Duration != "" {
 		lines = append(lines, row("Duration", r.Metadata.Duration))
@@ -591,6 +664,20 @@ func (v SessionsView) detailsBox(width int) string {
 		}
 	} else if pos := v.queuePos(r.Dir); pos > 0 {
 		lines = append(lines, row("TX", fmt.Sprintf("queued #%d", pos)))
+	}
+	lines = append(lines,
+		row("Provider", formatProvider(string(r.Provider))),
+		row("Status", string(r.Status)),
+		row("Path", r.Dir),
+		row("Audio", v.audioSizeLabel(r.Dir, width)),
+		row("File", sessionAudioName),
+		row("Backend", r.Backend),
+		row("Open folders", v.OpenerDetected),
+		row("Setting", openerSettingLabel(v.CurrentOpener)),
+	)
+	// Cut rather than wrap: a wrapped path left a stray "0…" on a line of its own.
+	for i, l := range lines {
+		lines[i] = clampStyledWidth(l, width-4)
 	}
 	return Box("Details", strings.Join(lines, "\n"), width)
 }

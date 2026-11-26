@@ -77,6 +77,14 @@ func (m Model) loadSessionsCmd() tea.Cmd {
 type windowSizePollTickMsg struct{}
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	next, cmd := m.update(msg)
+	if nm, ok := next.(Model); ok {
+		next = nm.repage()
+	}
+	return next, cmd
+}
+
+func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m = m.expireStatusNotes(time.Now())
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
