@@ -160,6 +160,9 @@ type Model struct {
 	downloadArmed     string
 	downloadRemoving  string
 
+	// pageSizeSeen is the sessions page size after the last Update; see repage.
+	pageSizeSeen int
+
 	transcribeActive     bool
 	transcribeSessionDir string
 	// transcribeQueue holds session dirs waiting to run after the active job.
@@ -403,32 +406,13 @@ func (m Model) recorderUnusable() string {
 	return m.deps.Recorder.Unusable()
 }
 
-// sessionsPageSize is how many session rows fit on screen.
-//
-// It was the constant 6 regardless of terminal size, so a tall terminal wasted
-// most of its height while a short one still tried to draw six rows plus the
-// details and preview panels, pushing the footer off the bottom.
+// sessionsPageSize is how many session rows fit on screen; see homeLayout.
 func (m Model) sessionsPageSize() int {
-	// Rows consumed by the header, tabs, status/audio boxes, the disk-usage
-	// lines (status panel and sessions list), the details and preview panels,
-	// borders and the footer. Box titles moved into the top border, saving one
-	// row in each of the three stacked panel bands.
-	const chrome = 25
-	n := m.height - chrome
-	switch {
-	case m.height <= 0:
-		return sessionsPageSizeDefault
-	case n < sessionsPageSizeMin:
-		return sessionsPageSizeMin
-	case n > sessionsPageSizeMax:
-		return sessionsPageSizeMax
-	default:
-		return n
-	}
+	return m.homeLayout().pageSize
 }
 
 const (
 	sessionsPageSizeMin     = 3
-	sessionsPageSizeMax     = 14
+	sessionsPageSizeMax     = 30
 	sessionsPageSizeDefault = 6
 )

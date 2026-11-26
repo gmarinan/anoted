@@ -71,11 +71,11 @@ func (v WaveformViz) renderDisabled() string {
 		var b strings.Builder
 		b.WriteString(labelStyle.Render("System"))
 		b.WriteString(" ")
-		b.WriteString(subtleStyle.Render(truncate(v.SystemLabel, max(8, v.Width/3))))
+		b.WriteString(subtleStyle.Render(truncate(v.SystemLabel, max(8, v.Width-4-len("System ")))))
 		b.WriteString("\n")
 		b.WriteString(labelStyle.Render("Mic"))
 		b.WriteString(" ")
-		b.WriteString(subtleStyle.Render(truncate(v.MicLabel, max(8, v.Width/3))))
+		b.WriteString(subtleStyle.Render(truncate(v.MicLabel, max(8, v.Width-4-len("Mic ")))))
 		if v.MonitorWarn != "" {
 			b.WriteString("\n")
 			b.WriteString(warnStyle.Render(LabelWarn + " " + truncate(v.MonitorWarn, v.Width-4)))
@@ -147,7 +147,7 @@ func (v WaveformViz) eqRowCount() int {
 func (v WaveformViz) renderUltraCompact() string {
 	var b strings.Builder
 	b.WriteString(labelStyle.Render("Sys"))
-	b.WriteString(subtleStyle.Render(" " + truncate(v.SystemLabel, max(6, v.Width/4))))
+	b.WriteString(subtleStyle.Render(" " + truncate(v.SystemLabel, max(6, v.Width-4-len("Sys ")))))
 	b.WriteString("\n")
 	b.WriteString(v.renderSparkline(v.SystemBands, &systemEQStyles))
 	b.WriteString("\n")
@@ -184,13 +184,13 @@ func (v WaveformViz) renderCompact() string {
 	var b strings.Builder
 	b.WriteString(labelStyle.Render("System"))
 	b.WriteString(" ")
-	b.WriteString(subtleStyle.Render(truncate(v.SystemLabel, max(8, v.Width/3))))
+	b.WriteString(subtleStyle.Render(truncate(v.SystemLabel, max(8, v.Width-4-len("System ")))))
 	b.WriteString("\n")
 	b.WriteString(v.renderMeterRows(v.SystemBands, &systemEQStyles))
 	b.WriteString("\n")
 	b.WriteString(labelStyle.Render("Mic"))
 	b.WriteString(" ")
-	b.WriteString(subtleStyle.Render(truncate(v.MicLabel, max(8, v.Width/3))))
+	b.WriteString(subtleStyle.Render(truncate(v.MicLabel, max(8, v.Width-4-len("Mic ")))))
 	b.WriteString("\n")
 	if v.Recording {
 		b.WriteString(v.renderMeterRows(v.MicBands, &micEQStyles))

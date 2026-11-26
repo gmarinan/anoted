@@ -1,6 +1,10 @@
 package components
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/charmbracelet/x/ansi"
+)
 
 // HelpEntry is one row of the keyboard shortcut overlay.
 type HelpEntry struct {
@@ -22,45 +26,162 @@ type HelpSection struct {
 // binding at all.
 type HelpView struct {
 	Sections []HelpSection
-	Width    int
-	Height   int
+	// Current is the title of the open tab's section. It is listed first and
+	// is the last to go when the terminal is too short for all of them.
+	Current string
+	Width   int
+	Height  int
 }
 
-// Overlay floats the shortcut list above the current screen.
-func (v HelpView) Overlay(base string) string {
-	var b strings.Builder
-	for i, section := range v.Sections {
-		if i > 0 {
-			b.WriteString("\n")
-		}
-		b.WriteString(boxTitleStyle.Render(section.Title))
-		b.WriteString("\n")
-		for _, e := range section.Entries {
-			b.WriteString("  ")
-			b.WriteString(padCell(keyStyle.Render(e.Key), helpKeyColumn))
-			b.WriteString(subtleStyle.Render(e.Action))
-			b.WriteString("\n")
-		}
-	}
-	b.WriteString("\n")
-	b.WriteString(subtleStyle.Render("Press ? or Esc to close"))
+const (
+	helpKeyColumn = 14
+	// helpColumnWidth is the widest a column of shortcuts gets, and
+	// helpColumnMin the narrowest before fewer columns are used.
+	helpColumnWidth = 58
+	helpColumnMin   = 50
+	helpColumnGap   = 4
+	// helpModalChrome is the modal's border and padding: 2+2 rows, 2+4 cells.
+	helpModalChromeRows = 4
+	helpModalChromeCols = 6
+)
 
-	modal := PickerModal("Keyboard shortcuts", strings.TrimRight(b.String(), "\n"), helpModalMaxWidth(v.Width))
+// Overlay floats the shortcut list above the current screen.
+//
+// It used to be one 52-row column, taller than any common terminal, so the
+// frame ran past the bottom and the close hint was never visible. Sections now
+// flow into as many columns as the width allows, and the ones for other tabs
+// are dropped when even that does not fit.
+func (v HelpView) Overlay(base string) string {
+	maxW := v.Width - 4
+	if v.Width <= 0 {
+		maxW = helpColumnWidth*2 + helpColumnGap + helpModalChromeCols
+	}
+	room := maxW - helpModalChromeCols
+	ncols := max(1, min(3, (room+helpColumnGap)/(helpColumnMin+helpColumnGap)))
+	colW := max(min(helpColumnWidth, (room-(ncols-1)*helpColumnGap)/ncols), 24)
+	// Title row, the blank under the body and the close hint.
+	budget := v.Height - helpModalChromeRows - 3
+	if v.Height <= 0 {
+		budget = 1 << 30
+	}
+
+	sections := v.ordered()
+	dropped := false
+	var cols [][]string
+	for {
+		blocks := make([][]string, len(sections))
+		for i, sec := range sections {
+			blocks[i] = helpBlock(sec, colW)
+		}
+		cols = flowColumns(blocks, ncols)
+		if tallest(cols) <= budget || len(sections) <= 1 {
+			break
+		}
+		sections = sections[:len(sections)-1]
+		dropped = true
+	}
+
+	body := joinHelpColumns(cols, colW)
+	if lines := strings.Split(body, "\n"); budget > 0 && len(lines) > budget {
+		body = strings.Join(lines[:budget], "\n") // a terminal too small even for one section
+	}
+	hint := "Press ? or Esc to close"
+	if dropped {
+		hint = "More keys: open a tab and press ?  ·  ? or Esc closes"
+	}
+	body += "\n\n" + subtleStyle.Render(clampStyledWidth(hint, ncols*colW+(ncols-1)*helpColumnGap))
+	modal := PickerModal("Keyboard shortcuts", body, maxW)
 	return FloatCenter(base, modal, v.Width, v.Height)
 }
 
-const helpKeyColumn = 14
-
-func helpModalMaxWidth(width int) int {
-	const preferred = 64
-	if width > 0 && width-8 < preferred {
-		return max(width-8, 24)
+// ordered puts the open tab first, then Global; the rest keep their order.
+// The open tab's keys are the ones the user came for, and Global's are
+// mostly on screen already (the tab bar and the footer).
+func (v HelpView) ordered() []HelpSection {
+	var current, global, rest []HelpSection
+	for _, sec := range v.Sections {
+		switch sec.Title {
+		case v.Current:
+			current = append(current, sec)
+		case "Global":
+			global = append(global, sec)
+		default:
+			rest = append(rest, sec)
+		}
 	}
-	return preferred
+	return append(append(current, global...), rest...)
 }
 
-// GlobalHelp is the keyboard map shown by the ? overlay. It is the single
-// source of truth the README table is generated from.
+// helpBlock renders one section as lines no wider than width, wrapping long
+// actions under themselves rather than under the key column.
+func helpBlock(sec HelpSection, width int) []string {
+	lines := []string{boxTitleStyle.Render(sec.Title)}
+	actionW := max(width-2-helpKeyColumn, 10)
+	indent := strings.Repeat(" ", 2+helpKeyColumn)
+	for _, e := range sec.Entries {
+		wrapped := strings.Split(ansi.Wrap(e.Action, actionW, ""), "\n")
+		lines = append(lines, "  "+padCell(keyStyle.Render(e.Key), helpKeyColumn)+subtleStyle.Render(wrapped[0]))
+		for _, w := range wrapped[1:] {
+			lines = append(lines, indent+subtleStyle.Render(w))
+		}
+	}
+	return lines
+}
+
+// flowColumns fills columns in order, starting a new one once a column reaches
+// its share of the total, so the tallest column stays close to the average.
+func flowColumns(blocks [][]string, ncols int) [][]string {
+	total := 0
+	for _, b := range blocks {
+		total += len(b) + 1
+	}
+	target := (total + ncols - 1) / ncols
+	cols := [][]string{nil}
+	for _, b := range blocks {
+		cur := len(cols) - 1
+		if len(cols[cur]) > 0 && len(cols[cur])+len(b) > target && len(cols) < ncols {
+			cols = append(cols, nil)
+			cur++
+		}
+		if len(cols[cur]) > 0 {
+			cols[cur] = append(cols[cur], "")
+		}
+		cols[cur] = append(cols[cur], b...)
+	}
+	return cols
+}
+
+func tallest(cols [][]string) int {
+	h := 0
+	for _, c := range cols {
+		h = max(h, len(c))
+	}
+	return h
+}
+
+func joinHelpColumns(cols [][]string, colW int) string {
+	h := tallest(cols)
+	gap := strings.Repeat(" ", helpColumnGap)
+	rows := make([]string, h)
+	for r := 0; r < h; r++ {
+		var b strings.Builder
+		for c, col := range cols {
+			cell := ""
+			if r < len(col) {
+				cell = col[r]
+			}
+			if c < len(cols)-1 {
+				b.WriteString(padCell(cell, colW))
+				b.WriteString(gap)
+			} else {
+				b.WriteString(cell)
+			}
+		}
+		rows[r] = b.String()
+	}
+	return strings.Join(rows, "\n")
+}
+
 func GlobalHelp() []HelpSection {
 	return []HelpSection{
 		{

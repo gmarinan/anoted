@@ -61,8 +61,8 @@ func (v QuitConfirmView) renderModal() string {
 }
 
 // QuitConfirmFooter returns footer hints while the quit modal is open.
-func QuitConfirmFooter() string {
-	return JoinFooter(
+func QuitConfirmFooter(width int) string {
+	return FitFooter(width,
 		FooterHint("↑↓", "choose"),
 		FooterHint("Enter", "apply"),
 		FooterHint("Esc", "cancel"),

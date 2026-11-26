@@ -72,6 +72,8 @@ type FilesView struct {
 	// TextRows is the height of the transcript body; the panel always renders
 	// exactly that many rows so the layout does not jump between states.
 	TextRows int
+	// CompactDrop shrinks the drop panel to one line on a short terminal.
+	CompactDrop bool
 }
 
 // Column widths of the Files list.
@@ -127,6 +129,13 @@ func (v FilesView) dropBox(width int) string {
 		clampStyledWidth(first, inner),
 		clampStyledWidth(settings, inner),
 		clampStyledWidth(third, inner),
+	}
+	if v.CompactDrop {
+		// One line: a note when there is one, otherwise the prompt.
+		lines = lines[:1]
+		if v.Note != "" && !v.Editing {
+			lines[0] = clampStyledWidth(third, inner)
+		}
 	}
 	return Box("Transcribe a file", strings.Join(lines, "\n"), width)
 }
@@ -254,6 +263,13 @@ func (v FilesView) transcriptBox(width int) string {
 		}
 	}
 
+	// Wrap before counting: Box would wrap a long hint itself, after the cut
+	// below, and the panel would come out taller than its budget.
+	var fitted []string
+	for _, l := range body {
+		fitted = append(fitted, strings.Split(ansi.Wrap(l, inner, ""), "\n")...)
+	}
+	body = fitted
 	if len(body) > rows {
 		body = body[:rows]
 	}

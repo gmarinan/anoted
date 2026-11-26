@@ -62,6 +62,14 @@ func formatClock(d time.Duration) string {
 	return fmt.Sprintf("%d:%02d", m, s)
 }
 
+// TabLabel is a tab's name as the tab bar shows it.
+func TabLabel(tab TabID) string {
+	if int(tab) < 0 || int(tab) >= len(tabLabels) {
+		return ""
+	}
+	return tabLabels[tab]
+}
+
 // TabBar renders the top main navigation tabs (visual only; use 1–4 to switch).
 func TabBar(active TabID) string {
 	var parts []string
@@ -77,6 +85,36 @@ func TabBar(active TabID) string {
 		}
 	}
 	return strings.Join(parts, " ")
+}
+
+// SubTabBarWrapped is SubTabBar broken over as many rows as width needs.
+// Config's eight sections measure 116 cells in one row, which overflowed every
+// terminal narrow enough to use the stacked layout.
+func SubTabBarWrapped(labels []string, active, width int) string {
+	var rows []string
+	var cur string
+	for i, label := range labels {
+		text := "[" + label + "]"
+		var part string
+		if i == active {
+			part = subTabActiveStyle.Render("▸ " + text)
+		} else {
+			part = subTabInactiveStyle.Render("  " + text)
+		}
+		switch {
+		case cur == "":
+			cur = part
+		case width > 0 && displayWidth(cur)+1+displayWidth(part) > width:
+			rows = append(rows, cur)
+			cur = part
+		default:
+			cur += " " + part
+		}
+	}
+	if cur != "" {
+		rows = append(rows, cur)
+	}
+	return strings.Join(rows, "\n")
 }
 
 // SubTabBar renders highlighted subsection tabs (e.g. Output / Microphone).
@@ -263,6 +301,35 @@ func writeBoxLine(b *strings.Builder, side, line string, inner int) {
 	b.WriteString(side)
 }
 
+// FitBoxRows makes a Box exactly rows tall. Content past the budget is
+// dropped, with the last kept line turned into "…" so the cut is visible; a
+// shorter box is stretched with blank lines so side-by-side panels line up.
+func FitBoxRows(box string, rows int) string {
+	lines := strings.Split(box, "\n")
+	if rows < 3 || len(lines) < 3 || len(lines) == rows {
+		return box
+	}
+	inner := displayWidth(lines[0]) - 4
+	side := borderStyle.Render("│")
+	boxLine := func(content string) string {
+		var b strings.Builder
+		writeBoxLine(&b, side, content, inner)
+		return strings.TrimPrefix(b.String(), "\n")
+	}
+	out := make([]string, 0, rows)
+	if len(lines) > rows {
+		out = append(out, lines[:rows-2]...)
+		out = append(out, boxLine(subtleStyle.Render("…")))
+	} else {
+		out = append(out, lines[:len(lines)-1]...)
+		blank := boxLine("")
+		for len(out) < rows-1 {
+			out = append(out, blank)
+		}
+	}
+	return strings.Join(append(out, lines[len(lines)-1]), "\n")
+}
+
 var dashesPool = strings.Repeat("─", 256)
 
 func boxDashes(n int) string {
@@ -352,20 +419,28 @@ func FooterBar(hints string, width int) string {
 	return footerBarStyle.Render(hints)
 }
 
-// FooterWithTrailingStatus places status text flush-right on the footer line.
-func FooterWithTrailingStatus(hints, status string, width int) string {
+// FitFooterWithStatus places status flush-right and fits as many hints as the
+// rest of the line holds. A status too long for the line is cut rather than
+// wrapped: a two-row footer pushes the frame past the terminal's height.
+func FitFooterWithStatus(width int, status string, hints ...string) string {
 	if status == "" {
-		return hints
+		return FitFooter(width, hints...)
 	}
 	if width <= 0 {
-		return JoinFooter(hints, status)
+		return JoinFooter(append(hints, status)...)
 	}
-	gap := width - displayWidth(hints) - displayWidth(status)
-	if gap < 2 {
-		return JoinFooter(hints, status)
+	sw := displayWidth(status)
+	const minGap = 2
+	if sw+minGap+footerHintMin > width {
+		return clampStyledWidth(status, width)
 	}
-	return hints + padSpaces(gap) + status
+	left := FitFooter(width-sw-minGap, hints...)
+	gap := width - displayWidth(left) - sw
+	return left + padSpaces(max(gap, minGap)) + status
 }
+
+// footerHintMin is the narrowest room worth leaving for hints next to a status.
+const footerHintMin = 12
 
 // PadView expands content to fill the terminal, avoiding uncleared cells
 // after resize (notably on Windows Terminal alt-screen).
@@ -603,10 +678,14 @@ func FloatCenter(background, overlay string, width, height int) string {
 // PickerModal renders a compact floating picker dialog.
 func PickerModal(title string, body string, maxWidth int) string {
 	lines := strings.Split(body, "\n")
-	modalW := lipgloss.Width(boxTitleStyle.Render(strings.ToUpper(title))) + 4
+	// modalBoxStyle has a 1-cell border and 2 cells of padding on each side,
+	// and lipgloss counts both inside Width. Adding only 4 left the content two
+	// cells short, so the widest lines of every modal wrapped.
+	const chrome = 6
+	modalW := lipgloss.Width(boxTitleStyle.Render(strings.ToUpper(title))) + chrome
 	for _, line := range lines {
-		if w := lipgloss.Width(line); w+4 > modalW {
-			modalW = w + 4
+		if w := lipgloss.Width(line); w+chrome > modalW {
+			modalW = w + chrome
 		}
 	}
 	if modalW < 28 {

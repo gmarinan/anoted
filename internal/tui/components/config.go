@@ -137,7 +137,26 @@ func (v ConfigMenuView) activeSection() ConfigSectionPanel {
 }
 
 func (v ConfigMenuView) renderStackedSectionTabs() string {
-	layout := NewPanelLayout(v.Width)
+	var b strings.Builder
+	b.WriteString(v.stackedTabBar())
+	b.WriteString("\n\n")
+	b.WriteString(v.renderContentPanel(v.activeSection(), NewPanelLayout(v.Width).FullWidth()))
+	return b.String()
+}
+
+// configSidebarChrome is the frame around the sidebar: header, tab bar, the
+// File line and the footer.
+const configSidebarChrome = 9
+
+// stacked reports whether sections are tabs above the panel, not a sidebar.
+func (v ConfigMenuView) stacked() bool {
+	if v.Width < configSidebarLayoutMin {
+		return true
+	}
+	return v.Width-configSidebarWidth(v.Width)-panelColumnGap < MinPanelWidth
+}
+
+func (v ConfigMenuView) stackedTabBar() string {
 	labels := make([]string, len(v.Sections))
 	active := 0
 	for i, sec := range v.Sections {
@@ -146,16 +165,8 @@ func (v ConfigMenuView) renderStackedSectionTabs() string {
 			active = i
 		}
 	}
-	var b strings.Builder
-	b.WriteString(SubTabBar(labels, active))
-	b.WriteString("\n\n")
-	b.WriteString(v.renderContentPanel(v.activeSection(), layout.FullWidth()))
-	return b.String()
+	return SubTabBarWrapped(labels, active, NewPanelLayout(v.Width).FullWidth())
 }
-
-// configSidebarChrome is the frame around the sidebar: header, tab bar, the
-// File line and the footer.
-const configSidebarChrome = 9
 
 func (v ConfigMenuView) renderSidebar(width int) string {
 	// Each boxed item takes three rows; with eight sections that no longer
@@ -223,7 +234,13 @@ func (v ConfigMenuView) renderSectionFields(focused bool, sec ConfigSectionPanel
 // entry, so on a short terminal the cursor could move to a field that was not
 // being drawn — the user pressed Enter on something they could not see.
 func (v ConfigMenuView) windowFieldLines(lines []string, cursorLine int) []string {
-	maxRows := configFieldRows(v.Height)
+	height := v.Height
+	if v.stacked() && height > 0 {
+		// The wrapped section tabs and the blank row under them sit above
+		// the panel in this layout.
+		height -= lipgloss.Height(v.stackedTabBar()) + 1
+	}
+	maxRows := configFieldRows(height)
 	if maxRows <= 0 || len(lines) <= maxRows {
 		return lines
 	}
@@ -393,54 +410,55 @@ const (
 
 // FooterForConfig returns context-sensitive footer for the Config tab.
 func FooterForConfig(mode ConfigFooterMode, savedMsg, errMsg string, width int) string {
-	var hints string
+	var hints []string
 	switch mode {
 	case ConfigFooterModal, ConfigFooterDevicePicker:
-		hints = JoinFooter(
+		hints = []string{
 			FooterHint("↑↓", "choose"),
 			FooterHint("Enter", "apply"),
 			FooterHint("Esc", "cancel"),
 			FooterHint("q", "quit"),
-		)
+		}
 	case ConfigFooterPathField:
-		hints = JoinFooter(
+		hints = []string{
 			FooterHint("Enter", "browse"),
 			FooterHint("e", "edit"),
 			FooterHint("c", "clear"),
 			FooterHint("q", "quit"),
-		)
+		}
 	case ConfigFooterModels:
-		hints = JoinFooter(
+		hints = []string{
+			FooterHint("d", "delete"),
 			FooterHint("←→", "section"),
 			FooterHint("↑↓", "navigate"),
-			FooterHint("d", "delete"),
 			FooterHint("R", "rescan"),
 			FooterHint("q", "quit"),
-		)
+		}
 	case ConfigFooterEditing:
-		hints = JoinFooter(
+		hints = []string{
 			FooterHint("Enter", "confirm"),
 			FooterHint("Esc", "cancel"),
 			FooterHint("q", "quit"),
-		)
+		}
 	default:
-		hints = JoinFooter(
+		hints = []string{
+			FooterHint("Enter", "edit"),
 			FooterHint("←→", "section"),
 			FooterHint("↑↓", "navigate"),
-			FooterHint("Enter", "edit"),
 			FooterHint("a/d", "patterns"),
 			FooterHint("R", "reload"),
 			FooterHint("q", "quit"),
-		)
+		}
 	}
 
-	if errMsg != "" {
-		return FooterWithTrailingStatus(hints, errStyle.Render("✗ "+errMsg), width)
+	switch {
+	case errMsg != "":
+		return FitFooterWithStatus(width, errStyle.Render("✗ "+errMsg), hints...)
+	case savedMsg != "":
+		return FitFooterWithStatus(width, okStyle.Render("✓ "+savedMsg), hints...)
+	default:
+		return FitFooter(width, hints...)
 	}
-	if savedMsg != "" {
-		return FooterWithTrailingStatus(hints, okStyle.Render("✓ "+savedMsg), width)
-	}
-	return hints
 }
 
 // FormatConfigBool displays a bool for the menu.
